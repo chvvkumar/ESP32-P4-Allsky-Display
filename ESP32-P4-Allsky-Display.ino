@@ -235,75 +235,75 @@ void renderFullImage() {
       // Draw the entire scaled image
       gfx->draw16bitRGBBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
     } else {
-      // For very large scaled images, use line-by-line rendering to avoid seams
-      // This is slower but eliminates horizontal lines
+      // For large scaled images, render in horizontal strips to avoid slow pixel-by-pixel drawing
+      // Calculate optimal strip height based on available buffer
+      int16_t maxStripHeight = scaledBufferSize / (scaledWidth * 2);
+      if (maxStripHeight < 1) maxStripHeight = 1;
+      if (maxStripHeight > 64) maxStripHeight = 64; // Limit to reasonable chunk size
       
-      for (int16_t dstY = 0; dstY < scaledHeight; dstY++) {
-        // Calculate source Y position with high precision
-        float srcYFloat = (float)dstY / scaleY;
-        int16_t srcY = (int16_t)srcYFloat;
+      // Process image in horizontal strips
+      for (int16_t stripY = 0; stripY < scaledHeight; stripY += maxStripHeight) {
+        int16_t currentStripHeight = min((int16_t)maxStripHeight, (int16_t)(scaledHeight - stripY));
         
-        // Ensure we don't go out of bounds
-        if (srcY >= fullImageHeight - 1) srcY = fullImageHeight - 1;
-        
-        // Process this line
-        for (int16_t dstX = 0; dstX < scaledWidth; dstX++) {
-          // Calculate source X position with high precision
-          float srcXFloat = (float)dstX / scaleX;
-          int16_t srcX = (int16_t)srcXFloat;
-          
-          // Ensure we don't go out of bounds
-          if (srcX >= fullImageWidth - 1) srcX = fullImageWidth - 1;
-          
-          // Get pixel with bilinear interpolation for smooth scaling
-          float xWeight = srcXFloat - srcX;
+        // Scale this strip
+        for (int16_t y = 0; y < currentStripHeight; y++) {
+          int16_t dstY = stripY + y;
+          float srcYFloat = (float)dstY / scaleY;
+          int16_t srcY = (int16_t)srcYFloat;
+          if (srcY >= fullImageHeight - 1) srcY = fullImageHeight - 1;
           float yWeight = srcYFloat - srcY;
           
-          // Get the four surrounding pixels
-          uint16_t p1 = fullImageBuffer[srcY * fullImageWidth + srcX]; // Top-left
-          uint16_t p2 = fullImageBuffer[srcY * fullImageWidth + min(srcX + 1, fullImageWidth - 1)]; // Top-right
-          uint16_t p3 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + srcX]; // Bottom-left
-          uint16_t p4 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + min(srcX + 1, fullImageWidth - 1)]; // Bottom-right
-          
-          // Extract RGB components (RGB565 format)
-          uint8_t r1 = (p1 >> 11) & 0x1F, g1 = (p1 >> 5) & 0x3F, b1 = p1 & 0x1F;
-          uint8_t r2 = (p2 >> 11) & 0x1F, g2 = (p2 >> 5) & 0x3F, b2 = p2 & 0x1F;
-          uint8_t r3 = (p3 >> 11) & 0x1F, g3 = (p3 >> 5) & 0x3F, b3 = p3 & 0x1F;
-          uint8_t r4 = (p4 >> 11) & 0x1F, g4 = (p4 >> 5) & 0x3F, b4 = p4 & 0x1F;
-          
-          // Bilinear interpolation
-          float r = r1 * (1 - xWeight) * (1 - yWeight) +
-                    r2 * xWeight * (1 - yWeight) +
-                    r3 * (1 - xWeight) * yWeight +
-                    r4 * xWeight * yWeight;
-          
-          float g = g1 * (1 - xWeight) * (1 - yWeight) +
-                    g2 * xWeight * (1 - yWeight) +
-                    g3 * (1 - xWeight) * yWeight +
-                    g4 * xWeight * yWeight;
-          
-          float b = b1 * (1 - xWeight) * (1 - yWeight) +
-                    b2 * xWeight * (1 - yWeight) +
-                    b3 * (1 - xWeight) * yWeight +
-                    b4 * xWeight * yWeight;
-          
-          // Combine back to RGB565
-          uint16_t finalPixel = ((uint16_t)(r + 0.5) << 11) |
-                               ((uint16_t)(g + 0.5) << 5) |
-                               (uint16_t)(b + 0.5);
-          
-          // Draw the pixel
-          int16_t drawX = finalX + dstX;
-          int16_t drawY = finalY + dstY;
-          
-          if (drawX >= 0 && drawX < w && drawY >= 0 && drawY < h) {
-            gfx->drawPixel(drawX, drawY, finalPixel);
+          for (int16_t dstX = 0; dstX < scaledWidth; dstX++) {
+            float srcXFloat = (float)dstX / scaleX;
+            int16_t srcX = (int16_t)srcXFloat;
+            if (srcX >= fullImageWidth - 1) srcX = fullImageWidth - 1;
+            float xWeight = srcXFloat - srcX;
+            
+            // Get the four surrounding pixels for bilinear interpolation
+            uint16_t p1 = fullImageBuffer[srcY * fullImageWidth + srcX];
+            uint16_t p2 = fullImageBuffer[srcY * fullImageWidth + min(srcX + 1, fullImageWidth - 1)];
+            uint16_t p3 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + srcX];
+            uint16_t p4 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + min(srcX + 1, fullImageWidth - 1)];
+            
+            // Extract RGB components (RGB565 format)
+            uint8_t r1 = (p1 >> 11) & 0x1F, g1 = (p1 >> 5) & 0x3F, b1 = p1 & 0x1F;
+            uint8_t r2 = (p2 >> 11) & 0x1F, g2 = (p2 >> 5) & 0x3F, b2 = p2 & 0x1F;
+            uint8_t r3 = (p3 >> 11) & 0x1F, g3 = (p3 >> 5) & 0x3F, b3 = p3 & 0x1F;
+            uint8_t r4 = (p4 >> 11) & 0x1F, g4 = (p4 >> 5) & 0x3F, b4 = p4 & 0x1F;
+            
+            // Bilinear interpolation
+            float r = r1 * (1 - xWeight) * (1 - yWeight) +
+                      r2 * xWeight * (1 - yWeight) +
+                      r3 * (1 - xWeight) * yWeight +
+                      r4 * xWeight * yWeight;
+            
+            float g = g1 * (1 - xWeight) * (1 - yWeight) +
+                      g2 * xWeight * (1 - yWeight) +
+                      g3 * (1 - xWeight) * yWeight +
+                      g4 * xWeight * yWeight;
+            
+            float b = b1 * (1 - xWeight) * (1 - yWeight) +
+                      b2 * xWeight * (1 - yWeight) +
+                      b3 * (1 - xWeight) * yWeight +
+                      b4 * xWeight * yWeight;
+            
+            // Store in strip buffer
+            uint16_t finalPixel = ((uint16_t)(r + 0.5) << 11) |
+                                 ((uint16_t)(g + 0.5) << 5) |
+                                 (uint16_t)(b + 0.5);
+            
+            scaledBuffer[y * scaledWidth + dstX] = finalPixel;
           }
         }
         
-        // Add a small delay every few lines to prevent watchdog timeout
-        if (dstY % 50 == 0) {
-          delay(1);
+        // Draw the entire strip at once for smooth rendering
+        int16_t drawX = finalX;
+        int16_t drawY = finalY + stripY;
+        
+        // Only draw if the strip is visible on screen
+        if (drawY < h && drawY + currentStripHeight > 0 && 
+            drawX < w && drawX + scaledWidth > 0) {
+          gfx->draw16bitRGBBitmap(drawX, drawY, scaledBuffer, scaledWidth, currentStripHeight);
         }
       }
     }
