@@ -30,7 +30,7 @@ const char* brightness_topic = "Astro/AllSky/display/brightness"; // Topic to su
 
 // Image Configuration
 const char* imageURL = "https://allsky.challa.co:1982/current/resized/image.jpg"; // Random image service
-const unsigned long updateInterval = 10000; // 10 seconds in milliseconds
+const unsigned long updateInterval = 60000; // 10 seconds in milliseconds
 
 // Brightness Control Variables
 uint8_t displayBrightness = 255;  // Current brightness (0-255)
