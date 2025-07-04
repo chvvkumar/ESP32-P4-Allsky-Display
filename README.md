@@ -1,10 +1,9 @@
-# ESP32-P4 Allsky Display
+# ESP32-P4 Allsky Display using ESP32-P4-WIFI6-Touch-LCD-3.4C
 
-A sophisticated image display system for ESP32-P4 microcontrollers featuring DSI display support, MQTT connectivity, hardware-accelerated image scaling, and touch interface capabilities.
 
-## Project Overview
-
-This project creates an all-sky camera display system that downloads and displays images from a web server on a high-resolution DSI display. It features real-time image transformation controls, MQTT-based remote reboot capability, and hardware-accelerated image processing using the ESP32-P4's PPA (Pixel Processing Accelerator).
+<p align="center">
+  <img src="images/display.jpg" alt="ESP32-P4 Allsky Display" width="400"/>
+</p>
 
 ## Features
 
@@ -24,7 +23,7 @@ This project is designed for the **Waveshare ESP32-P4-WiFi6-Touch-LCD-3.4C** dev
 
 For complete hardware specifications, pin connections, and library compatibility information, please refer to the official Waveshare documentation:
 
-**📖 [Waveshare ESP32-P4-WiFi6-Touch-LCD-3.4C Documentation](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.4c.htm?sku=31523)**
+**📖 [Waveshare ESP32-P4-WiFi6-Touch-LCD-3.4C Documentation](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-3.4C)**
 
 ## Software Dependencies
 
