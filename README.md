@@ -1,8 +1,6 @@
 # ESP32-P4 Allsky Display using ESP32-P4-WIFI6-Touch-LCD-3.4C
 
 
-## Project Overview
-
 <p align="center">
   <img src="images/display.jpg" alt="ESP32-P4 Allsky Display" width="400"/>
 </p>
