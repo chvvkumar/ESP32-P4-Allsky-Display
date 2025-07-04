@@ -1,10 +1,12 @@
 # ESP32-P4 Allsky Display
 
-A sophisticated image display system for ESP32-P4 microcontrollers featuring DSI display support, MQTT connectivity, hardware-accelerated image scaling, and touch interface capabilities.
+images\display.jpg
 
 ## Project Overview
 
-This project creates an all-sky camera display system that downloads and displays images from a web server on a high-resolution DSI display. It features real-time image transformation controls, MQTT-based remote reboot capability, and hardware-accelerated image processing using the ESP32-P4's PPA (Pixel Processing Accelerator).
+<p align="center">
+  <img src="images/display.jpg" alt="ESP32-P4 Allsky Display" width="400"/>
+</p>
 
 ## Features
 
