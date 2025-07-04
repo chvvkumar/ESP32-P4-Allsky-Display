@@ -383,12 +383,12 @@ flowchart TD
     C -->|No| D[Ignore Message]
     C -->|Yes| E[Parse Message Payload]
     
-    E --> F{Message = "reboot"?}
+    E --> F{Message equals reboot?}
     F -->|No| G[Log Invalid Command]
     F -->|Yes| H[Log Reboot Request]
     
     H --> I[Perform System Restart]
-    I --> J[ESP.restart()]
+    I --> J[ESP.restart call]
     J --> K[Device Reboots]
     
     D --> L[End]
