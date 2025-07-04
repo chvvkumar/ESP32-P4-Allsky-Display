@@ -7,6 +7,8 @@
 #include <HTTPClient.h>
 #include <JPEGDEC.h>
 #include <PubSubClient.h>
+#include <WebServer.h>
+#include <ElegantOTA.h>
 #include "displays_config.h"
 
 // ESP-IDF includes for PPA hardware acceleration
@@ -17,8 +19,8 @@ extern "C" {
 }
 
 // WiFi Configuration - Update these with your credentials
-const char* ssid = "IoT";
-const char* password = "kkkkkkkk";
+const char* ssid = "";
+const char* password = "";
 
 // MQTT Configuration - Update these with your MQTT broker details
 const char* mqtt_server = "192.168.1.250";  // Replace with your MQTT broker IP
@@ -26,17 +28,11 @@ const int mqtt_port = 1883;
 const char* mqtt_user = "";                 // Leave empty if no authentication
 const char* mqtt_password = "";             // Leave empty if no authentication
 const char* mqtt_client_id = "ESP32_Allsky_Display";
-const char* brightness_topic = "Astro/AllSky/display/brightness"; // Topic to subscribe for brightness control
+const char* reboot_topic = "Astro/AllSky/display/reboot"; // Topic to subscribe for reboot control
 
 // Image Configuration
 const char* imageURL = "https://allsky.challa.co:1982/current/resized/image.jpg"; // Random image service
-const unsigned long updateInterval = 60000; // 10 seconds in milliseconds
-
-// Brightness Control Variables
-uint8_t displayBrightness = 255;  // Current brightness (0-255)
-const uint8_t MIN_BRIGHTNESS = 10; // Minimum brightness to keep display visible
-const uint8_t MAX_BRIGHTNESS = 255; // Maximum brightness
-bool brightnessChanged = false;    // Flag to indicate brightness change
+const unsigned long updateInterval = 60000; // 60 seconds in milliseconds
 
 // Display variables
 int16_t w, h;
@@ -89,6 +85,35 @@ PubSubClient mqttClient(wifiClient);
 bool mqttConnected = false;
 unsigned long lastMqttReconnectAttempt = 0;
 const unsigned long mqttReconnectInterval = 5000; // 5 seconds
+
+// OTA Web Server
+WebServer server(80);
+unsigned long ota_progress_millis = 0;
+
+// ElegantOTA callback functions
+void onOTAStart() {
+  // Log when OTA has started
+  Serial.println("OTA update started!");
+  // Optionally pause image updates during OTA
+}
+
+void onOTAProgress(size_t current, size_t final) {
+  // Log every 1 second
+  if (millis() - ota_progress_millis > 1000) {
+    ota_progress_millis = millis();
+    Serial.printf("OTA Progress Current: %u bytes, Final: %u bytes\n", current, final);
+  }
+}
+
+void onOTAEnd(bool success) {
+  // Log when OTA has finished
+  if (success) {
+    Serial.println("OTA update finished successfully!");
+  } else {
+    Serial.println("There was an error during OTA update!");
+  }
+  // Device will restart automatically after successful OTA
+}
 
 // Function to print debug messages to screen
 void debugPrint(const char* message, uint16_t color = WHITE) {
@@ -376,117 +401,6 @@ void cleanupPPA() {
   ppa_available = false;
 }
 
-// Hardware brightness control functions
-void setBrightness(uint8_t brightness) {
-  displayBrightness = constrain(brightness, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
-  brightnessChanged = true;
-  
-  Serial.printf("Brightness set to: %d\n", displayBrightness);
-  
-  // Apply hardware brightness control
-  applyHardwareBrightness();
-}
-
-// Apply hardware brightness control via LCD registers
-void applyHardwareBrightness() {
-  if (!gfx || !dsipanel) return;
-  
-  // Calculate brightness value for LCD register (0x51 command)
-  // Convert from 0-255 range to 0-255 range (direct mapping for this display)
-  uint8_t lcdBrightness = displayBrightness;
-  
-  Serial.printf("Setting hardware brightness to: %d\n", lcdBrightness);
-  
-  // Send brightness control command to LCD
-  // 0x51 is the standard MIPI DCS command for setting display brightness
-  lcd_init_cmd_t brightnessCmd = {
-    0x51,
-    &lcdBrightness,
-    1,
-    0
-  };
-  
-  // Apply the brightness command
-  if (dsipanel) {
-    // Use the DSI panel's command sending capability
-    // First, we need to enable command mode
-    enableDisplayCommandMode();
-    
-    // Send the brightness command
-    sendDisplayCommand(0x51, &lcdBrightness, 1);
-    
-    // Return to video mode
-    enableDisplayVideoMode();
-  }
-}
-
-// Enable command mode for sending LCD commands
-void enableDisplayCommandMode() {
-  // This function enables command mode on the DSI interface
-  // Implementation depends on the specific DSI controller
-  // For ESP32-P4, we need to use the DSI peripheral registers
-  
-  // Note: This is a simplified implementation
-  // In practice, you might need to access DSI registers directly
-  Serial.println("Switching to command mode");
-}
-
-// Send command to display
-void sendDisplayCommand(uint8_t cmd, uint8_t* data, size_t len) {
-  // Send DCS command to the display
-  // This is a simplified implementation - actual implementation would
-  // use the ESP32-P4 DSI peripheral to send the command
-  
-  Serial.printf("Sending LCD command 0x%02X with %d bytes of data\n", cmd, len);
-  
-  // For now, we'll use a workaround by creating a temporary command array
-  // and trying to send it through the display initialization path
-  if (len > 0 && data) {
-    lcd_init_cmd_t tempCmd = {
-      cmd,
-      data,
-      (uint8_t)len,
-      0
-    };
-    
-    // Try to send the command (this is a simplified approach)
-    // In a full implementation, you'd access the DSI registers directly
-  }
-}
-
-// Enable video mode for normal display operation
-void enableDisplayVideoMode() {
-  // This function returns the DSI interface to video mode
-  Serial.println("Switching to video mode");
-}
-
-// Alternative PWM-based backlight control (if available)
-void setPWMBrightness(uint8_t brightness) {
-  // If your display has a separate backlight control pin, you can use PWM
-  // This is an alternative approach if direct LCD brightness control doesn't work
-  
-  const int backlightPin = 45; // Change this to your actual backlight control pin
-  const int pwmChannel = 0;
-  const int pwmFreq = 5000;
-  const int pwmResolution = 8;
-  
-  static bool pwmInitialized = false;
-  
-  if (!pwmInitialized) {
-    // Initialize PWM for backlight control (newer ESP32 Arduino core)
-    if (ledcAttach(backlightPin, pwmFreq, pwmResolution) == 0) {
-      Serial.println("ERROR: Failed to attach LEDC to pin");
-      return;
-    }
-    pwmInitialized = true;
-    Serial.printf("PWM backlight initialized on pin %d\n", backlightPin);
-  }
-  
-  // Set PWM duty cycle based on brightness
-  ledcWrite(backlightPin, brightness);
-  Serial.printf("PWM brightness set to: %d\n", brightness);
-}
-
 // MQTT callback function
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   // Convert payload to string
@@ -497,14 +411,14 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   
   Serial.printf("MQTT message received on topic '%s': %s\n", topic, message.c_str());
   
-  // Handle brightness control
-  if (String(topic) == brightness_topic) {
-    int brightness = message.toInt();
-    if (brightness >= 0 && brightness <= 255) {
-      setBrightness(brightness);
-      Serial.printf("Brightness changed via MQTT to: %d\n", brightness);
+  // Handle reboot control
+  if (String(topic) == reboot_topic) {
+    if (message == "reboot") {
+      Serial.println("Reboot command received via MQTT - restarting device...");
+      delay(1000); // Give time for the message to be sent
+      ESP.restart();
     } else {
-      Serial.printf("Invalid brightness value: %d (must be 0-255)\n", brightness);
+      Serial.printf("Invalid reboot command: '%s' (expected 'reboot')\n", message.c_str());
     }
   }
 }
@@ -534,15 +448,15 @@ void connectToMQTT() {
     mqttConnected = true;
     Serial.printf("MQTT connected as: %s\n", clientId.c_str());
     
-    // Subscribe to brightness control topic
-    if (mqttClient.subscribe(brightness_topic)) {
-      Serial.printf("Subscribed to topic: %s\n", brightness_topic);
+    // Subscribe to reboot control topic
+    if (mqttClient.subscribe(reboot_topic)) {
+      Serial.printf("Subscribed to topic: %s\n", reboot_topic);
       if (!firstImageLoaded) {
         debugPrint("MQTT connected!", GREEN);
-        debugPrintf(WHITE, "Subscribed to: %s", brightness_topic);
+        debugPrintf(WHITE, "Subscribed to: %s", reboot_topic);
       }
     } else {
-      Serial.println("Failed to subscribe to brightness topic");
+      Serial.println("Failed to subscribe to reboot topic");
       if (!firstImageLoaded) {
         debugPrint("MQTT subscription failed!", RED);
       }
@@ -853,8 +767,30 @@ void setup() {
   debugPrint("Starting WiFi connection...", YELLOW);
   connectToWiFi();
   
-  // Connect to MQTT after WiFi is established
+  // Initialize OTA web server after WiFi is established
   if (wifiConnected) {
+    debugPrint("Initializing OTA server...", YELLOW);
+    
+    // Set up a simple root page
+    server.on("/", []() {
+      server.send(200, "text/plain", "ESP32-P4 Allsky Display - OTA Ready");
+    });
+    
+    // Initialize ElegantOTA
+    ElegantOTA.begin(&server);
+    
+    // Set up ElegantOTA callbacks
+    ElegantOTA.onStart(onOTAStart);
+    ElegantOTA.onProgress(onOTAProgress);
+    ElegantOTA.onEnd(onOTAEnd);
+    
+    // Start the web server
+    server.begin();
+    
+    debugPrint("OTA server started!", GREEN);
+    debugPrintf(WHITE, "OTA URL: http://%s/update", WiFi.localIP().toString().c_str());
+    
+    // Connect to MQTT after WiFi is established
     connectToMQTT();
   }
   
@@ -1223,6 +1159,10 @@ void loop() {
   
   // Handle MQTT connection and messages
   handleMQTT();
+  
+  // Handle OTA web server
+  server.handleClient();
+  ElegantOTA.loop();
   
   // Process serial commands for image control
   processSerialCommands();
