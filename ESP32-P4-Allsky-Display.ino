@@ -25,13 +25,17 @@ size_t imageBufferSize = 0;
 bool firstImageLoaded = false; // Track if first image has been loaded
 
 // Image transformation variables
-float scaleX = 1.0;  // Horizontal scale factor
-float scaleY = 1.0;  // Vertical scale factor
+float scaleX = 1.1;  // Horizontal scale factor
+float scaleY = 1.2;  // Vertical scale factor
 int16_t offsetX = 0; // Horizontal offset from center
 int16_t offsetY = 0; // Vertical offset from center
 int16_t originalImageWidth = 0;
 int16_t originalImageHeight = 0;
 size_t currentImageSize = 0; // Store the actual size of the current image data
+
+// Scaling buffer for interpolated pixels
+uint16_t* scaledBuffer = nullptr;
+size_t scaledBufferSize = 0;
 
 // Control constants
 const float SCALE_STEP = 0.1;    // Scale increment/decrement
@@ -112,42 +116,198 @@ void debugPrintf(uint16_t color, const char* format, ...) {
   debugPrint(buffer, color);
 }
 
-// JPEG callback function to draw pixels with scaling and offset
+// Bilinear interpolation scaling function
+void scaleImageChunk(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
+                     uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight) {
+  float xRatio = (float)srcWidth / dstWidth;
+  float yRatio = (float)srcHeight / dstHeight;
+  
+  for (int16_t y = 0; y < dstHeight; y++) {
+    for (int16_t x = 0; x < dstWidth; x++) {
+      float srcX = x * xRatio;
+      float srcY = y * yRatio;
+      
+      int16_t x1 = (int16_t)srcX;
+      int16_t y1 = (int16_t)srcY;
+      int16_t x2 = min(x1 + 1, srcWidth - 1);
+      int16_t y2 = min(y1 + 1, srcHeight - 1);
+      
+      float xWeight = srcX - x1;
+      float yWeight = srcY - y1;
+      
+      // Get the four surrounding pixels
+      uint16_t p1 = srcPixels[y1 * srcWidth + x1]; // Top-left
+      uint16_t p2 = srcPixels[y1 * srcWidth + x2]; // Top-right
+      uint16_t p3 = srcPixels[y2 * srcWidth + x1]; // Bottom-left
+      uint16_t p4 = srcPixels[y2 * srcWidth + x2]; // Bottom-right
+      
+      // Extract RGB components (assuming RGB565 format)
+      uint8_t r1 = (p1 >> 11) & 0x1F;
+      uint8_t g1 = (p1 >> 5) & 0x3F;
+      uint8_t b1 = p1 & 0x1F;
+      
+      uint8_t r2 = (p2 >> 11) & 0x1F;
+      uint8_t g2 = (p2 >> 5) & 0x3F;
+      uint8_t b2 = p2 & 0x1F;
+      
+      uint8_t r3 = (p3 >> 11) & 0x1F;
+      uint8_t g3 = (p3 >> 5) & 0x3F;
+      uint8_t b3 = p3 & 0x1F;
+      
+      uint8_t r4 = (p4 >> 11) & 0x1F;
+      uint8_t g4 = (p4 >> 5) & 0x3F;
+      uint8_t b4 = p4 & 0x1F;
+      
+      // Bilinear interpolation
+      float r = r1 * (1 - xWeight) * (1 - yWeight) +
+                r2 * xWeight * (1 - yWeight) +
+                r3 * (1 - xWeight) * yWeight +
+                r4 * xWeight * yWeight;
+      
+      float g = g1 * (1 - xWeight) * (1 - yWeight) +
+                g2 * xWeight * (1 - yWeight) +
+                g3 * (1 - xWeight) * yWeight +
+                g4 * xWeight * yWeight;
+      
+      float b = b1 * (1 - xWeight) * (1 - yWeight) +
+                b2 * xWeight * (1 - yWeight) +
+                b3 * (1 - xWeight) * yWeight +
+                b4 * xWeight * yWeight;
+      
+      // Combine back to RGB565
+      uint16_t finalPixel = ((uint16_t)(r + 0.5) << 11) |
+                           ((uint16_t)(g + 0.5) << 5) |
+                           (uint16_t)(b + 0.5);
+      
+      dstPixels[y * dstWidth + x] = finalPixel;
+    }
+  }
+}
+
+// Global buffer for full image decoding
+uint16_t* fullImageBuffer = nullptr;
+size_t fullImageBufferSize = 0;
+int16_t fullImageWidth = 0;
+int16_t fullImageHeight = 0;
+
+// JPEG callback function to collect pixels into full image buffer
 int JPEGDraw(JPEGDRAW *pDraw) {
-  // Apply scaling and offset transformations
-  int16_t scaledX = (int16_t)(pDraw->x * scaleX);
-  int16_t scaledY = (int16_t)(pDraw->y * scaleY);
-  int16_t scaledWidth = (int16_t)(pDraw->iWidth * scaleX);
-  int16_t scaledHeight = (int16_t)(pDraw->iHeight * scaleY);
+  // Store pixels in the full image buffer
+  if (fullImageBuffer && pDraw->y + pDraw->iHeight <= fullImageHeight) {
+    for (int16_t y = 0; y < pDraw->iHeight; y++) {
+      uint16_t* destRow = fullImageBuffer + ((pDraw->y + y) * fullImageWidth + pDraw->x);
+      uint16_t* srcRow = pDraw->pPixels + (y * pDraw->iWidth);
+      memcpy(destRow, srcRow, pDraw->iWidth * sizeof(uint16_t));
+    }
+  }
+  return 1;
+}
+
+// Function to render the full image with transformations
+void renderFullImage() {
+  if (!fullImageBuffer || fullImageWidth == 0 || fullImageHeight == 0) return;
+  
+  // Calculate final scaled dimensions
+  int16_t scaledWidth = (int16_t)(fullImageWidth * scaleX);
+  int16_t scaledHeight = (int16_t)(fullImageHeight * scaleY);
   
   // Calculate center position
   int16_t centerX = w / 2;
   int16_t centerY = h / 2;
   
-  // Calculate scaled image center
-  int16_t scaledImageCenterX = (int16_t)(originalImageWidth * scaleX) / 2;
-  int16_t scaledImageCenterY = (int16_t)(originalImageHeight * scaleY) / 2;
+  // Calculate final position with centering and offset
+  int16_t finalX = centerX - (scaledWidth / 2) + offsetX;
+  int16_t finalY = centerY - (scaledHeight / 2) + offsetY;
   
-  // Apply centering and offset
-  int16_t finalX = centerX - scaledImageCenterX + scaledX + offsetX;
-  int16_t finalY = centerY - scaledImageCenterY + scaledY + offsetY;
+  // Clear screen first
+  gfx->fillScreen(BLACK);
   
-  // Check bounds to avoid drawing outside screen
-  if (finalX >= w || finalY >= h || finalX + scaledWidth <= 0 || finalY + scaledHeight <= 0) {
-    return 1; // Skip drawing if completely outside screen
-  }
-  
-  // For simple scaling, we'll use the built-in scaling if available, otherwise draw normally
   if (scaleX == 1.0 && scaleY == 1.0) {
-    // No scaling, just apply offset
-    gfx->draw16bitRGBBitmap(finalX, finalY, pDraw->pPixels, pDraw->iWidth, pDraw->iHeight);
+    // No scaling needed, direct copy
+    gfx->draw16bitRGBBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
   } else {
-    // For now, draw at calculated position (basic implementation)
-    // Note: True scaling would require pixel interpolation
-    gfx->draw16bitRGBBitmap(finalX, finalY, pDraw->pPixels, pDraw->iWidth, pDraw->iHeight);
+    // Check if we can scale the entire image at once
+    if (scaledWidth * scaledHeight * 2 <= scaledBufferSize) {
+      // Scale the entire image at once for seamless rendering
+      scaleImageChunk(fullImageBuffer, fullImageWidth, fullImageHeight,
+                      scaledBuffer, scaledWidth, scaledHeight);
+      
+      // Draw the entire scaled image
+      gfx->draw16bitRGBBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
+    } else {
+      // For very large scaled images, use line-by-line rendering to avoid seams
+      // This is slower but eliminates horizontal lines
+      
+      for (int16_t dstY = 0; dstY < scaledHeight; dstY++) {
+        // Calculate source Y position with high precision
+        float srcYFloat = (float)dstY / scaleY;
+        int16_t srcY = (int16_t)srcYFloat;
+        
+        // Ensure we don't go out of bounds
+        if (srcY >= fullImageHeight - 1) srcY = fullImageHeight - 1;
+        
+        // Process this line
+        for (int16_t dstX = 0; dstX < scaledWidth; dstX++) {
+          // Calculate source X position with high precision
+          float srcXFloat = (float)dstX / scaleX;
+          int16_t srcX = (int16_t)srcXFloat;
+          
+          // Ensure we don't go out of bounds
+          if (srcX >= fullImageWidth - 1) srcX = fullImageWidth - 1;
+          
+          // Get pixel with bilinear interpolation for smooth scaling
+          float xWeight = srcXFloat - srcX;
+          float yWeight = srcYFloat - srcY;
+          
+          // Get the four surrounding pixels
+          uint16_t p1 = fullImageBuffer[srcY * fullImageWidth + srcX]; // Top-left
+          uint16_t p2 = fullImageBuffer[srcY * fullImageWidth + min(srcX + 1, fullImageWidth - 1)]; // Top-right
+          uint16_t p3 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + srcX]; // Bottom-left
+          uint16_t p4 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + min(srcX + 1, fullImageWidth - 1)]; // Bottom-right
+          
+          // Extract RGB components (RGB565 format)
+          uint8_t r1 = (p1 >> 11) & 0x1F, g1 = (p1 >> 5) & 0x3F, b1 = p1 & 0x1F;
+          uint8_t r2 = (p2 >> 11) & 0x1F, g2 = (p2 >> 5) & 0x3F, b2 = p2 & 0x1F;
+          uint8_t r3 = (p3 >> 11) & 0x1F, g3 = (p3 >> 5) & 0x3F, b3 = p3 & 0x1F;
+          uint8_t r4 = (p4 >> 11) & 0x1F, g4 = (p4 >> 5) & 0x3F, b4 = p4 & 0x1F;
+          
+          // Bilinear interpolation
+          float r = r1 * (1 - xWeight) * (1 - yWeight) +
+                    r2 * xWeight * (1 - yWeight) +
+                    r3 * (1 - xWeight) * yWeight +
+                    r4 * xWeight * yWeight;
+          
+          float g = g1 * (1 - xWeight) * (1 - yWeight) +
+                    g2 * xWeight * (1 - yWeight) +
+                    g3 * (1 - xWeight) * yWeight +
+                    g4 * xWeight * yWeight;
+          
+          float b = b1 * (1 - xWeight) * (1 - yWeight) +
+                    b2 * xWeight * (1 - yWeight) +
+                    b3 * (1 - xWeight) * yWeight +
+                    b4 * xWeight * yWeight;
+          
+          // Combine back to RGB565
+          uint16_t finalPixel = ((uint16_t)(r + 0.5) << 11) |
+                               ((uint16_t)(g + 0.5) << 5) |
+                               (uint16_t)(b + 0.5);
+          
+          // Draw the pixel
+          int16_t drawX = finalX + dstX;
+          int16_t drawY = finalY + dstY;
+          
+          if (drawX >= 0 && drawX < w && drawY >= 0 && drawY < h) {
+            gfx->drawPixel(drawX, drawY, finalPixel);
+          }
+        }
+        
+        // Add a small delay every few lines to prevent watchdog timeout
+        if (dstY % 50 == 0) {
+          delay(1);
+        }
+      }
+    }
   }
-  
-  return 1;
 }
 
 void setup() {
@@ -228,6 +388,26 @@ void setup() {
   imageBuffer = (uint8_t*)ps_malloc(imageBufferSize);
   if (!imageBuffer) {
     debugPrint("ERROR: Memory allocation failed!", RED);
+    while(1) delay(1000);
+  }
+  
+  // Allocate full image buffer for smooth rendering (estimate max image size)
+  fullImageBufferSize = 1024 * 1024; // 1MB for full image buffer (512x512 max image at 16-bit)
+  debugPrintf(WHITE, "Allocating full image buffer: %d bytes", fullImageBufferSize);
+  
+  fullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
+  if (!fullImageBuffer) {
+    debugPrint("ERROR: Full image buffer allocation failed!", RED);
+    while(1) delay(1000);
+  }
+  
+  // Allocate scaling buffer for interpolated chunks
+  scaledBufferSize = 800 * 32 * 2; // 800 width x 32 height chunk, 16-bit color
+  debugPrintf(WHITE, "Allocating scaling buffer: %d bytes", scaledBufferSize);
+  
+  scaledBuffer = (uint16_t*)ps_malloc(scaledBufferSize);
+  if (!scaledBuffer) {
+    debugPrint("ERROR: Scaling buffer allocation failed!", RED);
     while(1) delay(1000);
   }
   
@@ -342,28 +522,46 @@ void downloadAndDisplayImage() {
         currentImageSize = bytesRead;
         
         debugPrintf(WHITE, "JPEG: %dx%d pixels", originalImageWidth, originalImageHeight);
-        debugPrint("Displaying image...", GREEN);
         
-        // Clear screen and decode image with transformations
-        gfx->fillScreen(BLACK);
-        jpeg.decode(0, 0, 0);  // Start from 0,0 since positioning is handled in callback
-        jpeg.close();
-        
-        // Mark first image as loaded
-        firstImageLoaded = true;
-        
-        // Show status info at bottom
-        gfx->setTextSize(1);
-        gfx->setTextColor(WHITE);
-        gfx->fillRect(0, h-20, w, 20, BLACK);
-        gfx->setCursor(5, h-15);
-        gfx->printf("Updated: %02d:%02d:%02d", 
-                   (millis()/3600000)%24, 
-                   (millis()/60000)%60, 
-                   (millis()/1000)%60);
-        
-        debugPrint("SUCCESS: Image displayed!", GREEN);
-        Serial.println("First image loaded successfully - switching to image mode");
+        // Check if image fits in our full image buffer
+        if (originalImageWidth * originalImageHeight * 2 <= fullImageBufferSize) {
+          debugPrint("Decoding to full buffer...", YELLOW);
+          
+          // Set up full image buffer dimensions
+          fullImageWidth = originalImageWidth;
+          fullImageHeight = originalImageHeight;
+          
+          // Clear the full image buffer
+          memset(fullImageBuffer, 0, fullImageWidth * fullImageHeight * sizeof(uint16_t));
+          
+          // Decode the full image into our buffer
+          jpeg.decode(0, 0, 0);
+          jpeg.close();
+          
+          debugPrint("Rendering image...", GREEN);
+          
+          // Now render the full image with transformations
+          renderFullImage();
+          
+          // Mark first image as loaded
+          firstImageLoaded = true;
+          
+          // Show status info at bottom
+          gfx->setTextSize(1);
+          gfx->setTextColor(WHITE);
+          gfx->fillRect(0, h-20, w, 20, BLACK);
+          gfx->setCursor(5, h-15);
+          gfx->printf("Updated: %02d:%02d:%02d", 
+                     (millis()/3600000)%24, 
+                     (millis()/60000)%60, 
+                     (millis()/1000)%60);
+          
+          debugPrint("SUCCESS: Image displayed!", GREEN);
+          Serial.println("First image loaded successfully - switching to image mode");
+        } else {
+          debugPrint("ERROR: Image too large for buffer!", RED);
+          jpeg.close();
+        }
         
       } else {
         debugPrint("ERROR: JPEG decode failed!", RED);
@@ -423,19 +621,34 @@ void downloadAndDisplayImageSilent() {
         originalImageHeight = jpeg.getHeight();
         currentImageSize = bytesRead;
         
-        gfx->fillScreen(BLACK);
-        jpeg.decode(0, 0, 0);  // Start from 0,0 since positioning is handled in callback
-        jpeg.close();
-        
-        // Update timestamp
-        gfx->setTextSize(1);
-        gfx->setTextColor(WHITE);
-        gfx->fillRect(0, h-20, w, 20, BLACK);
-        gfx->setCursor(5, h-15);
-        gfx->printf("Updated: %02d:%02d:%02d", 
-                   (millis()/3600000)%24, 
-                   (millis()/60000)%60, 
-                   (millis()/1000)%60);
+        // Check if image fits in our full image buffer
+        if (originalImageWidth * originalImageHeight * 2 <= fullImageBufferSize) {
+          // Set up full image buffer dimensions
+          fullImageWidth = originalImageWidth;
+          fullImageHeight = originalImageHeight;
+          
+          // Clear the full image buffer
+          memset(fullImageBuffer, 0, fullImageWidth * fullImageHeight * sizeof(uint16_t));
+          
+          // Decode the full image into our buffer
+          jpeg.decode(0, 0, 0);
+          jpeg.close();
+          
+          // Now render the full image with transformations
+          renderFullImage();
+          
+          // Update timestamp
+          gfx->setTextSize(1);
+          gfx->setTextColor(WHITE);
+          gfx->fillRect(0, h-20, w, 20, BLACK);
+          gfx->setCursor(5, h-15);
+          gfx->printf("Updated: %02d:%02d:%02d", 
+                     (millis()/3600000)%24, 
+                     (millis()/60000)%60, 
+                     (millis()/1000)%60);
+        } else {
+          jpeg.close();
+        }
       }
     }
   }
@@ -475,17 +688,13 @@ void resetImageTransform() {
 }
 
 void redrawImage() {
-  if (!firstImageLoaded || !imageBuffer || currentImageSize == 0) return;
+  if (!firstImageLoaded || !fullImageBuffer || fullImageWidth == 0 || fullImageHeight == 0) return;
   
-  // Redecode and display the current image with new transformations
-  if (jpeg.openRAM(imageBuffer, currentImageSize, JPEGDraw)) {
-    gfx->fillScreen(BLACK);
-    jpeg.decode(0, 0, 0);
-    jpeg.close();
-    
-    // Update status display
-    updateStatusDisplay();
-  }
+  // Use the existing full image buffer to render with new transformations
+  renderFullImage();
+  
+  // Update status display
+  updateStatusDisplay();
 }
 
 void updateStatusDisplay() {
