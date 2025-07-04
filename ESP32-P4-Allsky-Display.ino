@@ -6,15 +6,33 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <JPEGDEC.h>
+#include <PubSubClient.h>
+#include <WebServer.h>
+#include <ElegantOTA.h>
 #include "displays_config.h"
 
+// ESP-IDF includes for PPA hardware acceleration
+extern "C" {
+#include "driver/ppa.h"
+#include "esp_heap_caps.h"
+#include "esp_cache.h"
+}
+
 // WiFi Configuration - Update these with your credentials
-const char* ssid = "IoT";
-const char* password = "kkkkkkkk";
+const char* ssid = "";
+const char* password = "";
+
+// MQTT Configuration - Update these with your MQTT broker details
+const char* mqtt_server = "192.168.1.250";  // Replace with your MQTT broker IP
+const int mqtt_port = 1883;
+const char* mqtt_user = "";                 // Leave empty if no authentication
+const char* mqtt_password = "";             // Leave empty if no authentication
+const char* mqtt_client_id = "ESP32_Allsky_Display";
+const char* reboot_topic = "Astro/AllSky/display/reboot"; // Topic to subscribe for reboot control
 
 // Image Configuration
 const char* imageURL = "https://allsky.challa.co:1982/current/resized/image.jpg"; // Random image service
-const unsigned long updateInterval = 10000; // 10 seconds in milliseconds
+const unsigned long updateInterval = 60000; // 60 seconds in milliseconds
 
 // Display variables
 int16_t w, h;
@@ -25,13 +43,17 @@ size_t imageBufferSize = 0;
 bool firstImageLoaded = false; // Track if first image has been loaded
 
 // Image transformation variables
-float scaleX = 1.0;  // Horizontal scale factor
-float scaleY = 1.0;  // Vertical scale factor
+float scaleX = 1.2;  // Horizontal scale factor
+float scaleY = 1.2;  // Vertical scale factor
 int16_t offsetX = 0; // Horizontal offset from center
-int16_t offsetY = 0; // Vertical offset from center
+int16_t offsetY = 0; // Vertical offset from center (changed from 40 to 0)
 int16_t originalImageWidth = 0;
 int16_t originalImageHeight = 0;
 size_t currentImageSize = 0; // Store the actual size of the current image data
+
+// Scaling buffer for interpolated pixels
+uint16_t* scaledBuffer = nullptr;
+size_t scaledBufferSize = 0;
 
 // Control constants
 const float SCALE_STEP = 0.1;    // Scale increment/decrement
@@ -56,6 +78,42 @@ JPEGDEC jpeg;
 // Display objects - will be initialized in setup()
 Arduino_ESP32DSIPanel *dsipanel = nullptr;
 Arduino_DSI_Display *gfx = nullptr;
+
+// MQTT objects
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);
+bool mqttConnected = false;
+unsigned long lastMqttReconnectAttempt = 0;
+const unsigned long mqttReconnectInterval = 5000; // 5 seconds
+
+// OTA Web Server
+WebServer server(80);
+unsigned long ota_progress_millis = 0;
+
+// ElegantOTA callback functions
+void onOTAStart() {
+  // Log when OTA has started
+  Serial.println("OTA update started!");
+  // Optionally pause image updates during OTA
+}
+
+void onOTAProgress(size_t current, size_t final) {
+  // Log every 1 second
+  if (millis() - ota_progress_millis > 1000) {
+    ota_progress_millis = millis();
+    Serial.printf("OTA Progress Current: %u bytes, Final: %u bytes\n", current, final);
+  }
+}
+
+void onOTAEnd(bool success) {
+  // Log when OTA has finished
+  if (success) {
+    Serial.println("OTA update finished successfully!");
+  } else {
+    Serial.println("There was an error during OTA update!");
+  }
+  // Device will restart automatically after successful OTA
+}
 
 // Function to print debug messages to screen
 void debugPrint(const char* message, uint16_t color = WHITE) {
@@ -112,42 +170,484 @@ void debugPrintf(uint16_t color, const char* format, ...) {
   debugPrint(buffer, color);
 }
 
-// JPEG callback function to draw pixels with scaling and offset
-int JPEGDraw(JPEGDRAW *pDraw) {
-  // Apply scaling and offset transformations
-  int16_t scaledX = (int16_t)(pDraw->x * scaleX);
-  int16_t scaledY = (int16_t)(pDraw->y * scaleY);
-  int16_t scaledWidth = (int16_t)(pDraw->iWidth * scaleX);
-  int16_t scaledHeight = (int16_t)(pDraw->iHeight * scaleY);
+// Bilinear interpolation scaling function
+void scaleImageChunk(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
+                     uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight) {
+  float xRatio = (float)srcWidth / dstWidth;
+  float yRatio = (float)srcHeight / dstHeight;
   
-  // Calculate center position
+  for (int16_t y = 0; y < dstHeight; y++) {
+    for (int16_t x = 0; x < dstWidth; x++) {
+      float srcX = x * xRatio;
+      float srcY = y * yRatio;
+      
+      int16_t x1 = (int16_t)srcX;
+      int16_t y1 = (int16_t)srcY;
+      int16_t x2 = min(x1 + 1, srcWidth - 1);
+      int16_t y2 = min(y1 + 1, srcHeight - 1);
+      
+      float xWeight = srcX - x1;
+      float yWeight = srcY - y1;
+      
+      // Get the four surrounding pixels
+      uint16_t p1 = srcPixels[y1 * srcWidth + x1]; // Top-left
+      uint16_t p2 = srcPixels[y1 * srcWidth + x2]; // Top-right
+      uint16_t p3 = srcPixels[y2 * srcWidth + x1]; // Bottom-left
+      uint16_t p4 = srcPixels[y2 * srcWidth + x2]; // Bottom-right
+      
+      // Extract RGB components (assuming RGB565 format)
+      uint8_t r1 = (p1 >> 11) & 0x1F;
+      uint8_t g1 = (p1 >> 5) & 0x3F;
+      uint8_t b1 = p1 & 0x1F;
+      
+      uint8_t r2 = (p2 >> 11) & 0x1F;
+      uint8_t g2 = (p2 >> 5) & 0x3F;
+      uint8_t b2 = p2 & 0x1F;
+      
+      uint8_t r3 = (p3 >> 11) & 0x1F;
+      uint8_t g3 = (p3 >> 5) & 0x3F;
+      uint8_t b3 = p3 & 0x1F;
+      
+      uint8_t r4 = (p4 >> 11) & 0x1F;
+      uint8_t g4 = (p4 >> 5) & 0x3F;
+      uint8_t b4 = p4 & 0x1F;
+      
+      // Bilinear interpolation
+      float r = r1 * (1 - xWeight) * (1 - yWeight) +
+                r2 * xWeight * (1 - yWeight) +
+                r3 * (1 - xWeight) * yWeight +
+                r4 * xWeight * yWeight;
+      
+      float g = g1 * (1 - xWeight) * (1 - yWeight) +
+                g2 * xWeight * (1 - yWeight) +
+                g3 * (1 - xWeight) * yWeight +
+                g4 * xWeight * yWeight;
+      
+      float b = b1 * (1 - xWeight) * (1 - yWeight) +
+                b2 * xWeight * (1 - yWeight) +
+                b3 * (1 - xWeight) * yWeight +
+                b4 * xWeight * yWeight;
+      
+      // Combine back to RGB565
+      uint16_t finalPixel = ((uint16_t)(r + 0.5) << 11) |
+                           ((uint16_t)(g + 0.5) << 5) |
+                           (uint16_t)(b + 0.5);
+      
+      dstPixels[y * dstWidth + x] = finalPixel;
+    }
+  }
+}
+
+// Global buffer for full image decoding
+uint16_t* fullImageBuffer = nullptr;
+size_t fullImageBufferSize = 0;
+int16_t fullImageWidth = 0;
+int16_t fullImageHeight = 0;
+
+// PPA Hardware Acceleration variables
+ppa_client_handle_t ppa_scaling_handle = nullptr;
+bool ppa_available = false;
+uint16_t* ppa_src_buffer = nullptr;  // DMA-aligned source buffer
+uint16_t* ppa_dst_buffer = nullptr;  // DMA-aligned destination buffer
+size_t ppa_src_buffer_size = 0;
+size_t ppa_dst_buffer_size = 0;
+
+// JPEG callback function to collect pixels into full image buffer
+int JPEGDraw(JPEGDRAW *pDraw) {
+  // Store pixels in the full image buffer
+  if (fullImageBuffer && pDraw->y + pDraw->iHeight <= fullImageHeight) {
+    for (int16_t y = 0; y < pDraw->iHeight; y++) {
+      uint16_t* destRow = fullImageBuffer + ((pDraw->y + y) * fullImageWidth + pDraw->x);
+      uint16_t* srcRow = pDraw->pPixels + (y * pDraw->iWidth);
+      memcpy(destRow, srcRow, pDraw->iWidth * sizeof(uint16_t));
+    }
+  }
+  return 1;
+}
+
+// Initialize PPA hardware acceleration
+bool initPPA() {
+  debugPrint("Initializing PPA hardware...", YELLOW);
+  
+  // Configure PPA client for scaling operations
+  ppa_client_config_t ppa_client_config = {
+    .oper_type = PPA_OPERATION_SRM,  // Scaling, Rotating, and Mirror operations
+  };
+  
+  esp_err_t ret = ppa_register_client(&ppa_client_config, &ppa_scaling_handle);
+  if (ret != ESP_OK) {
+    debugPrintf(RED, "PPA client registration failed: %s", esp_err_to_name(ret));
+    return false;
+  }
+  
+  // Allocate DMA-aligned buffers for PPA operations
+  // Source buffer - for original image data
+  ppa_src_buffer_size = 1024 * 1024; // 1MB for source (512x512 max at 16-bit)
+  ppa_src_buffer = (uint16_t*)heap_caps_aligned_alloc(64, ppa_src_buffer_size, 
+                                                      MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
+  
+  if (!ppa_src_buffer) {
+    debugPrint("ERROR: PPA source buffer allocation failed!", RED);
+    ppa_unregister_client(ppa_scaling_handle);
+    return false;
+  }
+  
+  // Destination buffer - for scaled image data
+  ppa_dst_buffer_size = w * h * 2; // Full display size at 16-bit
+  ppa_dst_buffer = (uint16_t*)heap_caps_aligned_alloc(64, ppa_dst_buffer_size, 
+                                                      MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
+  
+  if (!ppa_dst_buffer) {
+    debugPrint("ERROR: PPA destination buffer allocation failed!", RED);
+    heap_caps_free(ppa_src_buffer);
+    ppa_unregister_client(ppa_scaling_handle);
+    return false;
+  }
+  
+  debugPrint("PPA hardware initialized successfully!", GREEN);
+  debugPrintf(WHITE, "PPA src buffer: %d bytes", ppa_src_buffer_size);
+  debugPrintf(WHITE, "PPA dst buffer: %d bytes", ppa_dst_buffer_size);
+  
+  return true;
+}
+
+// Hardware-accelerated image scaling using PPA
+bool scaleImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
+                   uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight) {
+  if (!ppa_available || !ppa_scaling_handle) {
+    return false; // Fall back to software scaling
+  }
+  
+  // Check if source fits in PPA buffer
+  size_t srcSize = srcWidth * srcHeight * sizeof(uint16_t);
+  if (srcSize > ppa_src_buffer_size) {
+    return false; // Too large for hardware acceleration
+  }
+  
+  // Check if destination fits in PPA buffer
+  size_t dstSize = dstWidth * dstHeight * sizeof(uint16_t);
+  if (dstSize > ppa_dst_buffer_size) {
+    return false; // Too large for hardware acceleration
+  }
+  
+  // Copy source data to DMA-aligned buffer
+  memcpy(ppa_src_buffer, srcPixels, srcSize);
+  
+  // Ensure cache coherency for DMA operations
+  esp_cache_msync(ppa_src_buffer, srcSize, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+  
+  // Configure PPA scaling operation
+  ppa_srm_oper_config_t srm_oper_config = {};
+  
+  // Source configuration
+  srm_oper_config.in.buffer = ppa_src_buffer;
+  srm_oper_config.in.pic_w = srcWidth;
+  srm_oper_config.in.pic_h = srcHeight;
+  srm_oper_config.in.block_w = srcWidth;
+  srm_oper_config.in.block_h = srcHeight;
+  srm_oper_config.in.block_offset_x = 0;
+  srm_oper_config.in.block_offset_y = 0;
+  srm_oper_config.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  
+  // Output configuration
+  srm_oper_config.out.buffer = ppa_dst_buffer;
+  srm_oper_config.out.buffer_size = ppa_dst_buffer_size;
+  srm_oper_config.out.pic_w = dstWidth;
+  srm_oper_config.out.pic_h = dstHeight;
+  srm_oper_config.out.block_offset_x = 0;
+  srm_oper_config.out.block_offset_y = 0;
+  srm_oper_config.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+  
+  // Scaling configuration
+  srm_oper_config.scale_x = (float)srcWidth / dstWidth;
+  srm_oper_config.scale_y = (float)srcHeight / dstHeight;
+  
+  // Rotation configuration (no rotation)
+  srm_oper_config.rotation_angle = PPA_SRM_ROTATION_ANGLE_0;
+  
+  // Perform the scaling operation
+  esp_err_t ret = ppa_do_scale_rotate_mirror(ppa_scaling_handle, &srm_oper_config);
+  if (ret != ESP_OK) {
+    Serial.printf("PPA scaling operation failed: %s\n", esp_err_to_name(ret));
+    return false;
+  }
+  
+  // Ensure cache coherency for reading results
+  esp_cache_msync(ppa_dst_buffer, dstSize, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+  
+  // Copy result to destination buffer
+  memcpy(dstPixels, ppa_dst_buffer, dstSize);
+  
+  return true;
+}
+
+// Cleanup PPA resources
+void cleanupPPA() {
+  if (ppa_scaling_handle) {
+    ppa_unregister_client(ppa_scaling_handle);
+    ppa_scaling_handle = nullptr;
+  }
+  
+  if (ppa_src_buffer) {
+    heap_caps_free(ppa_src_buffer);
+    ppa_src_buffer = nullptr;
+  }
+  
+  if (ppa_dst_buffer) {
+    heap_caps_free(ppa_dst_buffer);
+    ppa_dst_buffer = nullptr;
+  }
+  
+  ppa_available = false;
+}
+
+// MQTT callback function
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  // Convert payload to string
+  String message = "";
+  for (unsigned int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+  
+  Serial.printf("MQTT message received on topic '%s': %s\n", topic, message.c_str());
+  
+  // Handle reboot control
+  if (String(topic) == reboot_topic) {
+    if (message == "reboot") {
+      Serial.println("Reboot command received via MQTT - restarting device...");
+      delay(1000); // Give time for the message to be sent
+      ESP.restart();
+    } else {
+      Serial.printf("Invalid reboot command: '%s' (expected 'reboot')\n", message.c_str());
+    }
+  }
+}
+
+// Connect to MQTT broker
+void connectToMQTT() {
+  if (!wifiConnected) return;
+  
+  mqttClient.setServer(mqtt_server, mqtt_port);
+  mqttClient.setCallback(mqttCallback);
+  
+  if (!firstImageLoaded) {
+    debugPrint("Connecting to MQTT...", YELLOW);
+    debugPrintf(WHITE, "Broker: %s:%d", mqtt_server, mqtt_port);
+  }
+  
+  String clientId = String(mqtt_client_id) + "_" + String(random(0xffff), HEX);
+  
+  bool connected = false;
+  if (strlen(mqtt_user) > 0) {
+    connected = mqttClient.connect(clientId.c_str(), mqtt_user, mqtt_password);
+  } else {
+    connected = mqttClient.connect(clientId.c_str());
+  }
+  
+  if (connected) {
+    mqttConnected = true;
+    Serial.printf("MQTT connected as: %s\n", clientId.c_str());
+    
+    // Subscribe to reboot control topic
+    if (mqttClient.subscribe(reboot_topic)) {
+      Serial.printf("Subscribed to topic: %s\n", reboot_topic);
+      if (!firstImageLoaded) {
+        debugPrint("MQTT connected!", GREEN);
+        debugPrintf(WHITE, "Subscribed to: %s", reboot_topic);
+      }
+    } else {
+      Serial.println("Failed to subscribe to reboot topic");
+      if (!firstImageLoaded) {
+        debugPrint("MQTT subscription failed!", RED);
+      }
+    }
+  } else {
+    mqttConnected = false;
+    Serial.printf("MQTT connection failed, state: %d\n", mqttClient.state());
+    if (!firstImageLoaded) {
+      debugPrintf(RED, "MQTT failed, state: %d", mqttClient.state());
+    }
+  }
+}
+
+// Handle MQTT reconnection
+void handleMQTT() {
+  if (!wifiConnected) {
+    mqttConnected = false;
+    return;
+  }
+  
+  if (!mqttClient.connected()) {
+    if (mqttConnected) {
+      mqttConnected = false;
+      Serial.println("MQTT disconnected");
+    }
+    
+    unsigned long now = millis();
+    if (now - lastMqttReconnectAttempt > mqttReconnectInterval) {
+      lastMqttReconnectAttempt = now;
+      connectToMQTT();
+    }
+  } else {
+    mqttClient.loop();
+  }
+}
+
+// Function to render the full image with transformations
+void renderFullImage() {
+  renderFullImageWithTransition(false);
+}
+
+// Function to render the full image with optional smooth transition
+void renderFullImageWithTransition(bool useTransition) {
+  if (!fullImageBuffer || fullImageWidth == 0 || fullImageHeight == 0) return;
+  
+  // Calculate final scaled dimensions
+  int16_t scaledWidth = (int16_t)(fullImageWidth * scaleX);
+  int16_t scaledHeight = (int16_t)(fullImageHeight * scaleY);
+  
+  // Debug output to understand buffer usage
+  size_t scaledImageSize = scaledWidth * scaledHeight * 2;
+  Serial.printf("DEBUG: Scaled image %dx%d = %d bytes, buffer = %d bytes\n", 
+               scaledWidth, scaledHeight, scaledImageSize, scaledBufferSize);
+  Serial.printf("DEBUG: PPA available: %s\n", ppa_available ? "YES" : "NO");
+  
+  // Calculate center position using full display area (no status display)
   int16_t centerX = w / 2;
   int16_t centerY = h / 2;
   
-  // Calculate scaled image center
-  int16_t scaledImageCenterX = (int16_t)(originalImageWidth * scaleX) / 2;
-  int16_t scaledImageCenterY = (int16_t)(originalImageHeight * scaleY) / 2;
+  // Calculate final position with centering and offset
+  int16_t finalX = centerX - (scaledWidth / 2) + offsetX;
+  int16_t finalY = centerY - (scaledHeight / 2) + offsetY;
   
-  // Apply centering and offset
-  int16_t finalX = centerX - scaledImageCenterX + scaledX + offsetX;
-  int16_t finalY = centerY - scaledImageCenterY + scaledY + offsetY;
-  
-  // Check bounds to avoid drawing outside screen
-  if (finalX >= w || finalY >= h || finalX + scaledWidth <= 0 || finalY + scaledHeight <= 0) {
-    return 1; // Skip drawing if completely outside screen
+  // Only clear screen if not using transition (for manual controls)
+  if (!useTransition) {
+    gfx->fillScreen(BLACK);
   }
   
-  // For simple scaling, we'll use the built-in scaling if available, otherwise draw normally
   if (scaleX == 1.0 && scaleY == 1.0) {
-    // No scaling, just apply offset
-    gfx->draw16bitRGBBitmap(finalX, finalY, pDraw->pPixels, pDraw->iWidth, pDraw->iHeight);
+    // No scaling needed, direct copy
+    Serial.println("DEBUG: Using direct copy (no scaling)");
+    gfx->draw16bitRGBBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
   } else {
-    // For now, draw at calculated position (basic implementation)
-    // Note: True scaling would require pixel interpolation
-    gfx->draw16bitRGBBitmap(finalX, finalY, pDraw->pPixels, pDraw->iWidth, pDraw->iHeight);
+    bool hardwareScaled = false;
+    
+    // Try hardware acceleration first if available and image fits
+    if (ppa_available && scaledImageSize <= scaledBufferSize) {
+      Serial.println("DEBUG: Attempting PPA hardware scaling");
+      unsigned long hwStart = millis();
+      hardwareScaled = scaleImagePPA(fullImageBuffer, fullImageWidth, fullImageHeight,
+                                     scaledBuffer, scaledWidth, scaledHeight);
+      if (hardwareScaled) {
+        unsigned long hwTime = millis() - hwStart;
+        Serial.printf("PPA scaling: %lums (%dx%d -> %dx%d)\n", 
+                     hwTime, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight);
+        
+        // Draw the hardware-scaled image
+        gfx->draw16bitRGBBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
+      } else {
+        Serial.println("DEBUG: PPA scaling failed, falling back to software");
+      }
+    } else {
+      Serial.printf("DEBUG: PPA not available or image too large (%d > %d)\n", 
+                   scaledImageSize, scaledBufferSize);
+    }
+    
+    // Fall back to software scaling if hardware acceleration failed or unavailable
+    if (!hardwareScaled) {
+      // Check if we can scale the entire image at once with software
+      if (scaledImageSize <= scaledBufferSize) {
+        Serial.println("DEBUG: Using full software scaling");
+        // Scale the entire image at once for seamless rendering
+        unsigned long swStart = millis();
+        scaleImageChunk(fullImageBuffer, fullImageWidth, fullImageHeight,
+                        scaledBuffer, scaledWidth, scaledHeight);
+        unsigned long swTime = millis() - swStart;
+        Serial.printf("Software scaling: %lums (%dx%d -> %dx%d)\n", 
+                     swTime, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight);
+        
+        // Draw the entire scaled image
+        gfx->draw16bitRGBBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
+      } else {
+        // For large scaled images, render in horizontal strips to avoid slow pixel-by-pixel drawing
+        Serial.printf("Strip-based scaling (%dx%d -> %dx%d)\n", 
+                     fullImageWidth, fullImageHeight, scaledWidth, scaledHeight);
+        
+        // Calculate optimal strip height based on available buffer
+        int16_t maxStripHeight = scaledBufferSize / (scaledWidth * 2);
+        if (maxStripHeight < 1) maxStripHeight = 1;
+        if (maxStripHeight > 64) maxStripHeight = 64; // Limit to reasonable chunk size
+        
+        Serial.printf("DEBUG: Strip height = %d pixels\n", maxStripHeight);
+        
+        // Process image in horizontal strips
+        for (int16_t stripY = 0; stripY < scaledHeight; stripY += maxStripHeight) {
+          int16_t currentStripHeight = min((int16_t)maxStripHeight, (int16_t)(scaledHeight - stripY));
+          
+          // Scale this strip
+          for (int16_t y = 0; y < currentStripHeight; y++) {
+            int16_t dstY = stripY + y;
+            float srcYFloat = (float)dstY / scaleY;
+            int16_t srcY = (int16_t)srcYFloat;
+            if (srcY >= fullImageHeight - 1) srcY = fullImageHeight - 1;
+            float yWeight = srcYFloat - srcY;
+            
+            for (int16_t dstX = 0; dstX < scaledWidth; dstX++) {
+              float srcXFloat = (float)dstX / scaleX;
+              int16_t srcX = (int16_t)srcXFloat;
+              if (srcX >= fullImageWidth - 1) srcX = fullImageWidth - 1;
+              float xWeight = srcXFloat - srcX;
+              
+              // Get the four surrounding pixels for bilinear interpolation
+              uint16_t p1 = fullImageBuffer[srcY * fullImageWidth + srcX];
+              uint16_t p2 = fullImageBuffer[srcY * fullImageWidth + min(srcX + 1, fullImageWidth - 1)];
+              uint16_t p3 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + srcX];
+              uint16_t p4 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + min(srcX + 1, fullImageWidth - 1)];
+              
+              // Extract RGB components (RGB565 format)
+              uint8_t r1 = (p1 >> 11) & 0x1F, g1 = (p1 >> 5) & 0x3F, b1 = p1 & 0x1F;
+              uint8_t r2 = (p2 >> 11) & 0x1F, g2 = (p2 >> 5) & 0x3F, b2 = p2 & 0x1F;
+              uint8_t r3 = (p3 >> 11) & 0x1F, g3 = (p3 >> 5) & 0x3F, b3 = p3 & 0x1F;
+              uint8_t r4 = (p4 >> 11) & 0x1F, g4 = (p4 >> 5) & 0x3F, b4 = p4 & 0x1F;
+              
+              // Bilinear interpolation
+              float r = r1 * (1 - xWeight) * (1 - yWeight) +
+                        r2 * xWeight * (1 - yWeight) +
+                        r3 * (1 - xWeight) * yWeight +
+                        r4 * xWeight * yWeight;
+              
+              float g = g1 * (1 - xWeight) * (1 - yWeight) +
+                        g2 * xWeight * (1 - yWeight) +
+                        g3 * (1 - xWeight) * yWeight +
+                        g4 * xWeight * yWeight;
+              
+              float b = b1 * (1 - xWeight) * (1 - yWeight) +
+                        b2 * xWeight * (1 - yWeight) +
+                        b3 * (1 - xWeight) * yWeight +
+                        b4 * xWeight * yWeight;
+              
+              // Store in strip buffer
+              uint16_t finalPixel = ((uint16_t)(r + 0.5) << 11) |
+                                   ((uint16_t)(g + 0.5) << 5) |
+                                   (uint16_t)(b + 0.5);
+              
+              scaledBuffer[y * scaledWidth + dstX] = finalPixel;
+            }
+          }
+          
+          // Draw the entire strip at once for smooth rendering
+          int16_t drawX = finalX;
+          int16_t drawY = finalY + stripY;
+          
+          // Only draw if the strip is visible on screen
+          if (drawY < h && drawY + currentStripHeight > 0 && 
+              drawX < w && drawX + scaledWidth > 0) {
+            gfx->draw16bitRGBBitmap(drawX, drawY, scaledBuffer, scaledWidth, currentStripHeight);
+          }
+        }
+      }
+    }
   }
-  
-  return 1;
 }
 
 void setup() {
@@ -231,13 +731,68 @@ void setup() {
     while(1) delay(1000);
   }
   
+  // Allocate full image buffer for smooth rendering (estimate max image size)
+  fullImageBufferSize = 1024 * 1024; // 1MB for full image buffer (512x512 max image at 16-bit)
+  debugPrintf(WHITE, "Allocating full image buffer: %d bytes", fullImageBufferSize);
+  
+  fullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
+  if (!fullImageBuffer) {
+    debugPrint("ERROR: Full image buffer allocation failed!", RED);
+    while(1) delay(1000);
+  }
+  
+  // Allocate scaling buffer for full scaled images (with extra space for scaling)
+  scaledBufferSize = w * h * 2 * 4; // 4x display size to handle large scale factors
+  debugPrintf(WHITE, "Allocating scaling buffer: %d bytes", scaledBufferSize);
+  
+  scaledBuffer = (uint16_t*)ps_malloc(scaledBufferSize);
+  if (!scaledBuffer) {
+    debugPrint("ERROR: Scaling buffer allocation failed!", RED);
+    while(1) delay(1000);
+  }
+  
   debugPrint("Memory allocated successfully", GREEN);
   debugPrintf(WHITE, "Free heap: %d bytes", ESP.getFreeHeap());
   debugPrintf(WHITE, "Free PSRAM: %d bytes", ESP.getFreePsram());
   
+  // Initialize PPA hardware acceleration
+  ppa_available = initPPA();
+  if (ppa_available) {
+    debugPrint("Hardware acceleration enabled!", GREEN);
+  } else {
+    debugPrint("Using software scaling fallback", YELLOW);
+  }
+  
   // Connect to WiFi
   debugPrint("Starting WiFi connection...", YELLOW);
   connectToWiFi();
+  
+  // Initialize OTA web server after WiFi is established
+  if (wifiConnected) {
+    debugPrint("Initializing OTA server...", YELLOW);
+    
+    // Set up a simple root page
+    server.on("/", []() {
+      server.send(200, "text/plain", "ESP32-P4 Allsky Display - OTA Ready");
+    });
+    
+    // Initialize ElegantOTA
+    ElegantOTA.begin(&server);
+    
+    // Set up ElegantOTA callbacks
+    ElegantOTA.onStart(onOTAStart);
+    ElegantOTA.onProgress(onOTAProgress);
+    ElegantOTA.onEnd(onOTAEnd);
+    
+    // Start the web server
+    server.begin();
+    
+    debugPrint("OTA server started!", GREEN);
+    debugPrintf(WHITE, "OTA URL: http://%s/update", WiFi.localIP().toString().c_str());
+    
+    // Connect to MQTT after WiFi is established
+    connectToMQTT();
+  }
   
   debugPrint("Setup complete!", GREEN);
   delay(1000);
@@ -342,28 +897,36 @@ void downloadAndDisplayImage() {
         currentImageSize = bytesRead;
         
         debugPrintf(WHITE, "JPEG: %dx%d pixels", originalImageWidth, originalImageHeight);
-        debugPrint("Displaying image...", GREEN);
         
-        // Clear screen and decode image with transformations
-        gfx->fillScreen(BLACK);
-        jpeg.decode(0, 0, 0);  // Start from 0,0 since positioning is handled in callback
-        jpeg.close();
-        
-        // Mark first image as loaded
-        firstImageLoaded = true;
-        
-        // Show status info at bottom
-        gfx->setTextSize(1);
-        gfx->setTextColor(WHITE);
-        gfx->fillRect(0, h-20, w, 20, BLACK);
-        gfx->setCursor(5, h-15);
-        gfx->printf("Updated: %02d:%02d:%02d", 
-                   (millis()/3600000)%24, 
-                   (millis()/60000)%60, 
-                   (millis()/1000)%60);
-        
-        debugPrint("SUCCESS: Image displayed!", GREEN);
-        Serial.println("First image loaded successfully - switching to image mode");
+        // Check if image fits in our full image buffer
+        if (originalImageWidth * originalImageHeight * 2 <= fullImageBufferSize) {
+          debugPrint("Decoding to full buffer...", YELLOW);
+          
+          // Set up full image buffer dimensions
+          fullImageWidth = originalImageWidth;
+          fullImageHeight = originalImageHeight;
+          
+          // Clear the full image buffer
+          memset(fullImageBuffer, 0, fullImageWidth * fullImageHeight * sizeof(uint16_t));
+          
+          // Decode the full image into our buffer
+          jpeg.decode(0, 0, 0);
+          jpeg.close();
+          
+          debugPrint("Rendering image...", GREEN);
+          
+          // Now render the full image with transformations
+          renderFullImage();
+          
+          // Mark first image as loaded
+          firstImageLoaded = true;
+          
+          debugPrint("SUCCESS: Image displayed!", GREEN);
+          Serial.println("First image loaded successfully - switching to image mode");
+        } else {
+          debugPrint("ERROR: Image too large for buffer!", RED);
+          jpeg.close();
+        }
         
       } else {
         debugPrint("ERROR: JPEG decode failed!", RED);
@@ -384,13 +947,6 @@ void downloadAndDisplayImage() {
 void downloadAndDisplayImageSilent() {
   // Silent version for subsequent downloads (no debug output)
   if (!wifiConnected) return;
-  
-  // Show loading message briefly
-  gfx->fillRect(0, h-40, w, 20, BLACK);
-  gfx->setTextSize(1);
-  gfx->setTextColor(YELLOW);
-  gfx->setCursor(5, h-35);
-  gfx->print("Updating...");
   
   HTTPClient http;
   http.begin(imageURL);
@@ -423,19 +979,24 @@ void downloadAndDisplayImageSilent() {
         originalImageHeight = jpeg.getHeight();
         currentImageSize = bytesRead;
         
-        gfx->fillScreen(BLACK);
-        jpeg.decode(0, 0, 0);  // Start from 0,0 since positioning is handled in callback
-        jpeg.close();
-        
-        // Update timestamp
-        gfx->setTextSize(1);
-        gfx->setTextColor(WHITE);
-        gfx->fillRect(0, h-20, w, 20, BLACK);
-        gfx->setCursor(5, h-15);
-        gfx->printf("Updated: %02d:%02d:%02d", 
-                   (millis()/3600000)%24, 
-                   (millis()/60000)%60, 
-                   (millis()/1000)%60);
+        // Check if image fits in our full image buffer
+        if (originalImageWidth * originalImageHeight * 2 <= fullImageBufferSize) {
+          // Set up full image buffer dimensions
+          fullImageWidth = originalImageWidth;
+          fullImageHeight = originalImageHeight;
+          
+          // Clear the full image buffer
+          memset(fullImageBuffer, 0, fullImageWidth * fullImageHeight * sizeof(uint16_t));
+          
+          // Decode the full image into our buffer
+          jpeg.decode(0, 0, 0);
+          jpeg.close();
+          
+          // Now render the full image with smooth transition (single clean update)
+          renderFullImageWithTransition(true);
+        } else {
+          jpeg.close();
+        }
       }
     }
   }
@@ -475,41 +1036,12 @@ void resetImageTransform() {
 }
 
 void redrawImage() {
-  if (!firstImageLoaded || !imageBuffer || currentImageSize == 0) return;
+  if (!firstImageLoaded || !fullImageBuffer || fullImageWidth == 0 || fullImageHeight == 0) return;
   
-  // Redecode and display the current image with new transformations
-  if (jpeg.openRAM(imageBuffer, currentImageSize, JPEGDraw)) {
-    gfx->fillScreen(BLACK);
-    jpeg.decode(0, 0, 0);
-    jpeg.close();
-    
-    // Update status display
-    updateStatusDisplay();
-  }
+  // Use the existing full image buffer to render with new transformations
+  renderFullImage();
 }
 
-void updateStatusDisplay() {
-  // Show current transformation values and timestamp
-  gfx->setTextSize(1);
-  gfx->setTextColor(WHITE);
-  gfx->fillRect(0, h-40, w, 40, BLACK);
-  
-  // Timestamp
-  gfx->setCursor(5, h-35);
-  gfx->printf("Updated: %02d:%02d:%02d", 
-             (millis()/3600000)%24, 
-             (millis()/60000)%60, 
-             (millis()/1000)%60);
-  
-  // Transformation info
-  gfx->setCursor(5, h-20);
-  gfx->printf("Scale: %.1fx%.1f  Offset: %d,%d", scaleX, scaleY, offsetX, offsetY);
-  
-  // Controls info
-  gfx->setCursor(5, h-5);
-  gfx->setTextColor(CYAN);
-  gfx->print("Controls: +/-XY scale, WASD move, R reset");
-}
 
 void processSerialCommands() {
   if (Serial.available()) {
@@ -624,6 +1156,13 @@ void loop() {
       debugPrint("WiFi reconnected!", GREEN);
     }
   }
+  
+  // Handle MQTT connection and messages
+  handleMQTT();
+  
+  // Handle OTA web server
+  server.handleClient();
+  ElegantOTA.loop();
   
   // Process serial commands for image control
   processSerialCommands();
