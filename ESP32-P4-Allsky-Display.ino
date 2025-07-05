@@ -66,10 +66,10 @@ const float MAX_SCALE = 3.0;     // Maximum scale factor
 
 // Debug display variables
 int debugY = 50;
-const int debugLineHeight = 20;
-const int maxDebugLines = 30; // Maximum lines to show on screen
+const int debugLineHeight = 30;
+const int maxDebugLines = 20; // Maximum lines to show on screen (reduced due to larger font)
 int debugLineCount = 0;
-const int debugTextSize = 2;
+const int debugTextSize = 3; // Increased from 2 to 3 for better readability
 
 // JPEG decoder
 JPEGDEC jpeg;
@@ -823,7 +823,7 @@ void setup() {
   debugLineCount = 0;
   
   // Now we can use debugPrint functions
-  debugPrint("=== ESP32 Image Display ===", CYAN);
+  debugPrint("=== ESP32 AllSky Display ===", CYAN);
   debugPrint("Display initialized!", GREEN);
   debugPrintf(WHITE, "Display: %dx%d pixels", w, h);
   debugPrintf(WHITE, "Free heap: %d bytes", ESP.getFreeHeap());
