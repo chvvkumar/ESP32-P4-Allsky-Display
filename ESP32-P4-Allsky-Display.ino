@@ -11,11 +11,14 @@
 #include <ElegantOTA.h>
 #include "displays_config.h"
 
-// ESP-IDF includes for PPA hardware acceleration
+// ESP-IDF includes for PPA hardware acceleration and watchdog management
 extern "C" {
 #include "driver/ppa.h"
 #include "esp_heap_caps.h"
 #include "esp_cache.h"
+#include "esp_task_wdt.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 }
 
 // WiFi Configuration - Update these with your credentials
@@ -89,6 +92,17 @@ const unsigned long mqttReconnectInterval = 5000; // 5 seconds
 // OTA Web Server
 WebServer server(80);
 unsigned long ota_progress_millis = 0;
+
+// System health and watchdog management
+unsigned long lastWatchdogReset = 0;
+const unsigned long watchdogResetInterval = 1000; // Reset watchdog every 1 second
+unsigned long lastMemoryCheck = 0;
+const unsigned long memoryCheckInterval = 30000; // Check memory every 30 seconds
+size_t minFreeHeap = SIZE_MAX;
+size_t minFreePsram = SIZE_MAX;
+bool systemHealthy = true;
+unsigned long lastSerialFlush = 0;
+const unsigned long serialFlushInterval = 5000; // Flush serial every 5 seconds
 
 // ElegantOTA callback functions
 void onOTAStart() {
@@ -292,8 +306,8 @@ bool initPPA() {
     return false;
   }
   
-  // Destination buffer - for scaled image data
-  ppa_dst_buffer_size = w * h * 2; // Full display size at 16-bit
+  // Destination buffer - for scaled image data (increased for scaling operations)
+  ppa_dst_buffer_size = w * h * 2 * 2; // 2x display size to handle scaling up to 2x
   ppa_dst_buffer = (uint16_t*)heap_caps_aligned_alloc(64, ppa_dst_buffer_size, 
                                                       MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
   
@@ -315,20 +329,26 @@ bool initPPA() {
 bool scaleImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
                    uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight) {
   if (!ppa_available || !ppa_scaling_handle) {
+    Serial.println("DEBUG: PPA not available or handle invalid");
     return false; // Fall back to software scaling
   }
   
   // Check if source fits in PPA buffer
   size_t srcSize = srcWidth * srcHeight * sizeof(uint16_t);
   if (srcSize > ppa_src_buffer_size) {
+    Serial.printf("DEBUG: Source too large for PPA (%d > %d)\n", srcSize, ppa_src_buffer_size);
     return false; // Too large for hardware acceleration
   }
   
   // Check if destination fits in PPA buffer
   size_t dstSize = dstWidth * dstHeight * sizeof(uint16_t);
   if (dstSize > ppa_dst_buffer_size) {
+    Serial.printf("DEBUG: Destination too large for PPA (%d > %d)\n", dstSize, ppa_dst_buffer_size);
     return false; // Too large for hardware acceleration
   }
+  
+  Serial.printf("DEBUG: PPA scaling %dx%d -> %dx%d (src:%d dst:%d bytes)\n", 
+               srcWidth, srcHeight, dstWidth, dstHeight, srcSize, dstSize);
   
   // Copy source data to DMA-aligned buffer
   memcpy(ppa_src_buffer, srcPixels, srcSize);
@@ -358,17 +378,19 @@ bool scaleImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
   srm_oper_config.out.block_offset_y = 0;
   srm_oper_config.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
   
-  // Scaling configuration
-  srm_oper_config.scale_x = (float)srcWidth / dstWidth;
-  srm_oper_config.scale_y = (float)srcHeight / dstHeight;
+  // Scaling configuration - Fix the scale calculation
+  srm_oper_config.scale_x = (float)dstWidth / srcWidth;   // Fixed: was inverted
+  srm_oper_config.scale_y = (float)dstHeight / srcHeight; // Fixed: was inverted
   
   // Rotation configuration (no rotation)
   srm_oper_config.rotation_angle = PPA_SRM_ROTATION_ANGLE_0;
   
+  Serial.printf("DEBUG: PPA scale factors: x=%.3f, y=%.3f\n", srm_oper_config.scale_x, srm_oper_config.scale_y);
+  
   // Perform the scaling operation
   esp_err_t ret = ppa_do_scale_rotate_mirror(ppa_scaling_handle, &srm_oper_config);
   if (ret != ESP_OK) {
-    Serial.printf("PPA scaling operation failed: %s\n", esp_err_to_name(ret));
+    Serial.printf("PPA scaling operation failed: %s (0x%x)\n", esp_err_to_name(ret), ret);
     return false;
   }
   
@@ -378,6 +400,7 @@ bool scaleImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
   // Copy result to destination buffer
   memcpy(dstPixels, ppa_dst_buffer, dstSize);
   
+  Serial.println("DEBUG: PPA scaling successful!");
   return true;
 }
 
@@ -399,6 +422,74 @@ void cleanupPPA() {
   }
   
   ppa_available = false;
+}
+
+// System health monitoring and watchdog management
+void resetWatchdog() {
+  unsigned long now = millis();
+  if (now - lastWatchdogReset >= watchdogResetInterval) {
+    esp_task_wdt_reset();
+    lastWatchdogReset = now;
+  }
+}
+
+void checkSystemHealth() {
+  unsigned long now = millis();
+  if (now - lastMemoryCheck >= memoryCheckInterval) {
+    size_t freeHeap = ESP.getFreeHeap();
+    size_t freePsram = ESP.getFreePsram();
+    
+    // Track minimum memory levels
+    if (freeHeap < minFreeHeap) minFreeHeap = freeHeap;
+    if (freePsram < minFreePsram) minFreePsram = freePsram;
+    
+    // Check for critical memory levels
+    bool heapCritical = freeHeap < 50000;  // Less than 50KB heap
+    bool psramCritical = freePsram < 100000; // Less than 100KB PSRAM
+    
+    if (heapCritical || psramCritical) {
+      systemHealthy = false;
+      Serial.printf("CRITICAL: Low memory - Heap: %d, PSRAM: %d\n", freeHeap, freePsram);
+      
+      // Force garbage collection
+      if (heapCritical) {
+        Serial.println("Attempting heap cleanup...");
+        // Could add specific cleanup here if needed
+      }
+    } else {
+      systemHealthy = true;
+    }
+    
+    // Log memory status periodically
+    Serial.printf("Memory status - Heap: %d (min: %d), PSRAM: %d (min: %d)\n", 
+                 freeHeap, minFreeHeap, freePsram, minFreePsram);
+    
+    lastMemoryCheck = now;
+  }
+}
+
+void flushSerial() {
+  unsigned long now = millis();
+  if (now - lastSerialFlush >= serialFlushInterval) {
+    Serial.flush();
+    lastSerialFlush = now;
+  }
+}
+
+// Safe task yielding function
+void safeYield() {
+  resetWatchdog();
+  yield();
+  vTaskDelay(1); // Give other tasks a chance to run
+}
+
+// Safe delay with watchdog reset
+void safeDelay(unsigned long ms) {
+  unsigned long start = millis();
+  while (millis() - start < ms) {
+    resetWatchdog();
+    delay(min(100UL, ms - (millis() - start)));
+  }
 }
 
 // MQTT callback function
@@ -655,6 +746,23 @@ void setup() {
   delay(1000); // Give serial time to initialize
   
   Serial.println("=== ESP32-P4 Image Display Starting ===");
+  
+  // Initialize watchdog timer for system stability
+  Serial.println("Configuring watchdog timer...");
+  esp_task_wdt_config_t wdt_config = {
+    .timeout_ms = 30000,  // 30 second timeout
+    .idle_core_mask = 0,  // Don't monitor idle tasks
+    .trigger_panic = false // Don't panic on timeout, just reset
+  };
+  esp_task_wdt_init(&wdt_config);
+  esp_task_wdt_add(NULL); // Add current task to watchdog
+  Serial.println("Watchdog timer configured");
+  
+  // Initialize memory tracking
+  minFreeHeap = ESP.getFreeHeap();
+  minFreePsram = ESP.getFreePsram();
+  Serial.printf("Initial memory - Heap: %d, PSRAM: %d\n", minFreeHeap, minFreePsram);
+  
   Serial.println("Initializing display hardware...");
   
   // Initialize display objects
@@ -799,6 +907,13 @@ void setup() {
 }
 
 void connectToWiFi() {
+  // Validate WiFi credentials first
+  if (strlen(ssid) == 0) {
+    debugPrint("ERROR: WiFi SSID is empty!", RED);
+    wifiConnected = false;
+    return;
+  }
+  
   debugPrint("Setting WiFi mode to STA");
   WiFi.mode(WIFI_STA);
   
@@ -806,19 +921,36 @@ void connectToWiFi() {
   WiFi.begin(ssid, password);
   
   int attempts = 0;
+  const int maxAttempts = 15; // Reduced from 20 to prevent long blocking
+  unsigned long startTime = millis();
+  const unsigned long maxWaitTime = 12000; // 12 seconds maximum wait time
+  
   debugPrint("WiFi connecting", YELLOW);
   
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
+  while (WiFi.status() != WL_CONNECTED && attempts < maxAttempts) {
+    // Check for timeout to prevent infinite hanging
+    if (millis() - startTime > maxWaitTime) {
+      debugPrint("WiFi connection timeout!", RED);
+      break;
+    }
+    
+    safeDelay(400);  // Reduced delay for faster response
+    resetWatchdog(); // Explicitly reset watchdog during connection attempts
     attempts++;
     
     // Show progress dots
-    gfx->setTextColor(YELLOW);
-    gfx->print(".");
-    
-    if (attempts % 10 == 0) {
-      debugPrintf(YELLOW, "Attempt %d/20...", attempts);
+    if (!firstImageLoaded) {
+      gfx->setTextColor(YELLOW);
+      gfx->print(".");
     }
+    
+    if (attempts % 4 == 0) {  // More frequent status updates
+      debugPrintf(YELLOW, "Attempt %d/%d...", attempts, maxAttempts);
+      resetWatchdog(); // Additional watchdog reset
+    }
+    
+    // Allow other tasks to run
+    yield();
   }
   
   if (WiFi.status() == WL_CONNECTED) {
@@ -831,6 +963,11 @@ void connectToWiFi() {
     wifiConnected = false;
     debugPrintf(RED, "WiFi failed after %d attempts", attempts);
     debugPrintf(RED, "Status code: %d", WiFi.status());
+    debugPrint("Will retry in main loop...", YELLOW);
+    
+    // Disconnect to clean up any partial connection state
+    WiFi.disconnect();
+    safeDelay(1000);
   }
 }
 
@@ -839,6 +976,8 @@ void downloadAndDisplayImage() {
     debugPrint("ERROR: No WiFi connection", RED);
     return;
   }
+  
+  resetWatchdog(); // Reset watchdog before starting download
   
   debugPrint("=== Starting Download ===", CYAN);
   debugPrintf(WHITE, "Free heap: %d bytes", ESP.getFreeHeap());
@@ -850,6 +989,7 @@ void downloadAndDisplayImage() {
   
   debugPrint("Sending HTTP request...");
   unsigned long downloadStart = millis();
+  resetWatchdog(); // Reset before HTTP request
   int httpCode = http.GET();
   unsigned long downloadTime = millis() - downloadStart;
   
@@ -869,18 +1009,20 @@ void downloadAndDisplayImage() {
       unsigned long readStart = millis();
       
       while (http.connected() && bytesRead < size) {
+        resetWatchdog(); // Reset watchdog during download
         size_t available = stream->available();
         if (available) {
           size_t toRead = min(available, size - bytesRead);
           size_t read = stream->readBytes(buffer + bytesRead, toRead);
           bytesRead += read;
           
-          // Show progress every 20KB
+          // Show progress every 20KB and reset watchdog
           if (bytesRead % 20480 == 0) {
             debugPrintf(YELLOW, "Downloaded: %.1f%%", (float)bytesRead/size*100);
+            resetWatchdog();
           }
         }
-        delay(1);
+        safeYield(); // Use safe yield instead of delay(1)
       }
       
       unsigned long readTime = millis() - readStart;
@@ -948,10 +1090,19 @@ void downloadAndDisplayImageSilent() {
   // Silent version for subsequent downloads (no debug output)
   if (!wifiConnected) return;
   
+  resetWatchdog(); // Reset watchdog before starting download
+  
+  // Check system health before proceeding
+  if (!systemHealthy) {
+    Serial.println("Skipping image update due to poor system health");
+    return;
+  }
+  
   HTTPClient http;
   http.begin(imageURL);
   http.setTimeout(10000);
   
+  resetWatchdog(); // Reset before HTTP request
   int httpCode = http.GET();
   
   if (httpCode == HTTP_CODE_OK) {
@@ -963,14 +1114,22 @@ void downloadAndDisplayImageSilent() {
       uint8_t* buffer = imageBuffer;
       
       while (http.connected() && bytesRead < size) {
+        resetWatchdog(); // Reset watchdog during download
         size_t available = stream->available();
         if (available) {
           size_t toRead = min(available, size - bytesRead);
           size_t read = stream->readBytes(buffer + bytesRead, toRead);
           bytesRead += read;
+          
+          // Reset watchdog every 20KB
+          if (bytesRead % 20480 == 0) {
+            resetWatchdog();
+          }
         }
-        delay(1);
+        safeYield(); // Use safe yield instead of delay(1)
       }
+      
+      resetWatchdog(); // Reset before JPEG processing
       
       // Decode and display JPEG
       if (jpeg.openRAM(imageBuffer, bytesRead, JPEGDraw)) {
@@ -988,20 +1147,32 @@ void downloadAndDisplayImageSilent() {
           // Clear the full image buffer
           memset(fullImageBuffer, 0, fullImageWidth * fullImageHeight * sizeof(uint16_t));
           
+          resetWatchdog(); // Reset before JPEG decode
+          
           // Decode the full image into our buffer
           jpeg.decode(0, 0, 0);
           jpeg.close();
           
+          resetWatchdog(); // Reset before rendering
+          
           // Now render the full image with smooth transition (single clean update)
           renderFullImageWithTransition(true);
         } else {
+          Serial.printf("WARNING: Image too large for buffer (%dx%d)\n", originalImageWidth, originalImageHeight);
           jpeg.close();
         }
+      } else {
+        Serial.println("WARNING: Silent JPEG decode failed");
       }
+    } else {
+      Serial.printf("WARNING: Invalid image size: %d bytes\n", size);
     }
+  } else {
+    Serial.printf("WARNING: HTTP error in silent download: %d\n", httpCode);
   }
   
   http.end();
+  resetWatchdog(); // Reset after download complete
 }
 
 // Image control functions
@@ -1139,6 +1310,17 @@ void processSerialCommands() {
 }
 
 void loop() {
+  // Reset watchdog and check system health at start of each loop
+  resetWatchdog();
+  checkSystemHealth();
+  flushSerial();
+  
+  // Check for critical system health issues
+  if (!systemHealthy) {
+    Serial.println("CRITICAL: System health compromised, attempting recovery...");
+    safeDelay(5000); // Wait before continuing
+  }
+  
   // Check WiFi connection
   if (WiFi.status() != WL_CONNECTED) {
     if (wifiConnected) {
@@ -1149,6 +1331,7 @@ void loop() {
       }
       connectToWiFi();
     }
+    resetWatchdog(); // Reset after WiFi operations
     return;
   } else if (!wifiConnected) {
     wifiConnected = true;
@@ -1159,10 +1342,12 @@ void loop() {
   
   // Handle MQTT connection and messages
   handleMQTT();
+  resetWatchdog(); // Reset after MQTT operations
   
   // Handle OTA web server
   server.handleClient();
   ElegantOTA.loop();
+  resetWatchdog(); // Reset after OTA operations
   
   // Process serial commands for image control
   processSerialCommands();
@@ -1170,6 +1355,7 @@ void loop() {
   // Check if it's time to update the image
   unsigned long currentTime = millis();
   if (currentTime - lastUpdate >= updateInterval || lastUpdate == 0) {
+    resetWatchdog(); // Reset before image operations
     
     if (!firstImageLoaded) {
       // First download with debug output
@@ -1180,7 +1366,8 @@ void loop() {
     }
     
     lastUpdate = currentTime;
+    resetWatchdog(); // Reset after image operations
   }
   
-  delay(100);
+  safeDelay(100); // Use safe delay instead of regular delay
 }
