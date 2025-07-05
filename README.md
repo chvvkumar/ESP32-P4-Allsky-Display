@@ -7,7 +7,7 @@
 
 ## Features
 
-- **High-Resolution DSI Display Support**: Compatible with 3.4" (800x800) and 4" (720x720) DSI displays
+- **Display Support**: Compatible with 3.4" (800x800) and 4" (720x720) DSI displays
 - **Hardware-Accelerated Image Processing**: Utilizes ESP32-P4's PPA for fast image scaling
 - **Over-The-Air (OTA) Updates**: Web-based firmware updates using ElegantOTA (WIP)
 - **MQTT Integration**: Remote device reboot via MQTT
