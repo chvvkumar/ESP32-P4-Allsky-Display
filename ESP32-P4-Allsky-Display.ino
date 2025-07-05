@@ -433,6 +433,12 @@ void resetWatchdog() {
   }
 }
 
+// Force immediate watchdog reset (for critical sections)
+void forceResetWatchdog() {
+  esp_task_wdt_reset();
+  lastWatchdogReset = millis();
+}
+
 void checkSystemHealth() {
   unsigned long now = millis();
   if (now - lastMemoryCheck >= memoryCheckInterval) {
@@ -1310,15 +1316,17 @@ void processSerialCommands() {
 }
 
 void loop() {
-  // Reset watchdog and check system health at start of each loop
-  resetWatchdog();
+  // Force immediate watchdog reset at start of each loop
+  forceResetWatchdog();
   checkSystemHealth();
   flushSerial();
   
   // Check for critical system health issues
   if (!systemHealthy) {
     Serial.println("CRITICAL: System health compromised, attempting recovery...");
+    forceResetWatchdog(); // Force reset before delay
     safeDelay(5000); // Wait before continuing
+    forceResetWatchdog(); // Force reset after delay
   }
   
   // Check WiFi connection
@@ -1329,9 +1337,10 @@ void loop() {
         debugPrint("ERROR: WiFi disconnected!", RED);
         debugPrint("Attempting reconnection...", YELLOW);
       }
+      forceResetWatchdog(); // Force reset before WiFi operations
       connectToWiFi();
     }
-    resetWatchdog(); // Reset after WiFi operations
+    forceResetWatchdog(); // Force reset after WiFi operations
     return;
   } else if (!wifiConnected) {
     wifiConnected = true;
@@ -1341,21 +1350,23 @@ void loop() {
   }
   
   // Handle MQTT connection and messages
+  forceResetWatchdog(); // Force reset before MQTT
   handleMQTT();
-  resetWatchdog(); // Reset after MQTT operations
+  forceResetWatchdog(); // Force reset after MQTT operations
   
   // Handle OTA web server
   server.handleClient();
   ElegantOTA.loop();
-  resetWatchdog(); // Reset after OTA operations
+  forceResetWatchdog(); // Force reset after OTA operations
   
   // Process serial commands for image control
   processSerialCommands();
+  forceResetWatchdog(); // Force reset after serial processing
   
   // Check if it's time to update the image
   unsigned long currentTime = millis();
   if (currentTime - lastUpdate >= updateInterval || lastUpdate == 0) {
-    resetWatchdog(); // Reset before image operations
+    forceResetWatchdog(); // Force reset before image operations
     
     if (!firstImageLoaded) {
       // First download with debug output
@@ -1366,8 +1377,11 @@ void loop() {
     }
     
     lastUpdate = currentTime;
-    resetWatchdog(); // Reset after image operations
+    forceResetWatchdog(); // Force reset after image operations
   }
   
+  // Additional watchdog reset before delay
+  forceResetWatchdog();
   safeDelay(100); // Use safe delay instead of regular delay
+  forceResetWatchdog(); // Force reset after delay
 }
