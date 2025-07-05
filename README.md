@@ -5,6 +5,11 @@
   <img src="images/display.jpg" alt="ESP32-P4 Allsky Display" width="400"/>
 </p>
 
+Video:
+
+[![In action](https://img.youtube.com/vi/pPAgbkPNvvY/0.jpg)](https://www.youtube.com/watch?v=pPAgbkPNvvY)
+
+
 ## Features
 
 - **Display Support**: Compatible with 3.4" (800x800) and 4" (720x720) DSI displays
