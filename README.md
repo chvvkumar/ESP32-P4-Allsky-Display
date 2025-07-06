@@ -164,6 +164,9 @@ Control image transformations via Serial Monitor (115200 baud):
 - `T`: Toggle 180° rotation (useful for upside-down mounting)
 - `O`: Reset rotation to 0°
 
+#### System Commands
+- `B`: Reboot device (restarts ESP32 after 2-second warning)
+
 #### Reset and Help
 - `R`: Reset all transformations (including rotation)
 - `H` / `?`: Show help menu with current transformation status
