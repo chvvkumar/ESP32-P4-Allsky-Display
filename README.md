@@ -13,10 +13,10 @@ Video:
 ## Features
 
 - **Display Support**: Compatible with 3.4" (800x800) and 4" (720x720) DSI displays
-- **Hardware-Accelerated Image Processing**: Utilizes ESP32-P4's PPA for fast image scaling
+- **Hardware-Accelerated Image Processing**: Utilizes ESP32-P4's PPA for fast image scaling and rotation
 - **Over-The-Air (OTA) Updates**: Web-based firmware updates using ElegantOTA (WIP)
 - **MQTT Integration**: Remote device reboot via MQTT
-- **Real-Time Image Transformation**: Scale, move, and transform images via serial commands
+- **Real-Time Image Transformation**: Scale, move, and rotate images via serial commands
 - **Touch Interface Support**: GT911 touch controller integration
 - **WiFi Connectivity**: Automatic image downloading from web servers
 - **JPEG Decoding**: Built-in JPEG decoder with bilinear interpolation scaling
@@ -138,10 +138,11 @@ const unsigned long updateInterval = 60000; // Image update interval (millisecon
 
 ### Transformation Controls
 ```cpp
-const float SCALE_STEP = 0.1;    // Scale increment/decrement
-const int16_t MOVE_STEP = 10;    // Movement step in pixels
-const float MIN_SCALE = 0.1;     // Minimum scale factor
-const float MAX_SCALE = 3.0;     // Maximum scale factor
+const float SCALE_STEP = 0.1;      // Scale increment/decrement
+const int16_t MOVE_STEP = 10;      // Movement step in pixels
+const float MIN_SCALE = 0.1;       // Minimum scale factor
+const float MAX_SCALE = 3.0;       // Maximum scale factor
+const float ROTATION_STEP = 90.0;  // Rotation increment in degrees
 ```
 
 ## Usage
@@ -158,9 +159,14 @@ Control image transformations via Serial Monitor (115200 baud):
 - `W` / `S`: Move image up/down
 - `A` / `D`: Move image left/right
 
+#### Rotation Commands
+- `Q` / `E`: Rotate 90° counterclockwise/clockwise
+- `T`: Toggle 180° rotation (useful for upside-down mounting)
+- `O`: Reset rotation to 0°
+
 #### Reset and Help
-- `R`: Reset all transformations
-- `H` / `?`: Show help menu
+- `R`: Reset all transformations (including rotation)
+- `H` / `?`: Show help menu with current transformation status
 
 ### MQTT Control
 Send a "reboot" message to restart the device:
@@ -519,8 +525,9 @@ Enable debug output by monitoring the Serial port at 115200 baud. The system pro
 
 ### Performance
 - **Image Download**: Depends on network speed and image size
-- **Hardware Scaling**: ~50-100ms for full-screen images
+- **Hardware Scaling + Rotation**: ~50-100ms for full-screen images
 - **Software Scaling**: ~200-500ms for full-screen images
+- **Hardware Rotation**: Supports 0°, 90°, 180°, 270° with no performance penalty
 - **Display Refresh**: Real-time (limited by image processing)
 
 ### Supported Image Formats
@@ -572,3 +579,4 @@ For issues and questions:
 - **v1.3**: Added touch interface support
 - **v1.4**: Enhanced image transformation controls
 - **v1.5**: Added Over-The-Air (OTA) update functionality using ElegantOTA
+- **v1.6**: Added hardware-accelerated image rotation with PPA support (0°, 90°, 180°, 270°)
