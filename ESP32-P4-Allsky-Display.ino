@@ -80,6 +80,36 @@ const int maxDebugLines = 20; // Maximum lines to show on screen (reduced due to
 int debugLineCount = 0;
 const int debugTextSize = 3; // Increased from 2 to 3 for better readability
 
+// Benchmark system variables
+bool benchmarkMode = false;
+struct BenchmarkResult {
+  const char* testName;
+  unsigned long softwareTime;
+  unsigned long ppaTime;
+  bool softwareSuccess;
+  bool ppaSuccess;
+  size_t memoryUsed;
+  float speedupRatio;
+};
+
+struct BenchmarkSuite {
+  BenchmarkResult scalingTests[6];
+  BenchmarkResult rotationTests[4];
+  BenchmarkResult combinedTests[4];
+  int totalTests;
+  int passedTests;
+  int ppaSuccessCount;
+  unsigned long totalTime;
+};
+
+BenchmarkSuite benchmarkResults;
+
+// Benchmark test image data (simple test pattern)
+uint16_t* benchmarkTestImage = nullptr;
+const int16_t BENCHMARK_TEST_WIDTH = 400;
+const int16_t BENCHMARK_TEST_HEIGHT = 400;
+const size_t BENCHMARK_TEST_SIZE = BENCHMARK_TEST_WIDTH * BENCHMARK_TEST_HEIGHT * sizeof(uint16_t);
+
 // JPEG decoder
 JPEGDEC jpeg;
 
@@ -384,6 +414,23 @@ bool scaleRotateImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeigh
   // Configure PPA scaling and rotation operation
   ppa_srm_oper_config_t srm_oper_config = {};
   
+  // Calculate maximum output dimensions that fit in our buffer
+  size_t maxPixels = ppa_dst_buffer_size / sizeof(uint16_t);
+  int16_t maxDimension = (int16_t)sqrt(maxPixels);
+  
+  // Ensure output dimensions don't exceed buffer capacity
+  int16_t actualDstWidth = min(dstWidth, maxDimension);
+  int16_t actualDstHeight = min(dstHeight, maxDimension);
+  
+  // Recalculate if we had to limit dimensions
+  if (actualDstWidth != dstWidth || actualDstHeight != dstHeight) {
+    Serial.printf("DEBUG: Limiting PPA output from %dx%d to %dx%d (buffer limit)\n", 
+                 dstWidth, dstHeight, actualDstWidth, actualDstHeight);
+    dstWidth = actualDstWidth;
+    dstHeight = actualDstHeight;
+    dstSize = dstWidth * dstHeight * sizeof(uint16_t);
+  }
+  
   // Source configuration
   srm_oper_config.in.buffer = ppa_src_buffer;
   srm_oper_config.in.pic_w = srcWidth;
@@ -394,7 +441,7 @@ bool scaleRotateImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeigh
   srm_oper_config.in.block_offset_y = 0;
   srm_oper_config.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
   
-  // Output configuration
+  // Output configuration - use actual buffer dimensions
   srm_oper_config.out.buffer = ppa_dst_buffer;
   srm_oper_config.out.buffer_size = ppa_dst_buffer_size;
   srm_oper_config.out.pic_w = dstWidth;
@@ -465,6 +512,641 @@ void cleanupPPA() {
   }
   
   ppa_available = false;
+}
+
+// Benchmark utility functions
+void createBenchmarkTestImage() {
+  if (!benchmarkTestImage) {
+    benchmarkTestImage = (uint16_t*)ps_malloc(BENCHMARK_TEST_SIZE);
+    if (!benchmarkTestImage) {
+      Serial.println("ERROR: Failed to allocate benchmark test image!");
+      return;
+    }
+  }
+  
+  // Create a test pattern with gradients and geometric shapes
+  for (int16_t y = 0; y < BENCHMARK_TEST_HEIGHT; y++) {
+    for (int16_t x = 0; x < BENCHMARK_TEST_WIDTH; x++) {
+      uint16_t pixel;
+      
+      // Create different patterns in different quadrants
+      if (x < BENCHMARK_TEST_WIDTH/2 && y < BENCHMARK_TEST_HEIGHT/2) {
+        // Top-left: Red gradient
+        uint8_t intensity = (x + y) * 31 / (BENCHMARK_TEST_WIDTH/2 + BENCHMARK_TEST_HEIGHT/2);
+        pixel = (intensity << 11) | (0 << 5) | 0;
+      } else if (x >= BENCHMARK_TEST_WIDTH/2 && y < BENCHMARK_TEST_HEIGHT/2) {
+        // Top-right: Green gradient
+        uint8_t intensity = (x - BENCHMARK_TEST_WIDTH/2 + y) * 63 / (BENCHMARK_TEST_WIDTH/2 + BENCHMARK_TEST_HEIGHT/2);
+        pixel = (0 << 11) | (intensity << 5) | 0;
+      } else if (x < BENCHMARK_TEST_WIDTH/2 && y >= BENCHMARK_TEST_HEIGHT/2) {
+        // Bottom-left: Blue gradient
+        uint8_t intensity = (x + y - BENCHMARK_TEST_HEIGHT/2) * 31 / (BENCHMARK_TEST_WIDTH/2 + BENCHMARK_TEST_HEIGHT/2);
+        pixel = (0 << 11) | (0 << 5) | intensity;
+      } else {
+        // Bottom-right: Checkerboard pattern
+        if (((x/20) + (y/20)) % 2 == 0) {
+          pixel = 0xFFFF; // White
+        } else {
+          pixel = 0x0000; // Black
+        }
+      }
+      
+      benchmarkTestImage[y * BENCHMARK_TEST_WIDTH + x] = pixel;
+    }
+  }
+  
+  Serial.printf("Created benchmark test image: %dx%d pixels\n", BENCHMARK_TEST_WIDTH, BENCHMARK_TEST_HEIGHT);
+}
+
+void cleanupBenchmarkTestImage() {
+  if (benchmarkTestImage) {
+    free(benchmarkTestImage);
+    benchmarkTestImage = nullptr;
+  }
+}
+
+// Benchmark display functions
+void benchmarkPrint(const char* message, uint16_t color = WHITE) {
+  Serial.println(message);
+  
+  gfx->setTextSize(2);
+  gfx->setTextColor(color);
+  
+  // Calculate text width for centering
+  int16_t x1, y1;
+  uint16_t textWidth, textHeight;
+  gfx->getTextBounds(message, 0, 0, &x1, &y1, &textWidth, &textHeight);
+  
+  // Center the text horizontally
+  int16_t centerX = (w - textWidth) / 2;
+  if (centerX < 10) centerX = 10;
+  
+  gfx->setCursor(centerX, debugY);
+  gfx->println(message);
+  
+  debugY += 25;
+  
+  // Scroll if needed
+  if (debugY > h - 50) {
+    gfx->fillScreen(BLACK);
+    debugY = 50;
+  }
+}
+
+void benchmarkPrintf(uint16_t color, const char* format, ...) {
+  char buffer[256];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(buffer, sizeof(buffer), format, args);
+  va_end(args);
+  
+  benchmarkPrint(buffer, color);
+}
+
+// Individual benchmark test functions
+BenchmarkResult runScalingBenchmark(const char* testName, float scaleFactorX, float scaleFactorY) {
+  BenchmarkResult result = {};
+  result.testName = testName;
+  
+  // Calculate target dimensions
+  int16_t targetWidth = (int16_t)(BENCHMARK_TEST_WIDTH * scaleFactorX);
+  int16_t targetHeight = (int16_t)(BENCHMARK_TEST_HEIGHT * scaleFactorY);
+  size_t targetSize = targetWidth * targetHeight * sizeof(uint16_t);
+  
+  // Check if we have enough buffer space
+  if (targetSize > scaledBufferSize) {
+    Serial.printf("SKIP: %s - Target size %d exceeds buffer %d\n", testName, targetSize, scaledBufferSize);
+    return result;
+  }
+  
+  benchmarkPrintf(YELLOW, "Testing: %s", testName);
+  
+  // Get initial memory state
+  size_t heapBefore = ESP.getFreeHeap();
+  size_t psramBefore = ESP.getFreePsram();
+  
+  // Test software scaling
+  unsigned long swStart = micros();
+  scaleImageChunk(benchmarkTestImage, BENCHMARK_TEST_WIDTH, BENCHMARK_TEST_HEIGHT,
+                  scaledBuffer, targetWidth, targetHeight);
+  unsigned long swEnd = micros();
+  result.softwareTime = swEnd - swStart;
+  result.softwareSuccess = true;
+  
+  // Test PPA scaling if available
+  if (ppa_available && targetSize <= ppa_dst_buffer_size) {
+    unsigned long ppaStart = micros();
+    bool ppaSuccess = scaleImagePPA(benchmarkTestImage, BENCHMARK_TEST_WIDTH, BENCHMARK_TEST_HEIGHT,
+                                   scaledBuffer, targetWidth, targetHeight);
+    unsigned long ppaEnd = micros();
+    
+    if (ppaSuccess) {
+      result.ppaTime = ppaEnd - ppaStart;
+      result.ppaSuccess = true;
+      result.speedupRatio = (float)result.softwareTime / result.ppaTime;
+    }
+  }
+  
+  // Calculate memory usage
+  size_t heapAfter = ESP.getFreeHeap();
+  size_t psramAfter = ESP.getFreePsram();
+  result.memoryUsed = (heapBefore - heapAfter) + (psramBefore - psramAfter);
+  
+  // Display results
+  if (result.ppaSuccess) {
+    benchmarkPrintf(GREEN, "SW: %luμs, PPA: %luμs (%.1fx)", 
+                   result.softwareTime, result.ppaTime, result.speedupRatio);
+  } else {
+    benchmarkPrintf(WHITE, "SW: %luμs, PPA: N/A", result.softwareTime);
+  }
+  
+  resetWatchdog();
+  return result;
+}
+
+BenchmarkResult runRotationBenchmark(const char* testName, float rotationAngle) {
+  BenchmarkResult result = {};
+  result.testName = testName;
+  
+  // For rotation, dimensions might swap
+  int16_t targetWidth, targetHeight;
+  if (rotationAngle == 90.0 || rotationAngle == 270.0) {
+    targetWidth = BENCHMARK_TEST_HEIGHT;
+    targetHeight = BENCHMARK_TEST_WIDTH;
+  } else {
+    targetWidth = BENCHMARK_TEST_WIDTH;
+    targetHeight = BENCHMARK_TEST_HEIGHT;
+  }
+  
+  size_t targetSize = targetWidth * targetHeight * sizeof(uint16_t);
+  
+  if (targetSize > scaledBufferSize) {
+    Serial.printf("SKIP: %s - Target size exceeds buffer\n", testName);
+    return result;
+  }
+  
+  benchmarkPrintf(YELLOW, "Testing: %s", testName);
+  
+  // Get initial memory state
+  size_t heapBefore = ESP.getFreeHeap();
+  size_t psramBefore = ESP.getFreePsram();
+  
+  // Software rotation is not fully implemented, so we'll mark it as fallback
+  result.softwareTime = 0;
+  result.softwareSuccess = false;
+  
+  // Test PPA rotation if available
+  if (ppa_available && targetSize <= ppa_dst_buffer_size) {
+    unsigned long ppaStart = micros();
+    bool ppaSuccess = scaleRotateImagePPA(benchmarkTestImage, BENCHMARK_TEST_WIDTH, BENCHMARK_TEST_HEIGHT,
+                                         scaledBuffer, targetWidth, targetHeight, rotationAngle);
+    unsigned long ppaEnd = micros();
+    
+    if (ppaSuccess) {
+      result.ppaTime = ppaEnd - ppaStart;
+      result.ppaSuccess = true;
+    }
+  }
+  
+  // Calculate memory usage
+  size_t heapAfter = ESP.getFreeHeap();
+  size_t psramAfter = ESP.getFreePsram();
+  result.memoryUsed = (heapBefore - heapAfter) + (psramBefore - psramAfter);
+  
+  // Display results
+  if (result.ppaSuccess) {
+    benchmarkPrintf(GREEN, "SW: FALLBACK, PPA: %luμs", result.ppaTime);
+  } else {
+    benchmarkPrintf(RED, "SW: FALLBACK, PPA: FAILED");
+  }
+  
+  resetWatchdog();
+  return result;
+}
+
+BenchmarkResult runCombinedBenchmark(const char* testName, float scaleX, float scaleY, float rotation) {
+  BenchmarkResult result = {};
+  result.testName = testName;
+  
+  // Calculate target dimensions accounting for rotation
+  // For PPA, we need to think about this differently:
+  // - The PPA applies scaling first, then rotation
+  // - So for 90°/270° rotation, the scale factors need to be swapped in the PPA call
+  int16_t targetWidth, targetHeight;
+  
+  if (rotation == 90.0 || rotation == 270.0) {
+    // For 90°/270° rotation, dimensions will be swapped after rotation
+    // So we calculate based on the final rotated dimensions
+    targetWidth = (int16_t)(BENCHMARK_TEST_HEIGHT * scaleY);  // Height becomes width
+    targetHeight = (int16_t)(BENCHMARK_TEST_WIDTH * scaleX);  // Width becomes height
+  } else {
+    // For 0°/180° rotation, dimensions stay the same
+    targetWidth = (int16_t)(BENCHMARK_TEST_WIDTH * scaleX);
+    targetHeight = (int16_t)(BENCHMARK_TEST_HEIGHT * scaleY);
+  }
+  
+  size_t targetSize = targetWidth * targetHeight * sizeof(uint16_t);
+  
+  if (targetSize > scaledBufferSize) {
+    Serial.printf("SKIP: %s - Target size exceeds buffer\n", testName);
+    return result;
+  }
+  
+  benchmarkPrintf(YELLOW, "Testing: %s", testName);
+  
+  // Get initial memory state
+  size_t heapBefore = ESP.getFreeHeap();
+  size_t psramBefore = ESP.getFreePsram();
+  
+  // Software combined operations not fully implemented
+  result.softwareTime = 0;
+  result.softwareSuccess = false;
+  
+  // Test PPA combined operation if available
+  if (ppa_available && targetSize <= ppa_dst_buffer_size) {
+    unsigned long ppaStart = micros();
+    bool ppaSuccess = scaleRotateImagePPA(benchmarkTestImage, BENCHMARK_TEST_WIDTH, BENCHMARK_TEST_HEIGHT,
+                                         scaledBuffer, targetWidth, targetHeight, rotation);
+    unsigned long ppaEnd = micros();
+    
+    if (ppaSuccess) {
+      result.ppaTime = ppaEnd - ppaStart;
+      result.ppaSuccess = true;
+    }
+  }
+  
+  // Calculate memory usage
+  size_t heapAfter = ESP.getFreeHeap();
+  size_t psramAfter = ESP.getFreePsram();
+  result.memoryUsed = (heapBefore - heapAfter) + (psramBefore - psramAfter);
+  
+  // Display results
+  if (result.ppaSuccess) {
+    benchmarkPrintf(GREEN, "SW: FALLBACK, PPA: %luμs", result.ppaTime);
+  } else {
+    benchmarkPrintf(RED, "SW: FALLBACK, PPA: FAILED");
+  }
+  
+  resetWatchdog();
+  return result;
+}
+
+// Main benchmark suite functions
+void runBenchmarkSuite() {
+  benchmarkMode = true;
+  gfx->fillScreen(BLACK);
+  debugY = 50;
+  
+  benchmarkPrint("=== ESP32-P4 BENCHMARK SUITE ===", CYAN);
+  benchmarkPrintf(WHITE, "Display: %dx%d", w, h);
+  benchmarkPrintf(WHITE, "PPA Available: %s", ppa_available ? "YES" : "NO");
+  
+  // Initialize benchmark results
+  memset(&benchmarkResults, 0, sizeof(benchmarkResults));
+  
+  // Create test image
+  benchmarkPrint("Creating test image...", YELLOW);
+  createBenchmarkTestImage();
+  if (!benchmarkTestImage) {
+    benchmarkPrint("ERROR: Test image creation failed!", RED);
+    benchmarkMode = false;
+    return;
+  }
+  
+  unsigned long suiteStart = millis();
+  
+  // Run scaling benchmarks
+  benchmarkPrint("", WHITE);
+  benchmarkPrint("=== SCALING TESTS ===", CYAN);
+  int scalingIndex = 0;
+  benchmarkResults.scalingTests[scalingIndex++] = runScalingBenchmark("Scale 0.5x", 0.5, 0.5);
+  benchmarkResults.scalingTests[scalingIndex++] = runScalingBenchmark("Scale 0.8x", 0.8, 0.8);
+  benchmarkResults.scalingTests[scalingIndex++] = runScalingBenchmark("Scale 1.0x", 1.0, 1.0);
+  benchmarkResults.scalingTests[scalingIndex++] = runScalingBenchmark("Scale 1.5x", 1.5, 1.5);
+  benchmarkResults.scalingTests[scalingIndex++] = runScalingBenchmark("Scale 2.0x", 2.0, 2.0);
+  benchmarkResults.scalingTests[scalingIndex++] = runScalingBenchmark("Scale Non-uniform", 1.2, 0.8);
+  
+  // Run rotation benchmarks
+  benchmarkPrint("", WHITE);
+  benchmarkPrint("=== ROTATION TESTS ===", CYAN);
+  int rotationIndex = 0;
+  benchmarkResults.rotationTests[rotationIndex++] = runRotationBenchmark("Rotate 0°", 0.0);
+  benchmarkResults.rotationTests[rotationIndex++] = runRotationBenchmark("Rotate 90°", 90.0);
+  benchmarkResults.rotationTests[rotationIndex++] = runRotationBenchmark("Rotate 180°", 180.0);
+  benchmarkResults.rotationTests[rotationIndex++] = runRotationBenchmark("Rotate 270°", 270.0);
+  
+  // Run combined operation benchmarks
+  benchmarkPrint("", WHITE);
+  benchmarkPrint("=== COMBINED TESTS ===", CYAN);
+  int combinedIndex = 0;
+  benchmarkResults.combinedTests[combinedIndex++] = runCombinedBenchmark("Scale 1.5x + Rot 90°", 1.5, 1.5, 90.0);
+  benchmarkResults.combinedTests[combinedIndex++] = runCombinedBenchmark("Scale 0.8x + Rot 180°", 0.8, 0.8, 180.0);
+  benchmarkResults.combinedTests[combinedIndex++] = runCombinedBenchmark("Scale 2.0x + Rot 270°", 2.0, 2.0, 270.0);
+  benchmarkResults.combinedTests[combinedIndex++] = runCombinedBenchmark("Non-uniform + Rot 90°", 1.2, 0.8, 90.0);
+  
+  unsigned long suiteEnd = millis();
+  benchmarkResults.totalTime = suiteEnd - suiteStart;
+  
+  // Calculate summary statistics
+  benchmarkResults.totalTests = scalingIndex + rotationIndex + combinedIndex;
+  benchmarkResults.passedTests = 0;
+  benchmarkResults.ppaSuccessCount = 0;
+  
+  for (int i = 0; i < scalingIndex; i++) {
+    if (benchmarkResults.scalingTests[i].softwareSuccess || benchmarkResults.scalingTests[i].ppaSuccess) {
+      benchmarkResults.passedTests++;
+    }
+    if (benchmarkResults.scalingTests[i].ppaSuccess) {
+      benchmarkResults.ppaSuccessCount++;
+    }
+  }
+  
+  for (int i = 0; i < rotationIndex; i++) {
+    if (benchmarkResults.rotationTests[i].softwareSuccess || benchmarkResults.rotationTests[i].ppaSuccess) {
+      benchmarkResults.passedTests++;
+    }
+    if (benchmarkResults.rotationTests[i].ppaSuccess) {
+      benchmarkResults.ppaSuccessCount++;
+    }
+  }
+  
+  for (int i = 0; i < combinedIndex; i++) {
+    if (benchmarkResults.combinedTests[i].softwareSuccess || benchmarkResults.combinedTests[i].ppaSuccess) {
+      benchmarkResults.passedTests++;
+    }
+    if (benchmarkResults.combinedTests[i].ppaSuccess) {
+      benchmarkResults.ppaSuccessCount++;
+    }
+  }
+  
+  // Display summary
+  benchmarkPrint("", WHITE);
+  benchmarkPrint("=== BENCHMARK SUMMARY ===", CYAN);
+  benchmarkPrintf(GREEN, "Total Tests: %d", benchmarkResults.totalTests);
+  benchmarkPrintf(GREEN, "Passed: %d", benchmarkResults.passedTests);
+  benchmarkPrintf(GREEN, "PPA Success: %d", benchmarkResults.ppaSuccessCount);
+  benchmarkPrintf(WHITE, "Total Time: %lu ms", benchmarkResults.totalTime);
+  
+  // Calculate average speedup for successful PPA tests
+  float totalSpeedup = 0;
+  int speedupCount = 0;
+  for (int i = 0; i < scalingIndex; i++) {
+    if (benchmarkResults.scalingTests[i].ppaSuccess && benchmarkResults.scalingTests[i].speedupRatio > 0) {
+      totalSpeedup += benchmarkResults.scalingTests[i].speedupRatio;
+      speedupCount++;
+    }
+  }
+  
+  if (speedupCount > 0) {
+    float avgSpeedup = totalSpeedup / speedupCount;
+    benchmarkPrintf(GREEN, "Avg PPA Speedup: %.1fx", avgSpeedup);
+  }
+  
+  benchmarkPrint("", WHITE);
+  benchmarkPrint("=== DETAILED RESULTS ===", YELLOW);
+  
+  // Print detailed results to serial
+  Serial.println("\n=== DETAILED BENCHMARK RESULTS ===");
+  Serial.println("SCALING TESTS:");
+  for (int i = 0; i < scalingIndex; i++) {
+    BenchmarkResult& r = benchmarkResults.scalingTests[i];
+    if (r.testName) {
+      Serial.printf("  %s: SW=%luμs, PPA=%luμs, Speedup=%.1fx\n", 
+                   r.testName, r.softwareTime, r.ppaTime, r.speedupRatio);
+    }
+  }
+  
+  Serial.println("ROTATION TESTS:");
+  for (int i = 0; i < rotationIndex; i++) {
+    BenchmarkResult& r = benchmarkResults.rotationTests[i];
+    if (r.testName) {
+      Serial.printf("  %s: SW=%s, PPA=%luμs\n", 
+                   r.testName, r.softwareSuccess ? "OK" : "FALLBACK", r.ppaTime);
+    }
+  }
+  
+  Serial.println("COMBINED TESTS:");
+  for (int i = 0; i < combinedIndex; i++) {
+    BenchmarkResult& r = benchmarkResults.combinedTests[i];
+    if (r.testName) {
+      Serial.printf("  %s: SW=%s, PPA=%luμs\n", 
+                   r.testName, r.softwareSuccess ? "OK" : "FALLBACK", r.ppaTime);
+    }
+  }
+  
+  Serial.printf("SUMMARY: %d/%d tests passed, %d PPA successes, %lu ms total\n",
+               benchmarkResults.passedTests, benchmarkResults.totalTests, 
+               benchmarkResults.ppaSuccessCount, benchmarkResults.totalTime);
+  
+  // Cleanup
+  cleanupBenchmarkTestImage();
+  benchmarkMode = false;
+  
+  benchmarkPrint("Benchmark complete!", GREEN);
+  benchmarkPrint("Press any key to continue...", WHITE);
+}
+
+// Startup menu functions
+void showStartupMenu() {
+  gfx->fillScreen(BLACK);
+  debugY = 80;
+  
+  // Display menu on screen
+  gfx->setTextSize(3);
+  gfx->setTextColor(CYAN);
+  int16_t x1, y1;
+  uint16_t textWidth, textHeight;
+  
+  const char* title = "ESP32-P4 AllSky Display";
+  gfx->getTextBounds(title, 0, 0, &x1, &y1, &textWidth, &textHeight);
+  gfx->setCursor((w - textWidth) / 2, debugY);
+  gfx->println(title);
+  debugY += 60;
+  
+  gfx->setTextSize(2);
+  gfx->setTextColor(WHITE);
+  
+  const char* options[] = {
+    "1. Start Normal Operation",
+    "2. Run Image Processing Benchmarks", 
+    "3. Show System Information",
+    "4. Help"
+  };
+  
+  for (int i = 0; i < 4; i++) {
+    gfx->getTextBounds(options[i], 0, 0, &x1, &y1, &textWidth, &textHeight);
+    gfx->setCursor((w - textWidth) / 2, debugY);
+    gfx->println(options[i]);
+    debugY += 40;
+  }
+  
+  debugY += 20;
+  gfx->setTextColor(YELLOW);
+  const char* prompt = "Enter choice (1-4):";
+  gfx->getTextBounds(prompt, 0, 0, &x1, &y1, &textWidth, &textHeight);
+  gfx->setCursor((w - textWidth) / 2, debugY);
+  gfx->println(prompt);
+  
+  // Also display on serial
+  Serial.println("\n=== ESP32-P4 AllSky Display ===");
+  Serial.println("1. Start Normal Operation");
+  Serial.println("2. Run Image Processing Benchmarks");
+  Serial.println("3. Show System Information");
+  Serial.println("4. Help");
+  Serial.println("\nEnter choice (1-4): ");
+}
+
+int waitForMenuChoice() {
+  while (true) {
+    resetWatchdog();
+    
+    if (Serial.available()) {
+      char choice = Serial.read();
+      
+      // Clear any remaining characters
+      while (Serial.available()) {
+        Serial.read();
+      }
+      
+      switch (choice) {
+        case '1':
+          Serial.println("Starting normal operation...");
+          return 1;
+        case '2':
+          Serial.println("Running benchmarks...");
+          return 2;
+        case '3':
+          Serial.println("Showing system information...");
+          return 3;
+        case '4':
+          Serial.println("Showing help...");
+          return 4;
+        default:
+          Serial.println("Invalid choice. Please enter 1-4.");
+          break;
+      }
+    }
+    
+    delay(100);
+  }
+}
+
+void showSystemInfo() {
+  gfx->fillScreen(BLACK);
+  debugY = 50;
+  
+  benchmarkPrint("=== SYSTEM INFORMATION ===", CYAN);
+  benchmarkPrintf(WHITE, "ESP32-P4 AllSky Display");
+  benchmarkPrintf(WHITE, "Display: %dx%d pixels", w, h);
+  benchmarkPrintf(WHITE, "Free Heap: %d bytes", ESP.getFreeHeap());
+  benchmarkPrintf(WHITE, "Free PSRAM: %d bytes", ESP.getFreePsram());
+  benchmarkPrintf(WHITE, "Min Heap: %d bytes", minFreeHeap);
+  benchmarkPrintf(WHITE, "Min PSRAM: %d bytes", minFreePsram);
+  benchmarkPrintf(WHITE, "PPA Available: %s", ppa_available ? "YES" : "NO");
+  
+  if (ppa_available) {
+    benchmarkPrintf(WHITE, "PPA Src Buffer: %d bytes", ppa_src_buffer_size);
+    benchmarkPrintf(WHITE, "PPA Dst Buffer: %d bytes", ppa_dst_buffer_size);
+  }
+  
+  benchmarkPrintf(WHITE, "Image Buffer: %d bytes", imageBufferSize);
+  benchmarkPrintf(WHITE, "Full Image Buffer: %d bytes", fullImageBufferSize);
+  benchmarkPrintf(WHITE, "Scaled Buffer: %d bytes", scaledBufferSize);
+  
+  if (wifiConnected) {
+    benchmarkPrintf(GREEN, "WiFi: Connected");
+    benchmarkPrintf(WHITE, "IP: %s", WiFi.localIP().toString().c_str());
+    benchmarkPrintf(WHITE, "Signal: %d dBm", WiFi.RSSI());
+  } else {
+    benchmarkPrintf(RED, "WiFi: Disconnected");
+  }
+  
+  benchmarkPrintf(WHITE, "MQTT: %s", mqttConnected ? "Connected" : "Disconnected");
+  benchmarkPrintf(WHITE, "System Health: %s", systemHealthy ? "Good" : "Poor");
+  
+  // Also print to serial
+  Serial.println("\n=== SYSTEM INFORMATION ===");
+  Serial.printf("ESP32-P4 AllSky Display\n");
+  Serial.printf("Display: %dx%d pixels\n", w, h);
+  Serial.printf("Free Heap: %d bytes\n", ESP.getFreeHeap());
+  Serial.printf("Free PSRAM: %d bytes\n", ESP.getFreePsram());
+  Serial.printf("Min Heap: %d bytes\n", minFreeHeap);
+  Serial.printf("Min PSRAM: %d bytes\n", minFreePsram);
+  Serial.printf("PPA Available: %s\n", ppa_available ? "YES" : "NO");
+  
+  if (ppa_available) {
+    Serial.printf("PPA Src Buffer: %d bytes\n", ppa_src_buffer_size);
+    Serial.printf("PPA Dst Buffer: %d bytes\n", ppa_dst_buffer_size);
+  }
+  
+  Serial.printf("Image Buffer: %d bytes\n", imageBufferSize);
+  Serial.printf("Full Image Buffer: %d bytes\n", fullImageBufferSize);
+  Serial.printf("Scaled Buffer: %d bytes\n", scaledBufferSize);
+  Serial.printf("WiFi: %s\n", wifiConnected ? "Connected" : "Disconnected");
+  
+  if (wifiConnected) {
+    Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("Signal: %d dBm\n", WiFi.RSSI());
+  }
+  
+  Serial.printf("MQTT: %s\n", mqttConnected ? "Connected" : "Disconnected");
+  Serial.printf("System Health: %s\n", systemHealthy ? "Good" : "Poor");
+}
+
+void showHelp() {
+  gfx->fillScreen(BLACK);
+  debugY = 50;
+  
+  benchmarkPrint("=== HELP ===", CYAN);
+  benchmarkPrint("Image Control Commands:", WHITE);
+  benchmarkPrint("  +/- : Scale both axes", WHITE);
+  benchmarkPrint("  X/Z : Scale X-axis up/down", WHITE);
+  benchmarkPrint("  Y/U : Scale Y-axis up/down", WHITE);
+  benchmarkPrint("  W/S : Move up/down", WHITE);
+  benchmarkPrint("  A/D : Move left/right", WHITE);
+  benchmarkPrint("  Q/E : Rotate 90° CCW/CW", WHITE);
+  benchmarkPrint("  T   : Toggle 180° rotation", WHITE);
+  benchmarkPrint("  O   : Reset rotation to 0°", WHITE);
+  benchmarkPrint("  R   : Reset all transforms", WHITE);
+  benchmarkPrint("  B   : Reboot device", WHITE);
+  benchmarkPrint("  H/? : Show help", WHITE);
+  
+  // Also print to serial
+  Serial.println("\n=== HELP ===");
+  Serial.println("Image Control Commands:");
+  Serial.println("  +/- : Scale both axes");
+  Serial.println("  X/Z : Scale X-axis up/down");
+  Serial.println("  Y/U : Scale Y-axis up/down");
+  Serial.println("  W/S : Move up/down");
+  Serial.println("  A/D : Move left/right");
+  Serial.println("  Q/E : Rotate 90° CCW/CW");
+  Serial.println("  T   : Toggle 180° rotation");
+  Serial.println("  O   : Reset rotation to 0°");
+  Serial.println("  R   : Reset all transformations");
+  Serial.println("  B   : Reboot device");
+  Serial.println("  H/? : Show help");
+  Serial.println("\nBenchmark Commands (runtime):");
+  Serial.println("  M   : Run full benchmark suite");
+}
+
+void waitForAnyKey() {
+  Serial.println("Press any key to continue...");
+  
+  // Clear any existing input
+  while (Serial.available()) {
+    Serial.read();
+  }
+  
+  // Wait for input
+  while (!Serial.available()) {
+    resetWatchdog();
+    delay(100);
+  }
+  
+  // Clear the input
+  while (Serial.available()) {
+    Serial.read();
+  }
 }
 
 // System health monitoring and watchdog management
@@ -978,6 +1660,37 @@ void setup() {
   
   debugPrint("Setup complete!", GREEN);
   delay(1000);
+  
+  // Show startup menu and wait for user choice
+  int choice = 0;
+  showStartupMenu();
+  choice = waitForMenuChoice();
+  
+  switch (choice) {
+    case 1:
+      Serial.println("Starting normal operation...");
+      break;
+    case 2:
+      runBenchmarkSuite();
+      waitForAnyKey();
+      break;
+    case 3:
+      showSystemInfo();
+      waitForAnyKey();
+      break;
+    case 4:
+      showHelp();
+      waitForAnyKey();
+      break;
+  }
+  
+  // Clear screen and prepare for normal operation
+  gfx->fillScreen(BLACK);
+  debugY = 50;
+  debugLineCount = 0;
+  
+  debugPrint("=== Starting Normal Operation ===", CYAN);
+  debugPrint("Loading first image...", YELLOW);
 }
 
 void connectToWiFi() {
@@ -1464,6 +2177,20 @@ void processSerialCommands() {
         ESP.restart();
         break;
         
+      // Benchmark command
+      case 'M':
+      case 'm':
+        Serial.println("Running benchmark suite...");
+        runBenchmarkSuite();
+        waitForAnyKey();
+        // Restore the image after benchmarks
+        if (firstImageLoaded && fullImageBuffer && fullImageWidth > 0 && fullImageHeight > 0) {
+          gfx->fillScreen(BLACK);
+          renderFullImage();
+          Serial.println("Image restored after benchmark");
+        }
+        break;
+        
       // Help command
       case 'H':
       case 'h':
@@ -1484,6 +2211,7 @@ void processSerialCommands() {
         Serial.println("  R   : Reset all transformations");
         Serial.println("System:");
         Serial.println("  B   : Reboot device");
+        Serial.println("  M   : Run benchmark suite");
         Serial.println("Help:");
         Serial.println("  H/? : Show this help");
         Serial.printf("Current: Scale %.1fx%.1f, Offset %d,%d, Rotation %.0f°\n", 
