@@ -9,6 +9,11 @@ Video:
 
 [![In action](https://img.youtube.com/vi/pPAgbkPNvvY/0.jpg)](https://www.youtube.com/watch?v=pPAgbkPNvvY)
 
+On the fly image adjustments
+
+[![Image adjustments](https://img.youtube.com/vi/3zd7zNdAdGY/0.jpg)](https://www.youtube.com/watch?v=3zd7zNdAdGY)
+
+
 
 ## Features
 
