@@ -22,8 +22,8 @@ extern "C" {
 }
 
 // WiFi Configuration - Update these with your credentials
-const char* ssid = "";
-const char* password = "";
+const char* ssid = "IoT";
+const char* password = "kkkkkkkk";
 
 // MQTT Configuration - Update these with your MQTT broker details
 const char* mqtt_server = "192.168.1.250";  // Replace with your MQTT broker IP
@@ -36,6 +36,13 @@ const char* reboot_topic = "Astro/AllSky/display/reboot"; // Topic to subscribe 
 // Image Configuration
 const char* imageURL = "https://allsky.challa.co:1982/current/resized/image.jpg"; // Random image service
 const unsigned long updateInterval = 60000; // 60 seconds in milliseconds
+
+// Image change detection
+String lastETag = "";
+unsigned long lastModified = 0;
+size_t lastImageSize = 0;
+unsigned long lastSuccessfulCheck = 0;
+const unsigned long forceCheckInterval = 300000; // Force check every 5 minutes regardless of cache headers
 
 // Display variables
 int16_t w, h;
@@ -50,6 +57,7 @@ float scaleX = 1.2;  // Horizontal scale factor
 float scaleY = 1.2;  // Vertical scale factor
 int16_t offsetX = 0; // Horizontal offset from center
 int16_t offsetY = 0; // Vertical offset from center (changed from 40 to 0)
+float rotationAngle = 0.0; // Current rotation in degrees (0, 90, 180, 270)
 int16_t originalImageWidth = 0;
 int16_t originalImageHeight = 0;
 size_t currentImageSize = 0; // Store the actual size of the current image data
@@ -63,6 +71,7 @@ const float SCALE_STEP = 0.1;    // Scale increment/decrement
 const int16_t MOVE_STEP = 10;    // Movement step in pixels
 const float MIN_SCALE = 0.1;     // Minimum scale factor
 const float MAX_SCALE = 3.0;     // Maximum scale factor
+const float ROTATION_STEP = 90.0; // Rotation increment in degrees
 
 // Debug display variables
 int debugY = 50;
@@ -325,12 +334,28 @@ bool initPPA() {
   return true;
 }
 
-// Hardware-accelerated image scaling using PPA
-bool scaleImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
-                   uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight) {
+// Hardware-accelerated image scaling and rotation using PPA
+bool scaleRotateImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
+                         uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight, 
+                         float rotation = 0.0) {
   if (!ppa_available || !ppa_scaling_handle) {
     Serial.println("DEBUG: PPA not available or handle invalid");
     return false; // Fall back to software scaling
+  }
+  
+  // Convert rotation angle to PPA enum
+  ppa_srm_rotation_angle_t ppa_rotation;
+  if (rotation == 0.0) {
+    ppa_rotation = PPA_SRM_ROTATION_ANGLE_0;
+  } else if (rotation == 90.0) {
+    ppa_rotation = PPA_SRM_ROTATION_ANGLE_90;
+  } else if (rotation == 180.0) {
+    ppa_rotation = PPA_SRM_ROTATION_ANGLE_180;
+  } else if (rotation == 270.0) {
+    ppa_rotation = PPA_SRM_ROTATION_ANGLE_270;
+  } else {
+    Serial.printf("DEBUG: Invalid rotation angle: %.1f\n", rotation);
+    return false; // Invalid rotation angle
   }
   
   // Check if source fits in PPA buffer
@@ -347,8 +372,8 @@ bool scaleImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
     return false; // Too large for hardware acceleration
   }
   
-  Serial.printf("DEBUG: PPA scaling %dx%d -> %dx%d (src:%d dst:%d bytes)\n", 
-               srcWidth, srcHeight, dstWidth, dstHeight, srcSize, dstSize);
+  Serial.printf("DEBUG: PPA scale+rotate %dx%d -> %dx%d (%.1f°, src:%d dst:%d bytes)\n", 
+               srcWidth, srcHeight, dstWidth, dstHeight, rotation, srcSize, dstSize);
   
   // Copy source data to DMA-aligned buffer
   memcpy(ppa_src_buffer, srcPixels, srcSize);
@@ -356,7 +381,7 @@ bool scaleImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
   // Ensure cache coherency for DMA operations
   esp_cache_msync(ppa_src_buffer, srcSize, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
   
-  // Configure PPA scaling operation
+  // Configure PPA scaling and rotation operation
   ppa_srm_oper_config_t srm_oper_config = {};
   
   // Source configuration
@@ -378,19 +403,31 @@ bool scaleImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
   srm_oper_config.out.block_offset_y = 0;
   srm_oper_config.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
   
-  // Scaling configuration - Fix the scale calculation
-  srm_oper_config.scale_x = (float)dstWidth / srcWidth;   // Fixed: was inverted
-  srm_oper_config.scale_y = (float)dstHeight / srcHeight; // Fixed: was inverted
+  // Scaling configuration
+  srm_oper_config.scale_x = (float)dstWidth / srcWidth;
+  srm_oper_config.scale_y = (float)dstHeight / srcHeight;
   
-  // Rotation configuration (no rotation)
-  srm_oper_config.rotation_angle = PPA_SRM_ROTATION_ANGLE_0;
+  // Rotation configuration
+  srm_oper_config.rotation_angle = ppa_rotation;
   
-  Serial.printf("DEBUG: PPA scale factors: x=%.3f, y=%.3f\n", srm_oper_config.scale_x, srm_oper_config.scale_y);
+  // Mirror configuration (no mirroring)
+  srm_oper_config.mirror_x = false;
+  srm_oper_config.mirror_y = false;
   
-  // Perform the scaling operation
+  // Additional configuration
+  srm_oper_config.rgb_swap = false;
+  srm_oper_config.byte_swap = false;
+  srm_oper_config.alpha_update_mode = PPA_ALPHA_NO_CHANGE;
+  srm_oper_config.mode = PPA_TRANS_MODE_BLOCKING;
+  srm_oper_config.user_data = nullptr;
+  
+  Serial.printf("DEBUG: PPA scale factors: x=%.3f, y=%.3f, rotation=%d\n", 
+               srm_oper_config.scale_x, srm_oper_config.scale_y, (int)ppa_rotation);
+  
+  // Perform the scaling and rotation operation
   esp_err_t ret = ppa_do_scale_rotate_mirror(ppa_scaling_handle, &srm_oper_config);
   if (ret != ESP_OK) {
-    Serial.printf("PPA scaling operation failed: %s (0x%x)\n", esp_err_to_name(ret), ret);
+    Serial.printf("PPA scale+rotate operation failed: %s (0x%x)\n", esp_err_to_name(ret), ret);
     return false;
   }
   
@@ -400,8 +437,14 @@ bool scaleImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
   // Copy result to destination buffer
   memcpy(dstPixels, ppa_dst_buffer, dstSize);
   
-  Serial.println("DEBUG: PPA scaling successful!");
+  Serial.println("DEBUG: PPA scale+rotate successful!");
   return true;
+}
+
+// Legacy function for backward compatibility
+bool scaleImagePPA(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
+                   uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight) {
+  return scaleRotateImagePPA(srcPixels, srcWidth, srcHeight, dstPixels, dstWidth, dstHeight, 0.0);
 }
 
 // Cleanup PPA resources
@@ -431,6 +474,12 @@ void resetWatchdog() {
     esp_task_wdt_reset();
     lastWatchdogReset = now;
   }
+}
+
+// Force immediate watchdog reset (for critical sections)
+void forceResetWatchdog() {
+  esp_task_wdt_reset();
+  lastWatchdogReset = millis();
 }
 
 void checkSystemHealth() {
@@ -593,14 +642,22 @@ void renderFullImage() {
 void renderFullImageWithTransition(bool useTransition) {
   if (!fullImageBuffer || fullImageWidth == 0 || fullImageHeight == 0) return;
   
-  // Calculate final scaled dimensions
-  int16_t scaledWidth = (int16_t)(fullImageWidth * scaleX);
-  int16_t scaledHeight = (int16_t)(fullImageHeight * scaleY);
+  // Calculate final scaled dimensions (accounting for rotation)
+  int16_t scaledWidth, scaledHeight;
+  if (rotationAngle == 90.0 || rotationAngle == 270.0) {
+    // For 90°/270° rotation, dimensions are swapped
+    scaledWidth = (int16_t)(fullImageHeight * scaleX);
+    scaledHeight = (int16_t)(fullImageWidth * scaleY);
+  } else {
+    // For 0°/180° rotation, dimensions remain the same
+    scaledWidth = (int16_t)(fullImageWidth * scaleX);
+    scaledHeight = (int16_t)(fullImageHeight * scaleY);
+  }
   
   // Debug output to understand buffer usage
   size_t scaledImageSize = scaledWidth * scaledHeight * 2;
-  Serial.printf("DEBUG: Scaled image %dx%d = %d bytes, buffer = %d bytes\n", 
-               scaledWidth, scaledHeight, scaledImageSize, scaledBufferSize);
+  Serial.printf("DEBUG: Scaled+rotated image %dx%d = %d bytes, buffer = %d bytes, rotation = %.0f°\n", 
+               scaledWidth, scaledHeight, scaledImageSize, scaledBufferSize, rotationAngle);
   Serial.printf("DEBUG: PPA available: %s\n", ppa_available ? "YES" : "NO");
   
   // Calculate center position using full display area (no status display)
@@ -616,125 +673,142 @@ void renderFullImageWithTransition(bool useTransition) {
     gfx->fillScreen(BLACK);
   }
   
-  if (scaleX == 1.0 && scaleY == 1.0) {
-    // No scaling needed, direct copy
-    Serial.println("DEBUG: Using direct copy (no scaling)");
+  if (scaleX == 1.0 && scaleY == 1.0 && rotationAngle == 0.0) {
+    // No scaling or rotation needed, direct copy
+    Serial.println("DEBUG: Using direct copy (no scaling or rotation)");
     gfx->draw16bitRGBBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
   } else {
-    bool hardwareScaled = false;
+    bool hardwareProcessed = false;
     
     // Try hardware acceleration first if available and image fits
     if (ppa_available && scaledImageSize <= scaledBufferSize) {
-      Serial.println("DEBUG: Attempting PPA hardware scaling");
+      Serial.println("DEBUG: Attempting PPA hardware scale+rotate");
       unsigned long hwStart = millis();
-      hardwareScaled = scaleImagePPA(fullImageBuffer, fullImageWidth, fullImageHeight,
-                                     scaledBuffer, scaledWidth, scaledHeight);
-      if (hardwareScaled) {
+      hardwareProcessed = scaleRotateImagePPA(fullImageBuffer, fullImageWidth, fullImageHeight,
+                                              scaledBuffer, scaledWidth, scaledHeight, rotationAngle);
+      if (hardwareProcessed) {
         unsigned long hwTime = millis() - hwStart;
-        Serial.printf("PPA scaling: %lums (%dx%d -> %dx%d)\n", 
-                     hwTime, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight);
+        Serial.printf("PPA scale+rotate: %lums (%dx%d -> %dx%d, %.0f°)\n", 
+                     hwTime, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, rotationAngle);
         
-        // Draw the hardware-scaled image
+        // Draw the hardware-processed image
         gfx->draw16bitRGBBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
       } else {
-        Serial.println("DEBUG: PPA scaling failed, falling back to software");
+        Serial.println("DEBUG: PPA scale+rotate failed, falling back to software");
       }
     } else {
       Serial.printf("DEBUG: PPA not available or image too large (%d > %d)\n", 
                    scaledImageSize, scaledBufferSize);
     }
     
-    // Fall back to software scaling if hardware acceleration failed or unavailable
-    if (!hardwareScaled) {
-      // Check if we can scale the entire image at once with software
-      if (scaledImageSize <= scaledBufferSize) {
-        Serial.println("DEBUG: Using full software scaling");
-        // Scale the entire image at once for seamless rendering
-        unsigned long swStart = millis();
-        scaleImageChunk(fullImageBuffer, fullImageWidth, fullImageHeight,
-                        scaledBuffer, scaledWidth, scaledHeight);
-        unsigned long swTime = millis() - swStart;
-        Serial.printf("Software scaling: %lums (%dx%d -> %dx%d)\n", 
-                     swTime, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight);
-        
-        // Draw the entire scaled image
-        gfx->draw16bitRGBBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
-      } else {
-        // For large scaled images, render in horizontal strips to avoid slow pixel-by-pixel drawing
-        Serial.printf("Strip-based scaling (%dx%d -> %dx%d)\n", 
-                     fullImageWidth, fullImageHeight, scaledWidth, scaledHeight);
-        
-        // Calculate optimal strip height based on available buffer
-        int16_t maxStripHeight = scaledBufferSize / (scaledWidth * 2);
-        if (maxStripHeight < 1) maxStripHeight = 1;
-        if (maxStripHeight > 64) maxStripHeight = 64; // Limit to reasonable chunk size
-        
-        Serial.printf("DEBUG: Strip height = %d pixels\n", maxStripHeight);
-        
-        // Process image in horizontal strips
-        for (int16_t stripY = 0; stripY < scaledHeight; stripY += maxStripHeight) {
-          int16_t currentStripHeight = min((int16_t)maxStripHeight, (int16_t)(scaledHeight - stripY));
+    // Fall back to software processing if hardware acceleration failed or unavailable
+    if (!hardwareProcessed) {
+      // For software fallback, we'll implement rotation + scaling
+      // Note: This is a simplified software implementation
+      // For production, you might want more sophisticated software rotation algorithms
+      
+      if (rotationAngle == 0.0) {
+        // No rotation, just scaling
+        if (scaledImageSize <= scaledBufferSize) {
+          Serial.println("DEBUG: Using full software scaling (no rotation)");
+          unsigned long swStart = millis();
+          scaleImageChunk(fullImageBuffer, fullImageWidth, fullImageHeight,
+                          scaledBuffer, scaledWidth, scaledHeight);
+          unsigned long swTime = millis() - swStart;
+          Serial.printf("Software scaling: %lums (%dx%d -> %dx%d)\n", 
+                       swTime, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight);
           
-          // Scale this strip
-          for (int16_t y = 0; y < currentStripHeight; y++) {
-            int16_t dstY = stripY + y;
-            float srcYFloat = (float)dstY / scaleY;
-            int16_t srcY = (int16_t)srcYFloat;
-            if (srcY >= fullImageHeight - 1) srcY = fullImageHeight - 1;
-            float yWeight = srcYFloat - srcY;
+          gfx->draw16bitRGBBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
+        } else {
+          // Strip-based software scaling (existing implementation)
+          Serial.printf("Strip-based scaling (%dx%d -> %dx%d)\n", 
+                       fullImageWidth, fullImageHeight, scaledWidth, scaledHeight);
+          
+          int16_t maxStripHeight = scaledBufferSize / (scaledWidth * 2);
+          if (maxStripHeight < 1) maxStripHeight = 1;
+          if (maxStripHeight > 64) maxStripHeight = 64;
+          
+          for (int16_t stripY = 0; stripY < scaledHeight; stripY += maxStripHeight) {
+            int16_t currentStripHeight = min((int16_t)maxStripHeight, (int16_t)(scaledHeight - stripY));
             
-            for (int16_t dstX = 0; dstX < scaledWidth; dstX++) {
-              float srcXFloat = (float)dstX / scaleX;
-              int16_t srcX = (int16_t)srcXFloat;
-              if (srcX >= fullImageWidth - 1) srcX = fullImageWidth - 1;
-              float xWeight = srcXFloat - srcX;
+            // Scale this strip (existing strip scaling code)
+            for (int16_t y = 0; y < currentStripHeight; y++) {
+              int16_t dstY = stripY + y;
+              float srcYFloat = (float)dstY / scaleY;
+              int16_t srcY = (int16_t)srcYFloat;
+              if (srcY >= fullImageHeight - 1) srcY = fullImageHeight - 1;
+              float yWeight = srcYFloat - srcY;
               
-              // Get the four surrounding pixels for bilinear interpolation
-              uint16_t p1 = fullImageBuffer[srcY * fullImageWidth + srcX];
-              uint16_t p2 = fullImageBuffer[srcY * fullImageWidth + min(srcX + 1, fullImageWidth - 1)];
-              uint16_t p3 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + srcX];
-              uint16_t p4 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + min(srcX + 1, fullImageWidth - 1)];
-              
-              // Extract RGB components (RGB565 format)
-              uint8_t r1 = (p1 >> 11) & 0x1F, g1 = (p1 >> 5) & 0x3F, b1 = p1 & 0x1F;
-              uint8_t r2 = (p2 >> 11) & 0x1F, g2 = (p2 >> 5) & 0x3F, b2 = p2 & 0x1F;
-              uint8_t r3 = (p3 >> 11) & 0x1F, g3 = (p3 >> 5) & 0x3F, b3 = p3 & 0x1F;
-              uint8_t r4 = (p4 >> 11) & 0x1F, g4 = (p4 >> 5) & 0x3F, b4 = p4 & 0x1F;
-              
-              // Bilinear interpolation
-              float r = r1 * (1 - xWeight) * (1 - yWeight) +
-                        r2 * xWeight * (1 - yWeight) +
-                        r3 * (1 - xWeight) * yWeight +
-                        r4 * xWeight * yWeight;
-              
-              float g = g1 * (1 - xWeight) * (1 - yWeight) +
-                        g2 * xWeight * (1 - yWeight) +
-                        g3 * (1 - xWeight) * yWeight +
-                        g4 * xWeight * yWeight;
-              
-              float b = b1 * (1 - xWeight) * (1 - yWeight) +
-                        b2 * xWeight * (1 - yWeight) +
-                        b3 * (1 - xWeight) * yWeight +
-                        b4 * xWeight * yWeight;
-              
-              // Store in strip buffer
-              uint16_t finalPixel = ((uint16_t)(r + 0.5) << 11) |
-                                   ((uint16_t)(g + 0.5) << 5) |
-                                   (uint16_t)(b + 0.5);
-              
-              scaledBuffer[y * scaledWidth + dstX] = finalPixel;
+              for (int16_t dstX = 0; dstX < scaledWidth; dstX++) {
+                float srcXFloat = (float)dstX / scaleX;
+                int16_t srcX = (int16_t)srcXFloat;
+                if (srcX >= fullImageWidth - 1) srcX = fullImageWidth - 1;
+                float xWeight = srcXFloat - srcX;
+                
+                uint16_t p1 = fullImageBuffer[srcY * fullImageWidth + srcX];
+                uint16_t p2 = fullImageBuffer[srcY * fullImageWidth + min(srcX + 1, fullImageWidth - 1)];
+                uint16_t p3 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + srcX];
+                uint16_t p4 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + min(srcX + 1, fullImageWidth - 1)];
+                
+                uint8_t r1 = (p1 >> 11) & 0x1F, g1 = (p1 >> 5) & 0x3F, b1 = p1 & 0x1F;
+                uint8_t r2 = (p2 >> 11) & 0x1F, g2 = (p2 >> 5) & 0x3F, b2 = p2 & 0x1F;
+                uint8_t r3 = (p3 >> 11) & 0x1F, g3 = (p3 >> 5) & 0x3F, b3 = p3 & 0x1F;
+                uint8_t r4 = (p4 >> 11) & 0x1F, g4 = (p4 >> 5) & 0x3F, b4 = p4 & 0x1F;
+                
+                float r = r1 * (1 - xWeight) * (1 - yWeight) +
+                          r2 * xWeight * (1 - yWeight) +
+                          r3 * (1 - xWeight) * yWeight +
+                          r4 * xWeight * yWeight;
+                
+                float g = g1 * (1 - xWeight) * (1 - yWeight) +
+                          g2 * xWeight * (1 - yWeight) +
+                          g3 * (1 - xWeight) * yWeight +
+                          g4 * xWeight * yWeight;
+                
+                float b = b1 * (1 - xWeight) * (1 - yWeight) +
+                          b2 * xWeight * (1 - yWeight) +
+                          b3 * (1 - xWeight) * yWeight +
+                          b4 * xWeight * yWeight;
+                
+                uint16_t finalPixel = ((uint16_t)(r + 0.5) << 11) |
+                                     ((uint16_t)(g + 0.5) << 5) |
+                                     (uint16_t)(b + 0.5);
+                
+                scaledBuffer[y * scaledWidth + dstX] = finalPixel;
+              }
+            }
+            
+            int16_t drawX = finalX;
+            int16_t drawY = finalY + stripY;
+            
+            if (drawY < h && drawY + currentStripHeight > 0 && 
+                drawX < w && drawX + scaledWidth > 0) {
+              gfx->draw16bitRGBBitmap(drawX, drawY, scaledBuffer, scaledWidth, currentStripHeight);
             }
           }
+        }
+      } else {
+        // Software rotation + scaling - simplified implementation
+        Serial.printf("Software rotation+scaling: %.0f° (%dx%d -> %dx%d)\n", 
+                     rotationAngle, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight);
+        
+        // For now, fall back to PPA with no rotation if software rotation is needed
+        // This ensures the system remains functional while providing a path for future enhancement
+        Serial.println("WARNING: Software rotation not fully implemented, using scaling only");
+        
+        if (scaledImageSize <= scaledBufferSize) {
+          // Calculate dimensions without rotation for fallback
+          int16_t fallbackWidth = (int16_t)(fullImageWidth * scaleX);
+          int16_t fallbackHeight = (int16_t)(fullImageHeight * scaleY);
           
-          // Draw the entire strip at once for smooth rendering
-          int16_t drawX = finalX;
-          int16_t drawY = finalY + stripY;
+          scaleImageChunk(fullImageBuffer, fullImageWidth, fullImageHeight,
+                          scaledBuffer, fallbackWidth, fallbackHeight);
           
-          // Only draw if the strip is visible on screen
-          if (drawY < h && drawY + currentStripHeight > 0 && 
-              drawX < w && drawX + scaledWidth > 0) {
-            gfx->draw16bitRGBBitmap(drawX, drawY, scaledBuffer, scaledWidth, currentStripHeight);
-          }
+          // Adjust position for fallback dimensions
+          int16_t fallbackX = centerX - (fallbackWidth / 2) + offsetX;
+          int16_t fallbackY = centerY - (fallbackHeight / 2) + offsetY;
+          
+          gfx->draw16bitRGBBitmap(fallbackX, fallbackY, scaledBuffer, fallbackWidth, fallbackHeight);
         }
       }
     }
@@ -1102,8 +1176,57 @@ void downloadAndDisplayImageSilent() {
   http.begin(imageURL);
   http.setTimeout(10000);
   
+  // First, do a HEAD request to check if image has changed
   resetWatchdog(); // Reset before HTTP request
-  int httpCode = http.GET();
+  int httpCode = http.sendRequest("HEAD");
+  
+  if (httpCode == HTTP_CODE_OK) {
+    // Check ETag and Last-Modified headers
+    String etag = http.header("ETag");
+    String lastModifiedStr = http.header("Last-Modified");
+    size_t contentLength = http.getSize();
+    
+    // Check if image has actually changed
+    bool imageChanged = false;
+    unsigned long currentTime = millis();
+    
+    // Force check every 5 minutes regardless of cache headers (for servers with poor caching)
+    bool forceCheck = (currentTime - lastSuccessfulCheck) > forceCheckInterval;
+    
+    if (etag.length() > 0 && etag != lastETag) {
+      imageChanged = true;
+      lastETag = etag;
+      Serial.printf("Image changed (ETag): %s\n", etag.c_str());
+    } else if (contentLength != lastImageSize && contentLength > 0) {
+      imageChanged = true;
+      lastImageSize = contentLength;
+      Serial.printf("Image changed (size): %d bytes\n", contentLength);
+    } else if (forceCheck) {
+      // Force periodic check for servers that don't update cache headers properly
+      imageChanged = true;
+      lastSuccessfulCheck = currentTime;
+      Serial.printf("Forced check after %lu minutes (cache headers may be unreliable)\n", 
+                   forceCheckInterval / 60000);
+    } else if (etag.length() == 0 && lastModifiedStr.length() == 0) {
+      // No cache headers available, assume it might have changed
+      imageChanged = true;
+      Serial.println("No cache headers, assuming image changed");
+    }
+    
+    http.end();
+    
+    if (!imageChanged) {
+      Serial.println("Image unchanged, skipping download");
+      return;
+    }
+    
+    // Image has changed, proceed with full download
+    Serial.println("Image changed, downloading...");
+    http.begin(imageURL);
+    http.setTimeout(10000);
+    resetWatchdog();
+    httpCode = http.GET();
+  }
   
   if (httpCode == HTTP_CODE_OK) {
     WiFiClient* stream = http.getStreamPtr();
@@ -1137,6 +1260,7 @@ void downloadAndDisplayImageSilent() {
         originalImageWidth = jpeg.getWidth();
         originalImageHeight = jpeg.getHeight();
         currentImageSize = bytesRead;
+        lastImageSize = bytesRead; // Update our tracking
         
         // Check if image fits in our full image buffer
         if (originalImageWidth * originalImageHeight * 2 <= fullImageBufferSize) {
@@ -1157,6 +1281,8 @@ void downloadAndDisplayImageSilent() {
           
           // Now render the full image with smooth transition (single clean update)
           renderFullImageWithTransition(true);
+          Serial.printf("New image displayed (%dx%d, %d bytes)\n", 
+                       originalImageWidth, originalImageHeight, bytesRead);
         } else {
           Serial.printf("WARNING: Image too large for buffer (%dx%d)\n", originalImageWidth, originalImageHeight);
           jpeg.close();
@@ -1198,11 +1324,38 @@ void moveImage(int16_t deltaX, int16_t deltaY) {
   redrawImage();
 }
 
+void rotateImage(float deltaAngle) {
+  rotationAngle += deltaAngle;
+  
+  // Normalize rotation angle to 0-360 range
+  while (rotationAngle < 0) rotationAngle += 360.0;
+  while (rotationAngle >= 360.0) rotationAngle -= 360.0;
+  
+  // Snap to nearest 90-degree increment for hardware acceleration
+  if (rotationAngle >= 0 && rotationAngle < 45) rotationAngle = 0;
+  else if (rotationAngle >= 45 && rotationAngle < 135) rotationAngle = 90;
+  else if (rotationAngle >= 135 && rotationAngle < 225) rotationAngle = 180;
+  else if (rotationAngle >= 225 && rotationAngle < 315) rotationAngle = 270;
+  else rotationAngle = 0;
+  
+  redrawImage();
+}
+
+void toggleRotation180() {
+  if (rotationAngle == 0.0 || rotationAngle == 90.0 || rotationAngle == 270.0) {
+    rotationAngle = 180.0;
+  } else {
+    rotationAngle = 0.0;
+  }
+  redrawImage();
+}
+
 void resetImageTransform() {
   scaleX = 1.0;
   scaleY = 1.0;
   offsetX = 0;
   offsetY = 0;
+  rotationAngle = 0.0;
   redrawImage();
 }
 
@@ -1271,11 +1424,34 @@ void processSerialCommands() {
         Serial.printf("Move right, offset: %d,%d\n", offsetX, offsetY);
         break;
         
+      // Rotation commands
+      case 'Q':
+      case 'q':
+        rotateImage(-ROTATION_STEP);
+        Serial.printf("Rotate CCW: %.0f°\n", rotationAngle);
+        break;
+      case 'E':
+      case 'e':
+        rotateImage(ROTATION_STEP);
+        Serial.printf("Rotate CW: %.0f°\n", rotationAngle);
+        break;
+      case 'T':
+      case 't':
+        toggleRotation180();
+        Serial.printf("Toggle 180°: %.0f°\n", rotationAngle);
+        break;
+      case 'O':
+      case 'o':
+        rotationAngle = 0.0;
+        redrawImage();
+        Serial.printf("Reset rotation: %.0f°\n", rotationAngle);
+        break;
+        
       // Reset command
       case 'R':
       case 'r':
         resetImageTransform();
-        Serial.println("Reset transformations");
+        Serial.println("Reset all transformations");
         break;
         
       // Help command
@@ -1290,11 +1466,16 @@ void processSerialCommands() {
         Serial.println("Movement:");
         Serial.println("  W/S : Move up/down");
         Serial.println("  A/D : Move left/right");
+        Serial.println("Rotation:");
+        Serial.println("  Q/E : Rotate 90° CCW/CW");
+        Serial.println("  T   : Toggle 180° rotation");
+        Serial.println("  O   : Reset rotation to 0°");
         Serial.println("Reset:");
         Serial.println("  R   : Reset all transformations");
         Serial.println("Help:");
         Serial.println("  H/? : Show this help");
-        Serial.printf("Current: Scale %.1fx%.1f, Offset %d,%d\n", scaleX, scaleY, offsetX, offsetY);
+        Serial.printf("Current: Scale %.1fx%.1f, Offset %d,%d, Rotation %.0f°\n", 
+                     scaleX, scaleY, offsetX, offsetY, rotationAngle);
         break;
         
       default:
@@ -1309,16 +1490,23 @@ void processSerialCommands() {
   }
 }
 
+// Add a flag to prevent image processing loops
+bool imageProcessing = false;
+unsigned long lastImageProcessTime = 0;
+const unsigned long imageProcessTimeout = 5000; // 5 second timeout for image processing
+
 void loop() {
-  // Reset watchdog and check system health at start of each loop
-  resetWatchdog();
+  // Force immediate watchdog reset at start of each loop
+  forceResetWatchdog();
   checkSystemHealth();
   flushSerial();
   
   // Check for critical system health issues
   if (!systemHealthy) {
     Serial.println("CRITICAL: System health compromised, attempting recovery...");
+    forceResetWatchdog(); // Force reset before delay
     safeDelay(5000); // Wait before continuing
+    forceResetWatchdog(); // Force reset after delay
   }
   
   // Check WiFi connection
@@ -1329,9 +1517,10 @@ void loop() {
         debugPrint("ERROR: WiFi disconnected!", RED);
         debugPrint("Attempting reconnection...", YELLOW);
       }
+      forceResetWatchdog(); // Force reset before WiFi operations
       connectToWiFi();
     }
-    resetWatchdog(); // Reset after WiFi operations
+    forceResetWatchdog(); // Force reset after WiFi operations
     return;
   } else if (!wifiConnected) {
     wifiConnected = true;
@@ -1341,21 +1530,32 @@ void loop() {
   }
   
   // Handle MQTT connection and messages
+  forceResetWatchdog(); // Force reset before MQTT
   handleMQTT();
-  resetWatchdog(); // Reset after MQTT operations
+  forceResetWatchdog(); // Force reset after MQTT operations
   
   // Handle OTA web server
   server.handleClient();
   ElegantOTA.loop();
-  resetWatchdog(); // Reset after OTA operations
+  forceResetWatchdog(); // Force reset after OTA operations
   
   // Process serial commands for image control
   processSerialCommands();
+  forceResetWatchdog(); // Force reset after serial processing
   
-  // Check if it's time to update the image
+  // Check for stuck image processing
+  if (imageProcessing && (millis() - lastImageProcessTime > imageProcessTimeout)) {
+    Serial.println("WARNING: Image processing timeout detected, resetting...");
+    imageProcessing = false;
+    forceResetWatchdog();
+  }
+  
+  // Check if it's time to update the image (only if not currently processing)
   unsigned long currentTime = millis();
-  if (currentTime - lastUpdate >= updateInterval || lastUpdate == 0) {
-    resetWatchdog(); // Reset before image operations
+  if (!imageProcessing && (currentTime - lastUpdate >= updateInterval || lastUpdate == 0)) {
+    imageProcessing = true;
+    lastImageProcessTime = currentTime;
+    forceResetWatchdog(); // Force reset before image operations
     
     if (!firstImageLoaded) {
       // First download with debug output
@@ -1366,8 +1566,12 @@ void loop() {
     }
     
     lastUpdate = currentTime;
-    resetWatchdog(); // Reset after image operations
+    imageProcessing = false;
+    forceResetWatchdog(); // Force reset after image operations
   }
   
+  // Additional watchdog reset before delay
+  forceResetWatchdog();
   safeDelay(100); // Use safe delay instead of regular delay
+  forceResetWatchdog(); // Force reset after delay
 }
