@@ -1454,6 +1454,16 @@ void processSerialCommands() {
         Serial.println("Reset all transformations");
         break;
         
+      // Reboot command
+      case 'B':
+      case 'b':
+        Serial.println("Reboot command received - restarting device in 2 seconds...");
+        Serial.println("WARNING: Device will restart now!");
+        Serial.flush(); // Ensure message is sent before restart
+        delay(2000); // Give user time to see the message
+        ESP.restart();
+        break;
+        
       // Help command
       case 'H':
       case 'h':
@@ -1472,6 +1482,8 @@ void processSerialCommands() {
         Serial.println("  O   : Reset rotation to 0°");
         Serial.println("Reset:");
         Serial.println("  R   : Reset all transformations");
+        Serial.println("System:");
+        Serial.println("  B   : Reboot device");
         Serial.println("Help:");
         Serial.println("  H/? : Show this help");
         Serial.printf("Current: Scale %.1fx%.1f, Offset %d,%d, Rotation %.0f°\n", 
