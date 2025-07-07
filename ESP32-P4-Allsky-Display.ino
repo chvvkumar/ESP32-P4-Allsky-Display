@@ -87,7 +87,7 @@ void setup() {
     Serial.begin(9600);
     delay(1000); // Give serial time to initialize
     
-    Serial.println("=== ESP32-P4 Modular Image Display Starting ===");
+    Serial.println("=== ESP32-P4 Image Display Starting ===");
     
     // Initialize system monitor first
     if (!systemMonitor.begin()) {

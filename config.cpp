@@ -5,8 +5,8 @@
 // =============================================================================
 
 // WiFi Configuration - Update these with your credentials
-const char* WIFI_SSID = "IoT";
-const char* WIFI_PASSWORD = "kkkkkkkk";
+const char* WIFI_SSID = "";
+const char* WIFI_PASSWORD = "";
 
 // =============================================================================
 // MQTT CONFIGURATION IMPLEMENTATION
