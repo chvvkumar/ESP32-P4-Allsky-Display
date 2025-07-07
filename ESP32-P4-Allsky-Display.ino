@@ -10,7 +10,6 @@
 #include <WebServer.h>
 #include <ElegantOTA.h>
 #include "displays_config.h"
-#include "performance_optimizations.h"
 
 // ESP-IDF includes for PPA hardware acceleration and watchdog management
 extern "C" {
@@ -23,8 +22,8 @@ extern "C" {
 }
 
 // WiFi Configuration - Update these with your credentials
-const char* ssid = "IoT";
-const char* password = "kkkkkkkk";
+const char* ssid = "";
+const char* password = "";
 
 // MQTT Configuration - Update these with your MQTT broker details
 const char* mqtt_server = "192.168.1.250";  // Replace with your MQTT broker IP
@@ -206,11 +205,67 @@ void debugPrintf(uint16_t color, const char* format, ...) {
   debugPrint(buffer, color);
 }
 
-// Bilinear interpolation scaling function (legacy version kept for comparison)
+// Bilinear interpolation scaling function using legacy implementation
 void scaleImageChunk(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
                      uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight) {
-  // Use optimized version that eliminates int/float conversions
-  scaleImageChunkOptimized(srcPixels, srcWidth, srcHeight, dstPixels, dstWidth, dstHeight);
+  // Use legacy version (will replace with optimized version later)
+  scaleImageChunkLegacy(srcPixels, srcWidth, srcHeight, dstPixels, dstWidth, dstHeight);
+}
+
+// Simple strip-based scaling function (replacement for scaleImageStripOptimized)
+void scaleImageStripLegacy(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
+                          uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight,
+                          float scaleX, float scaleY, int16_t stripY, int16_t stripHeight) {
+  // Calculate the source Y range for this strip
+  float srcStartY = stripY / scaleY;
+  float srcEndY = (stripY + stripHeight) / scaleY;
+  
+  // Process each row in the strip
+  for (int16_t y = 0; y < stripHeight; y++) {
+    float srcY = (stripY + y) / scaleY;
+    int16_t srcY1 = (int16_t)srcY;
+    int16_t srcY2 = min(srcY1 + 1, srcHeight - 1);
+    float yWeight = srcY - srcY1;
+    
+    for (int16_t x = 0; x < dstWidth; x++) {
+      float srcX = x / scaleX;
+      int16_t srcX1 = (int16_t)srcX;
+      int16_t srcX2 = min(srcX1 + 1, srcWidth - 1);
+      float xWeight = srcX - srcX1;
+      
+      // Ensure source coordinates are within bounds
+      if (srcY1 >= srcHeight) srcY1 = srcHeight - 1;
+      if (srcY2 >= srcHeight) srcY2 = srcHeight - 1;
+      if (srcX1 >= srcWidth) srcX1 = srcWidth - 1;
+      if (srcX2 >= srcWidth) srcX2 = srcWidth - 1;
+      
+      // Get the four surrounding pixels
+      uint16_t p1 = srcPixels[srcY1 * srcWidth + srcX1]; // Top-left
+      uint16_t p2 = srcPixels[srcY1 * srcWidth + srcX2]; // Top-right
+      uint16_t p3 = srcPixels[srcY2 * srcWidth + srcX1]; // Bottom-left
+      uint16_t p4 = srcPixels[srcY2 * srcWidth + srcX2]; // Bottom-right
+      
+      // Extract RGB components
+      uint8_t r1 = (p1 >> 11) & 0x1F, g1 = (p1 >> 5) & 0x3F, b1 = p1 & 0x1F;
+      uint8_t r2 = (p2 >> 11) & 0x1F, g2 = (p2 >> 5) & 0x3F, b2 = p2 & 0x1F;
+      uint8_t r3 = (p3 >> 11) & 0x1F, g3 = (p3 >> 5) & 0x3F, b3 = p3 & 0x1F;
+      uint8_t r4 = (p4 >> 11) & 0x1F, g4 = (p4 >> 5) & 0x3F, b4 = p4 & 0x1F;
+      
+      // Bilinear interpolation
+      float r = r1 * (1 - xWeight) * (1 - yWeight) + r2 * xWeight * (1 - yWeight) +
+                r3 * (1 - xWeight) * yWeight + r4 * xWeight * yWeight;
+      float g = g1 * (1 - xWeight) * (1 - yWeight) + g2 * xWeight * (1 - yWeight) +
+                g3 * (1 - xWeight) * yWeight + g4 * xWeight * yWeight;
+      float b = b1 * (1 - xWeight) * (1 - yWeight) + b2 * xWeight * (1 - yWeight) +
+                b3 * (1 - xWeight) * yWeight + b4 * xWeight * yWeight;
+      
+      uint16_t finalPixel = ((uint16_t)(r + 0.5) << 11) |
+                           ((uint16_t)(g + 0.5) << 5) |
+                           (uint16_t)(b + 0.5);
+      
+      dstPixels[y * dstWidth + x] = finalPixel;
+    }
+  }
 }
 
 // Legacy float-based scaling function (for performance comparison if needed)
@@ -820,10 +875,10 @@ void renderFullImageWithTransition(bool useTransition) {
           for (int16_t stripY = 0; stripY < scaledHeight; stripY += maxStripHeight) {
             int16_t currentStripHeight = min((int16_t)maxStripHeight, (int16_t)(scaledHeight - stripY));
             
-            // Use optimized strip-based scaling (eliminates int/float conversions)
-            scaleImageStripOptimized(fullImageBuffer, fullImageWidth, fullImageHeight,
-                                   scaledBuffer, scaledWidth, scaledHeight,
-                                   scaleX, scaleY, stripY, currentStripHeight);
+            // Use legacy strip-based scaling (will replace with optimized version later)
+            scaleImageStripLegacy(fullImageBuffer, fullImageWidth, fullImageHeight,
+                                scaledBuffer, scaledWidth, scaledHeight,
+                                scaleX, scaleY, stripY, currentStripHeight);
             
             int16_t drawX = finalX;
             int16_t drawY = finalY + stripY;
