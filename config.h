@@ -85,7 +85,7 @@ extern const char* IMAGE_URL;
 #define BACKLIGHT_CHANNEL 0              // LEDC channel
 #define BACKLIGHT_FREQ 5000              // 5kHz PWM frequency  
 #define BACKLIGHT_RESOLUTION 10          // 10-bit resolution (0-1023)
-#define DEFAULT_BRIGHTNESS 70            // Default brightness percentage
+#define DEFAULT_BRIGHTNESS 50            // Default brightness percentage
 
 // Debug display settings
 #define DEBUG_START_Y 50                 // Starting Y position for debug text

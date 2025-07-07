@@ -336,8 +336,6 @@ void downloadAndDisplayImage() {
                     // Now render the full image with transformations
                     renderFullImage();
                     
-                    debugPrint("SUCCESS: Image displayed!", COLOR_GREEN);
-                    
                     // Mark first image as loaded (only once)
                     if (!firstImageLoaded) {
                         firstImageLoaded = true;
