@@ -122,7 +122,7 @@ const unsigned long serialFlushInterval = 5000; // Flush serial every 5 seconds
 #define BACKLIGHT_CHANNEL 0     // LEDC channel
 #define BACKLIGHT_FREQ 5000     // 5kHz PWM frequency  
 #define BACKLIGHT_RESOLUTION 10 // 10-bit resolution (0-1023)
-int displayBrightness = 100;    // Default brightness 100%
+int displayBrightness = 70;     // Default brightness 100%
 bool brightnessInitialized = false;
 
 // ElegantOTA callback functions
