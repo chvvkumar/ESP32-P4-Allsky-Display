@@ -23,8 +23,8 @@ extern "C" {
 }
 
 // WiFi Configuration - Update these with your credentials
-const char* ssid = "IoT";
-const char* password = "kkkkkkkk";
+const char* ssid = "";
+const char* password = "";
 
 // MQTT Configuration - Update these with your MQTT broker details
 const char* mqtt_server = "192.168.1.250";  // Replace with your MQTT broker IP
