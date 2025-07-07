@@ -10,6 +10,7 @@
 #include <WebServer.h>
 #include <ElegantOTA.h>
 #include "displays_config.h"
+#include "performance_optimizations.h"
 
 // ESP-IDF includes for PPA hardware acceleration and watchdog management
 extern "C" {
@@ -32,6 +33,10 @@ const char* mqtt_user = "";                 // Leave empty if no authentication
 const char* mqtt_password = "";             // Leave empty if no authentication
 const char* mqtt_client_id = "ESP32_Allsky_Display";
 const char* reboot_topic = "Astro/AllSky/display/reboot"; // Topic to subscribe for reboot control
+
+// Brightness control configuration
+const char* brightness_topic = "Astro/AllSky/display/brightness";           // Topic to control brightness (0-100)
+const char* brightness_status_topic = "Astro/AllSky/display/brightness/status"; // Topic for brightness status
 
 // Image Configuration
 const char* imageURL = "https://allsky.challa.co:1982/current/resized/image.jpg"; // Random image service
@@ -113,6 +118,14 @@ bool systemHealthy = true;
 unsigned long lastSerialFlush = 0;
 const unsigned long serialFlushInterval = 5000; // Flush serial every 5 seconds
 
+// Brightness control variables
+#define BACKLIGHT_PIN 26        // GPIO26 from schematic (LCD_BL_PWM)
+#define BACKLIGHT_CHANNEL 0     // LEDC channel
+#define BACKLIGHT_FREQ 5000     // 5kHz PWM frequency  
+#define BACKLIGHT_RESOLUTION 10 // 10-bit resolution (0-1023)
+int displayBrightness = 100;    // Default brightness 100%
+bool brightnessInitialized = false;
+
 // ElegantOTA callback functions
 void onOTAStart() {
   // Log when OTA has started
@@ -193,24 +206,31 @@ void debugPrintf(uint16_t color, const char* format, ...) {
   debugPrint(buffer, color);
 }
 
-// Bilinear interpolation scaling function
+// Bilinear interpolation scaling function (legacy version kept for comparison)
 void scaleImageChunk(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
                      uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight) {
-  float xRatio = (float)srcWidth / dstWidth;
-  float yRatio = (float)srcHeight / dstHeight;
+  // Use optimized version that eliminates int/float conversions
+  scaleImageChunkOptimized(srcPixels, srcWidth, srcHeight, dstPixels, dstWidth, dstHeight);
+}
+
+// Legacy float-based scaling function (for performance comparison if needed)
+void scaleImageChunkLegacy(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
+                          uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight) {
+  float xRatio = (float)srcWidth / dstWidth;  // int->float conversion
+  float yRatio = (float)srcHeight / dstHeight; // int->float conversion
   
   for (int16_t y = 0; y < dstHeight; y++) {
     for (int16_t x = 0; x < dstWidth; x++) {
-      float srcX = x * xRatio;
-      float srcY = y * yRatio;
+      float srcX = x * xRatio;    // int->float conversion per pixel
+      float srcY = y * yRatio;    // int->float conversion per pixel
       
-      int16_t x1 = (int16_t)srcX;
-      int16_t y1 = (int16_t)srcY;
+      int16_t x1 = (int16_t)srcX; // float->int conversion per pixel
+      int16_t y1 = (int16_t)srcY; // float->int conversion per pixel
       int16_t x2 = min(x1 + 1, srcWidth - 1);
       int16_t y2 = min(y1 + 1, srcHeight - 1);
       
-      float xWeight = srcX - x1;
-      float yWeight = srcY - y1;
+      float xWeight = srcX - x1; // float math per pixel
+      float yWeight = srcY - y1; // float math per pixel
       
       // Get the four surrounding pixels
       uint16_t p1 = srcPixels[y1 * srcWidth + x1]; // Top-left
@@ -235,7 +255,7 @@ void scaleImageChunk(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
       uint8_t g4 = (p4 >> 5) & 0x3F;
       uint8_t b4 = p4 & 0x1F;
       
-      // Bilinear interpolation
+      // Bilinear interpolation with float operations per pixel
       float r = r1 * (1 - xWeight) * (1 - yWeight) +
                 r2 * xWeight * (1 - yWeight) +
                 r3 * (1 - xWeight) * yWeight +
@@ -251,7 +271,7 @@ void scaleImageChunk(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
                 b3 * (1 - xWeight) * yWeight +
                 b4 * xWeight * yWeight;
       
-      // Combine back to RGB565
+      // More float->int conversions per pixel
       uint16_t finalPixel = ((uint16_t)(r + 0.5) << 11) |
                            ((uint16_t)(g + 0.5) << 5) |
                            (uint16_t)(b + 0.5);
@@ -541,6 +561,46 @@ void safeDelay(unsigned long ms) {
   }
 }
 
+// Brightness control functions
+void initBrightness() {
+  if (brightnessInitialized) return;
+  
+  debugPrint("Initializing brightness control...", YELLOW);
+  
+  // Configure LEDC for backlight control using newer API
+  if (ledcAttach(BACKLIGHT_PIN, BACKLIGHT_FREQ, BACKLIGHT_RESOLUTION) == 0) {
+    debugPrint("ERROR: LEDC attach failed!", RED);
+    return;
+  }
+  
+  // Set initial brightness
+  setBrightness(displayBrightness);
+  brightnessInitialized = true;
+  
+  debugPrint("Brightness control initialized!", GREEN);
+}
+
+// Set brightness level (0-100%)
+void setBrightness(int brightness) {
+  if (!brightnessInitialized) return;
+  
+  brightness = constrain(brightness, 0, 100);
+  displayBrightness = brightness;
+  
+  // Convert percentage to inverted 10-bit duty cycle (0-1023)
+  // Backlight uses inverted logic: low PWM = high brightness
+  uint32_t duty = 1023 - ((1023 * brightness) / 100);
+  
+  ledcWrite(BACKLIGHT_PIN, duty);
+  
+  Serial.printf("Display brightness set to: %d%% (PWM duty: %d)\n", brightness, duty);
+}
+
+// Get current brightness
+int getBrightness() {
+  return displayBrightness;
+}
+
 // MQTT callback function
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   // Convert payload to string
@@ -560,6 +620,25 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     } else {
       Serial.printf("Invalid reboot command: '%s' (expected 'reboot')\n", message.c_str());
     }
+    return;
+  }
+  
+  // Handle brightness control
+  if (String(topic) == brightness_topic) {
+    int brightness = message.toInt();
+    if (brightness >= 0 && brightness <= 100) {
+      setBrightness(brightness);
+      
+      // Publish status confirmation
+      if (mqttConnected) {
+        String status = String(displayBrightness);
+        mqttClient.publish(brightness_status_topic, status.c_str());
+        Serial.printf("Published brightness status: %d%%\n", displayBrightness);
+      }
+    } else {
+      Serial.printf("Invalid brightness value: %d (must be 0-100)\n", brightness);
+    }
+    return;
   }
 }
 
@@ -600,6 +679,16 @@ void connectToMQTT() {
       if (!firstImageLoaded) {
         debugPrint("MQTT subscription failed!", RED);
       }
+    }
+    
+    // Subscribe to brightness control topic
+    if (mqttClient.subscribe(brightness_topic)) {
+      Serial.printf("Subscribed to brightness topic: %s\n", brightness_topic);
+      if (!firstImageLoaded) {
+        debugPrintf(WHITE, "Brightness MQTT ready");
+      }
+    } else {
+      Serial.println("Failed to subscribe to brightness topic");
     }
   } else {
     mqttConnected = false;
@@ -731,52 +820,10 @@ void renderFullImageWithTransition(bool useTransition) {
           for (int16_t stripY = 0; stripY < scaledHeight; stripY += maxStripHeight) {
             int16_t currentStripHeight = min((int16_t)maxStripHeight, (int16_t)(scaledHeight - stripY));
             
-            // Scale this strip (existing strip scaling code)
-            for (int16_t y = 0; y < currentStripHeight; y++) {
-              int16_t dstY = stripY + y;
-              float srcYFloat = (float)dstY / scaleY;
-              int16_t srcY = (int16_t)srcYFloat;
-              if (srcY >= fullImageHeight - 1) srcY = fullImageHeight - 1;
-              float yWeight = srcYFloat - srcY;
-              
-              for (int16_t dstX = 0; dstX < scaledWidth; dstX++) {
-                float srcXFloat = (float)dstX / scaleX;
-                int16_t srcX = (int16_t)srcXFloat;
-                if (srcX >= fullImageWidth - 1) srcX = fullImageWidth - 1;
-                float xWeight = srcXFloat - srcX;
-                
-                uint16_t p1 = fullImageBuffer[srcY * fullImageWidth + srcX];
-                uint16_t p2 = fullImageBuffer[srcY * fullImageWidth + min(srcX + 1, fullImageWidth - 1)];
-                uint16_t p3 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + srcX];
-                uint16_t p4 = fullImageBuffer[min(srcY + 1, fullImageHeight - 1) * fullImageWidth + min(srcX + 1, fullImageWidth - 1)];
-                
-                uint8_t r1 = (p1 >> 11) & 0x1F, g1 = (p1 >> 5) & 0x3F, b1 = p1 & 0x1F;
-                uint8_t r2 = (p2 >> 11) & 0x1F, g2 = (p2 >> 5) & 0x3F, b2 = p2 & 0x1F;
-                uint8_t r3 = (p3 >> 11) & 0x1F, g3 = (p3 >> 5) & 0x3F, b3 = p3 & 0x1F;
-                uint8_t r4 = (p4 >> 11) & 0x1F, g4 = (p4 >> 5) & 0x3F, b4 = p4 & 0x1F;
-                
-                float r = r1 * (1 - xWeight) * (1 - yWeight) +
-                          r2 * xWeight * (1 - yWeight) +
-                          r3 * (1 - xWeight) * yWeight +
-                          r4 * xWeight * yWeight;
-                
-                float g = g1 * (1 - xWeight) * (1 - yWeight) +
-                          g2 * xWeight * (1 - yWeight) +
-                          g3 * (1 - xWeight) * yWeight +
-                          g4 * xWeight * yWeight;
-                
-                float b = b1 * (1 - xWeight) * (1 - yWeight) +
-                          b2 * xWeight * (1 - yWeight) +
-                          b3 * (1 - xWeight) * yWeight +
-                          b4 * xWeight * yWeight;
-                
-                uint16_t finalPixel = ((uint16_t)(r + 0.5) << 11) |
-                                     ((uint16_t)(g + 0.5) << 5) |
-                                     (uint16_t)(b + 0.5);
-                
-                scaledBuffer[y * scaledWidth + dstX] = finalPixel;
-              }
-            }
+            // Use optimized strip-based scaling (eliminates int/float conversions)
+            scaleImageStripOptimized(fullImageBuffer, fullImageWidth, fullImageHeight,
+                                   scaledBuffer, scaledWidth, scaledHeight,
+                                   scaleX, scaleY, stripY, currentStripHeight);
             
             int16_t drawX = finalX;
             int16_t drawY = finalY + stripY;
@@ -940,10 +987,13 @@ void setup() {
   // Initialize PPA hardware acceleration
   ppa_available = initPPA();
   if (ppa_available) {
-    debugPrint("Hardware acceleration enabled!", GREEN);
+  debugPrint("Hardware acceleration enabled!", GREEN);
   } else {
     debugPrint("Using software scaling fallback", YELLOW);
   }
+  
+  // Initialize brightness control
+  initBrightness();
   
   // Connect to WiFi
   debugPrint("Starting WiFi connection...", YELLOW);
@@ -1482,12 +1532,34 @@ void processSerialCommands() {
         Serial.println("  O   : Reset rotation to 0°");
         Serial.println("Reset:");
         Serial.println("  R   : Reset all transformations");
+        Serial.println("Brightness:");
+        Serial.println("  L/K : Brightness up/down (±10%)");
+        Serial.println("  M   : Show current brightness");
         Serial.println("System:");
         Serial.println("  B   : Reboot device");
         Serial.println("Help:");
         Serial.println("  H/? : Show this help");
         Serial.printf("Current: Scale %.1fx%.1f, Offset %d,%d, Rotation %.0f°\n", 
                      scaleX, scaleY, offsetX, offsetY, rotationAngle);
+        Serial.printf("Brightness: %d%%\n", displayBrightness);
+        break;
+        
+      // Brightness commands
+      case 'L':
+      case 'l':
+        setBrightness(min(displayBrightness + 10, 100));
+        Serial.printf("Brightness up: %d%%\n", displayBrightness);
+        break;
+        
+      case 'K':
+      case 'k':
+        setBrightness(max(displayBrightness - 10, 0));
+        Serial.printf("Brightness down: %d%%\n", displayBrightness);
+        break;
+        
+      case 'M':
+      case 'm':
+        Serial.printf("Current brightness: %d%%\n", displayBrightness);
         break;
         
       default:

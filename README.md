@@ -19,8 +19,9 @@ On the fly image adjustments
 
 - **Display Support**: Compatible with 3.4" (800x800) and 4" (720x720) DSI displays
 - **Hardware-Accelerated Image Processing**: Utilizes ESP32-P4's PPA for fast image scaling and rotation
+- **Brightness Control**: PWM-based backlight control via serial commands and MQTT
 - **Over-The-Air (OTA) Updates**: Web-based firmware updates using ElegantOTA (WIP)
-- **MQTT Integration**: Remote device reboot via MQTT
+- **MQTT Integration**: Remote device reboot and brightness control via MQTT
 - **Real-Time Image Transformation**: Scale, move, and rotate images via serial commands
 - **Touch Interface Support**: GT911 touch controller integration
 - **WiFi Connectivity**: Automatic image downloading from web servers
@@ -169,14 +170,20 @@ Control image transformations via Serial Monitor (115200 baud):
 - `T`: Toggle 180° rotation (useful for upside-down mounting)
 - `O`: Reset rotation to 0°
 
+#### Brightness Commands
+- `L` / `K`: Brightness up/down (±10% increments)
+- `M`: Show current brightness level
+
 #### System Commands
 - `B`: Reboot device (restarts ESP32 after 2-second warning)
 
 #### Reset and Help
 - `R`: Reset all transformations (including rotation)
-- `H` / `?`: Show help menu with current transformation status
+- `H` / `?`: Show help menu with current transformation and brightness status
 
 ### MQTT Control
+
+#### Device Reboot
 Send a "reboot" message to restart the device:
 ```
 Topic: Astro/AllSky/display/reboot
@@ -187,6 +194,36 @@ Example MQTT command:
 ```bash
 mosquitto_pub -h your-mqtt-broker -t "Astro/AllSky/display/reboot" -m "reboot"
 ```
+
+#### Brightness Control
+Control display brightness remotely via MQTT:
+```
+Topic: Astro/AllSky/display/brightness
+Message: 0-100 (brightness percentage)
+```
+
+The device will publish brightness status confirmations to:
+```
+Topic: Astro/AllSky/display/brightness/status
+Message: Current brightness percentage
+```
+
+Example MQTT brightness commands:
+```bash
+# Set brightness to 75%
+mosquitto_pub -h your-mqtt-broker -t "Astro/AllSky/display/brightness" -m "75"
+
+# Set brightness to minimum (0%)
+mosquitto_pub -h your-mqtt-broker -t "Astro/AllSky/display/brightness" -m "0"
+
+# Set brightness to maximum (100%)
+mosquitto_pub -h your-mqtt-broker -t "Astro/AllSky/display/brightness" -m "100"
+
+# Subscribe to brightness status updates
+mosquitto_sub -h your-mqtt-broker -t "Astro/AllSky/display/brightness/status"
+```
+
+**Note**: The brightness control uses inverted PWM logic to match the LCD backlight controller. Values are properly mapped so that 0% = minimum brightness and 100% = maximum brightness.
 
 ### Over-The-Air (OTA) Updates
 The device supports wireless firmware updates through a web interface powered by ElegantOTA.
@@ -588,3 +625,4 @@ For issues and questions:
 - **v1.4**: Enhanced image transformation controls
 - **v1.5**: Added Over-The-Air (OTA) update functionality using ElegantOTA
 - **v1.6**: Added hardware-accelerated image rotation with PPA support (0°, 90°, 180°, 270°)
+- **v1.7**: Added PWM-based brightness control with serial commands and MQTT integration
