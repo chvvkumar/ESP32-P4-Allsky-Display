@@ -45,7 +45,7 @@ extern const char* WIFI_PASSWORD;
 
 // MQTT broker settings - Update these with your MQTT broker details
 extern const char* MQTT_SERVER;
-extern const int MQTT_PORT;
+extern int MQTT_PORT;
 extern const char* MQTT_USER;           // Leave empty if no authentication
 extern const char* MQTT_PASSWORD;       // Leave empty if no authentication
 extern const char* MQTT_CLIENT_ID;
@@ -117,5 +117,15 @@ extern const char* IMAGE_URL;
 #define WATCHDOG_TIMEOUT_MS 30000        // 30 second timeout
 #define WATCHDOG_IDLE_CORE_MASK 0        // Don't monitor idle tasks
 #define WATCHDOG_TRIGGER_PANIC false     // Don't panic on timeout, just reset
+
+// =============================================================================
+// CONFIGURATION FUNCTIONS
+// =============================================================================
+
+// Initialize configuration from persistent storage
+void initializeConfiguration();
+
+// Reload configuration from storage (useful after web config changes)
+void reloadConfiguration();
 
 #endif // CONFIG_H

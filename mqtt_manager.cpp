@@ -66,6 +66,12 @@ void MQTTManager::connect() {
             if (debugPrintFunc && !firstImageLoaded) {
                 debugPrintfFunc(COLOR_WHITE, "Brightness MQTT ready");
             }
+            
+            // Publish current brightness status on connect to establish proper state
+            int currentBrightness = displayManager.getBrightness();
+            Serial.printf("Publishing initial brightness status: %d%%\n", currentBrightness);
+            publishBrightnessStatus(currentBrightness);
+            
         } else {
             Serial.println("Failed to subscribe to brightness topic!");
         }
@@ -174,14 +180,43 @@ void MQTTManager::handleRebootMessage(const String& message) {
 }
 
 void MQTTManager::handleBrightnessMessage(const String& message) {
+    Serial.printf("Processing brightness message: '%s'\n", message.c_str());
+    
+    // Handle empty or invalid messages
+    if (message.length() == 0) {
+        Serial.println("Empty brightness message received - ignoring");
+        return;
+    }
+    
     int brightness = message.toInt();
+    
+    // Additional validation for edge cases
+    if (message == "0") {
+        brightness = 0; // Explicitly handle "0" string
+    } else if (brightness == 0 && message != "0") {
+        Serial.printf("Invalid brightness value (non-numeric): '%s' - ignoring\n", message.c_str());
+        return;
+    }
+    
     if (brightness >= 0 && brightness <= 100) {
-        displayManager.setBrightness(brightness);
-        Serial.printf("Brightness set to %d%% via MQTT\n", brightness);
+        // Get current brightness to compare
+        int currentBrightness = displayManager.getBrightness();
         
-        // Publish status confirmation
+        if (brightness != currentBrightness) {
+            displayManager.setBrightness(brightness);
+            Serial.printf("Brightness changed from %d%% to %d%% via MQTT\n", currentBrightness, brightness);
+            
+            // Show debug message if first image not loaded yet
+            if (debugPrintFunc && !firstImageLoaded) {
+                debugPrintfFunc(COLOR_CYAN, "Brightness: %d%% -> %d%% via MQTT", currentBrightness, brightness);
+            }
+        } else {
+            Serial.printf("Brightness already at %d%% - no change needed\n", brightness);
+        }
+        
+        // Always publish status confirmation for valid values
         publishBrightnessStatus(brightness);
     } else {
-        Serial.printf("Invalid brightness value received: %s\n", message.c_str());
+        Serial.printf("Invalid brightness value (out of range): %d - ignoring\n", brightness);
     }
 }

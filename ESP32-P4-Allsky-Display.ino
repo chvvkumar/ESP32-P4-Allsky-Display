@@ -4,6 +4,8 @@
 
 // Include all our modular components
 #include "config.h"
+#include "config_storage.h"
+#include "web_config.h"
 #include "system_monitor.h"
 #include "network_manager.h"
 #include "display_manager.h"
@@ -16,6 +18,7 @@
 #include <PubSubClient.h>
 #include <WebServer.h>
 #include <ElegantOTA.h>
+#include <Preferences.h>
 
 // Global variables for image processing
 bool firstImageLoaded = false;
@@ -30,6 +33,9 @@ int16_t offsetX = DEFAULT_OFFSET_X;
 int16_t offsetY = DEFAULT_OFFSET_Y;
 float rotationAngle = DEFAULT_ROTATION;
 
+// Dynamic configuration variables
+unsigned long currentUpdateInterval = UPDATE_INTERVAL;
+
 // Full image buffer for smooth rendering
 uint16_t* fullImageBuffer = nullptr;
 size_t fullImageBufferSize = 0;
@@ -39,6 +45,11 @@ int16_t fullImageHeight = 0;
 // Scaling buffer for transformed images
 uint16_t* scaledBuffer = nullptr;
 size_t scaledBufferSize = 0;
+
+// Previous image tracking for seamless transitions
+static int16_t prevImageX = -1, prevImageY = -1;
+static int16_t prevImageWidth = 0, prevImageHeight = 0;
+static bool hasSeenFirstImage = false;
 
 // JPEG decoder
 JPEGDEC jpeg;
@@ -89,7 +100,11 @@ void setup() {
     
     Serial.println("=== ESP32-P4 Image Display Starting ===");
     
-    // Initialize system monitor first
+    // Initialize configuration system first
+    Serial.println("Initializing configuration...");
+    initializeConfiguration();
+    
+    // Initialize system monitor
     if (!systemMonitor.begin()) {
         Serial.println("CRITICAL: System monitor initialization failed!");
         while(1) delay(1000);
@@ -178,6 +193,16 @@ void setup() {
         // MQTT connection will be attempted after WiFi is established
     }
     
+    // Start web configuration server if WiFi is connected
+    if (wifiManager.isConnected()) {
+        debugPrint("Starting web configuration server...", COLOR_YELLOW);
+        if (webConfig.begin(80)) {
+            debugPrintf(COLOR_GREEN, "Web config available at: http://%s", WiFi.localIP().toString().c_str());
+        } else {
+            debugPrint("ERROR: Web config server failed to start", COLOR_RED);
+        }
+    }
+    
     debugPrint("Setup complete!", COLOR_GREEN);
     delay(1000);
 }
@@ -211,13 +236,68 @@ void renderFullImage() {
     int16_t finalX = centerX - (scaledWidth / 2) + offsetX;
     int16_t finalY = centerY - (scaledHeight / 2) + offsetY;
     
-    // Clear screen
-    displayManager.clearScreen();
+    // Smart clearing to prevent flash
+    if (!hasSeenFirstImage) {
+        // First image: clear entire screen
+        displayManager.clearScreen();
+        hasSeenFirstImage = true;
+        Serial.println("DEBUG: First image - clearing entire screen");
+    } else {
+        // Subsequent images: clear only areas not covered by new image
+        Serial.printf("DEBUG: Smart clear - prev(%d,%d %dx%d) -> new(%d,%d %dx%d)\n", 
+                     prevImageX, prevImageY, prevImageWidth, prevImageHeight,
+                     finalX, finalY, scaledWidth, scaledHeight);
+        
+        // Clear areas that were covered by previous image but won't be covered by new image
+        if (prevImageWidth > 0 && prevImageHeight > 0) {
+            // Clear top area (above new image)
+            if (prevImageY < finalY) {
+                int16_t clearX = min(prevImageX, finalX);
+                int16_t clearWidth = max(prevImageX + prevImageWidth, finalX + scaledWidth) - clearX;
+                gfx->fillRect(clearX, prevImageY, clearWidth, finalY - prevImageY, COLOR_BLACK);
+            }
+            
+            // Clear bottom area (below new image)
+            int16_t prevBottom = prevImageY + prevImageHeight;
+            int16_t newBottom = finalY + scaledHeight;
+            if (prevBottom > newBottom) {
+                int16_t clearX = min(prevImageX, finalX);
+                int16_t clearWidth = max(prevImageX + prevImageWidth, finalX + scaledWidth) - clearX;
+                gfx->fillRect(clearX, newBottom, clearWidth, prevBottom - newBottom, COLOR_BLACK);
+            }
+            
+            // Clear left area (left of new image)
+            if (prevImageX < finalX) {
+                int16_t clearY = max(prevImageY, finalY);
+                int16_t clearHeight = min(prevImageY + prevImageHeight, finalY + scaledHeight) - clearY;
+                if (clearHeight > 0) {
+                    gfx->fillRect(prevImageX, clearY, finalX - prevImageX, clearHeight, COLOR_BLACK);
+                }
+            }
+            
+            // Clear right area (right of new image)
+            int16_t prevRight = prevImageX + prevImageWidth;
+            int16_t newRight = finalX + scaledWidth;
+            if (prevRight > newRight) {
+                int16_t clearY = max(prevImageY, finalY);
+                int16_t clearHeight = min(prevImageY + prevImageHeight, finalY + scaledHeight) - clearY;
+                if (clearHeight > 0) {
+                    gfx->fillRect(newRight, clearY, prevRight - newRight, clearHeight, COLOR_BLACK);
+                }
+            }
+        }
+    }
     
     if (scaleX == 1.0 && scaleY == 1.0 && rotationAngle == 0.0) {
         // No scaling or rotation needed, direct copy
         Serial.println("DEBUG: Using direct copy (no scaling or rotation)");
         displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+        
+        // Update tracking variables for next transition
+        prevImageX = finalX;
+        prevImageY = finalY;
+        prevImageWidth = fullImageWidth;
+        prevImageHeight = fullImageHeight;
     } else {
         // Try hardware acceleration first if available
         size_t scaledImageSize = scaledWidth * scaledHeight * 2;
@@ -234,6 +314,12 @@ void renderFullImage() {
                 
                 // Draw the hardware-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
+                
+                // Update tracking variables for next transition
+                prevImageX = finalX;
+                prevImageY = finalY;
+                prevImageWidth = scaledWidth;
+                prevImageHeight = scaledHeight;
                 return;
             } else {
                 Serial.println("DEBUG: PPA scale+rotate failed, falling back to software");
@@ -245,9 +331,21 @@ void renderFullImage() {
         if (rotationAngle == 0.0 && scaledImageSize <= scaledBufferSize) {
             // Simple software scaling (simplified version)
             displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+            
+            // Update tracking variables for next transition
+            prevImageX = finalX;
+            prevImageY = finalY;
+            prevImageWidth = fullImageWidth;
+            prevImageHeight = fullImageHeight;
         } else {
             // Just draw original image as fallback
             displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+            
+            // Update tracking variables for next transition
+            prevImageX = finalX;
+            prevImageY = finalY;
+            prevImageWidth = fullImageWidth;
+            prevImageHeight = fullImageHeight;
         }
     }
 }
@@ -492,6 +590,16 @@ void loop() {
     systemMonitor.update();
     wifiManager.update();
     
+    // Handle web configuration server
+    if (webConfig.isRunning()) {
+        webConfig.handleClient();
+    } else if (wifiManager.isConnected()) {
+        // Start web server if WiFi is connected but server isn't running
+        if (webConfig.begin(80)) {
+            Serial.printf("Web configuration server started at: http://%s\n", WiFi.localIP().toString().c_str());
+        }
+    }
+    
     // Update MQTT manager (connect to MQTT after WiFi is established)
     if (wifiManager.isConnected()) {
         mqttManager.update();
@@ -516,9 +624,12 @@ void loop() {
         systemMonitor.forceResetWatchdog();
     }
     
+    // Update dynamic configuration
+    currentUpdateInterval = configStorage.getUpdateInterval();
+    
     // Check if it's time to update the image (only if not currently processing)
     unsigned long currentTime = millis();
-    if (!imageProcessing && (currentTime - lastUpdate >= UPDATE_INTERVAL || lastUpdate == 0)) {
+    if (!imageProcessing && (currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0)) {
         imageProcessing = true;
         lastImageProcessTime = currentTime;
         systemMonitor.forceResetWatchdog();

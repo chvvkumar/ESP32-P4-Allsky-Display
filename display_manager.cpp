@@ -1,5 +1,6 @@
 #include "display_manager.h"
 #include "system_monitor.h"
+#include "config_storage.h"
 
 // Global instance
 DisplayManager displayManager;
@@ -114,6 +115,10 @@ bool DisplayManager::initBrightness() {
         debugPrint("ERROR: LEDC attach failed!", COLOR_RED);
         return false;
     }
+    
+    // Get the default brightness from configuration storage
+    displayBrightness = configStorage.getDefaultBrightness();
+    debugPrintf(COLOR_WHITE, "Using stored brightness: %d%%", displayBrightness);
     
     // Set initial brightness
     setBrightness(displayBrightness);
