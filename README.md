@@ -19,6 +19,7 @@ On the fly image adjustments
 
 - **Display Support**: Compatible with 3.4" (800x800) and 4" (720x720) DSI displays
 - **Hardware-Accelerated Image Processing**: Utilizes ESP32-P4's PPA for fast image scaling and rotation
+- **Seamless Image Transitions**: Smart clearing algorithm eliminates flash when images change
 - **Brightness Control**: PWM-based backlight control via serial commands and MQTT
 - **Over-The-Air (OTA) Updates**: Web-based firmware updates using ElegantOTA (WIP)
 - **MQTT Integration**: Remote device reboot and brightness control via MQTT
@@ -626,3 +627,4 @@ For issues and questions:
 - **v1.5**: Added Over-The-Air (OTA) update functionality using ElegantOTA
 - **v1.6**: Added hardware-accelerated image rotation with PPA support (0°, 90°, 180°, 270°)
 - **v1.7**: Added PWM-based brightness control with serial commands and MQTT integration
+- **v1.8**: Implemented seamless image transitions with smart clearing algorithm to eliminate flash when images change
