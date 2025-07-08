@@ -545,18 +545,38 @@ void processSerialCommands() {
                 Serial.printf("Brightness down: %d%%\n", displayManager.getBrightness());
                 break;
                 
+            // Reboot command
+            case 'B':
+            case 'b':
+                Serial.println("Rebooting device...");
+                delay(1000); // Give time for message to be sent
+                ESP.restart();
+                break;
+                
             // Help command
             case 'H':
             case 'h':
             case '?':
-                Serial.println("\n=== Modular Image Control Commands ===");
-                Serial.println("Scaling: +/- Scale up/down");
-                Serial.println("Movement: W/A/S/D Move up/left/down/right");
-                Serial.println("Rotation: Q/E Rotate CCW/CW");
-                Serial.println("Reset: R Reset all transformations");
-                Serial.println("Brightness: L/K Up/Down");
-                Serial.println("System: M Memory info, I Network info, P PPA info");
-                Serial.println("Help: H/? Show this help");
+                Serial.println("\n=== Image Control Commands ===");
+                Serial.println("Scaling:");
+                Serial.println("  +/- : Scale both axes");
+                Serial.println("Movement:");
+                Serial.println("  W/S : Move up/down");
+                Serial.println("  A/D : Move left/right");
+                Serial.println("Rotation:");
+                Serial.println("  Q/E : Rotate 90° CCW/CW");
+                Serial.println("Reset:");
+                Serial.println("  R   : Reset all transformations");
+                Serial.println("Brightness:");
+                Serial.println("  L/K : Brightness up/down");
+                Serial.println("System:");
+                Serial.println("  B   : Reboot device");
+                Serial.println("  M   : Memory info");
+                Serial.println("  I   : Network info");
+                Serial.println("  P   : PPA info");
+                Serial.println("  T   : MQTT info");
+                Serial.println("Help:");
+                Serial.println("  H/? : Show this help");
                 break;
                 
             // System info commands

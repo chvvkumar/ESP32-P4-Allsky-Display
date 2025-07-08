@@ -18,8 +18,8 @@ bool ConfigStorage::begin() {
 
 void ConfigStorage::setDefaults() {
     // Set hardcoded defaults from original config.cpp
-    config.wifiSSID = "IoT";
-    config.wifiPassword = "kkkkkkkk";
+    config.wifiSSID = "";
+    config.wifiPassword = "";
     
     config.mqttServer = "192.168.1.250";
     config.mqttPort = 1883;
@@ -30,7 +30,7 @@ void ConfigStorage::setDefaults() {
     config.mqttBrightnessTopic = "Astro/AllSky/display/brightness";
     config.mqttBrightnessStatusTopic = "Astro/AllSky/display/brightness/status";
     
-    config.imageURL = "https://allsky.challa.co:1982/current/resized/image.jpg";
+    config.imageURL = "";
     
     config.defaultBrightness = DEFAULT_BRIGHTNESS;
     config.defaultScaleX = DEFAULT_SCALE_X;

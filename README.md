@@ -157,30 +157,32 @@ const float ROTATION_STEP = 90.0;  // Rotation increment in degrees
 ### Serial Commands
 Control image transformations via Serial Monitor (115200 baud):
 
-#### Scaling Commands
-- `+` / `-`: Scale both axes up/down
-- `X` / `Z`: Scale X-axis up/down
-- `Y` / `U`: Scale Y-axis up/down
+#### Image Control Commands
+**Scaling:**
+- `+` / `-`: Scale both axes
 
-#### Movement Commands
-- `W` / `S`: Move image up/down
-- `A` / `D`: Move image left/right
+**Movement:**
+- `W` / `S`: Move up/down
+- `A` / `D`: Move left/right
 
-#### Rotation Commands
-- `Q` / `E`: Rotate 90° counterclockwise/clockwise
-- `T`: Toggle 180° rotation (useful for upside-down mounting)
-- `O`: Reset rotation to 0°
+**Rotation:**
+- `Q` / `E`: Rotate 90° CCW/CW
 
-#### Brightness Commands
-- `L` / `K`: Brightness up/down (±10% increments)
-- `M`: Show current brightness level
+**Reset:**
+- `R`: Reset all transformations
 
-#### System Commands
-- `B`: Reboot device (restarts ESP32 after 2-second warning)
+**Brightness:**
+- `L` / `K`: Brightness up/down
 
-#### Reset and Help
-- `R`: Reset all transformations (including rotation)
-- `H` / `?`: Show help menu with current transformation and brightness status
+**System:**
+- `B`: Reboot device
+- `M`: Memory info
+- `I`: Network info
+- `P`: PPA info
+- `T`: MQTT info
+
+**Help:**
+- `H` / `?`: Show this help
 
 ### MQTT Control
 
@@ -628,3 +630,4 @@ For issues and questions:
 - **v1.6**: Added hardware-accelerated image rotation with PPA support (0°, 90°, 180°, 270°)
 - **v1.7**: Added PWM-based brightness control with serial commands and MQTT integration
 - **v1.8**: Implemented seamless image transitions with smart clearing algorithm to eliminate flash when images change
+- **v1.9**: Added serial reboot command ('B') and reformatted help menu with structured command categories
