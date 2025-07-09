@@ -208,13 +208,25 @@ void setup() {
 }
 
 void renderFullImage() {
-    if (!fullImageBuffer || fullImageWidth == 0 || fullImageHeight == 0) return;
+    // Reset watchdog at function start
+    systemMonitor.forceResetWatchdog();
+    
+    if (!fullImageBuffer || fullImageWidth == 0 || fullImageHeight == 0) {
+        systemMonitor.forceResetWatchdog();
+        return;
+    }
     
     Arduino_DSI_Display* gfx = displayManager.getGFX();
-    if (!gfx) return;
+    if (!gfx) {
+        systemMonitor.forceResetWatchdog();
+        return;
+    }
     
     int16_t w = displayManager.getWidth();
     int16_t h = displayManager.getHeight();
+    
+    // Reset watchdog before calculations
+    systemMonitor.forceResetWatchdog();
     
     // Calculate final scaled dimensions (accounting for rotation)
     int16_t scaledWidth, scaledHeight;
@@ -237,16 +249,22 @@ void renderFullImage() {
     int16_t finalY = centerY - (scaledHeight / 2) + offsetY;
     
     // Smart clearing to prevent flash
+    systemMonitor.forceResetWatchdog();
+    
     if (!hasSeenFirstImage) {
         // First image: clear entire screen
+        debugPrint("DEBUG: First image - clearing entire screen", COLOR_WHITE);
         displayManager.clearScreen();
         hasSeenFirstImage = true;
-        Serial.println("DEBUG: First image - clearing entire screen");
+        systemMonitor.forceResetWatchdog();
     } else {
         // Subsequent images: clear only areas not covered by new image
-        Serial.printf("DEBUG: Smart clear - prev(%d,%d %dx%d) -> new(%d,%d %dx%d)\n", 
-                     prevImageX, prevImageY, prevImageWidth, prevImageHeight,
-                     finalX, finalY, scaledWidth, scaledHeight);
+        debugPrintf(COLOR_WHITE, "DEBUG: Smart clear - prev(%d,%d %dx%d) -> new(%d,%d %dx%d)", 
+                   prevImageX, prevImageY, prevImageWidth, prevImageHeight,
+                   finalX, finalY, scaledWidth, scaledHeight);
+        
+        // Reset watchdog before clearing operations
+        systemMonitor.forceResetWatchdog();
         
         // Clear areas that were covered by previous image but won't be covered by new image
         if (prevImageWidth > 0 && prevImageHeight > 0) {
@@ -288,10 +306,15 @@ void renderFullImage() {
         }
     }
     
+    // Reset watchdog before rendering operations
+    systemMonitor.forceResetWatchdog();
+    
     if (scaleX == 1.0 && scaleY == 1.0 && rotationAngle == 0.0) {
         // No scaling or rotation needed, direct copy
-        Serial.println("DEBUG: Using direct copy (no scaling or rotation)");
+        debugPrint("DEBUG: Using direct copy (no scaling or rotation)", COLOR_WHITE);
         displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+        
+        systemMonitor.forceResetWatchdog();
         
         // Update tracking variables for next transition
         prevImageX = finalX;
@@ -303,17 +326,23 @@ void renderFullImage() {
         size_t scaledImageSize = scaledWidth * scaledHeight * 2;
         
         if (ppaAccelerator.isAvailable() && scaledImageSize <= scaledBufferSize) {
-            Serial.println("DEBUG: Attempting PPA hardware scale+rotate");
+            debugPrint("DEBUG: Attempting PPA hardware scale+rotate", COLOR_WHITE);
+            systemMonitor.forceResetWatchdog();
+            
             unsigned long hwStart = millis();
             
             if (ppaAccelerator.scaleRotateImage(fullImageBuffer, fullImageWidth, fullImageHeight,
                                               scaledBuffer, scaledWidth, scaledHeight, rotationAngle)) {
                 unsigned long hwTime = millis() - hwStart;
-                Serial.printf("PPA scale+rotate: %lums (%dx%d -> %dx%d, %.0f°)\n", 
-                             hwTime, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, rotationAngle);
+                debugPrintf(COLOR_WHITE, "PPA scale+rotate: %lums (%dx%d -> %dx%d, %.0f°)", 
+                           hwTime, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, rotationAngle);
+                
+                systemMonitor.forceResetWatchdog();
                 
                 // Draw the hardware-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
+                
+                systemMonitor.forceResetWatchdog();
                 
                 // Update tracking variables for next transition
                 prevImageX = finalX;
@@ -322,15 +351,20 @@ void renderFullImage() {
                 prevImageHeight = scaledHeight;
                 return;
             } else {
-                Serial.println("DEBUG: PPA scale+rotate failed, falling back to software");
+                debugPrint("DEBUG: PPA scale+rotate failed, falling back to software", COLOR_YELLOW);
+                systemMonitor.forceResetWatchdog();
             }
         }
         
         // Software fallback - for now, just do basic scaling without rotation
-        Serial.println("DEBUG: Software fallback - basic scaling only");
+        debugPrint("DEBUG: Software fallback - basic scaling only", COLOR_YELLOW);
+        systemMonitor.forceResetWatchdog();
+        
         if (rotationAngle == 0.0 && scaledImageSize <= scaledBufferSize) {
             // Simple software scaling (simplified version)
             displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+            
+            systemMonitor.forceResetWatchdog();
             
             // Update tracking variables for next transition
             prevImageX = finalX;
@@ -341,6 +375,8 @@ void renderFullImage() {
             // Just draw original image as fallback
             displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
             
+            systemMonitor.forceResetWatchdog();
+            
             // Update tracking variables for next transition
             prevImageX = finalX;
             prevImageY = finalY;
@@ -348,116 +384,298 @@ void renderFullImage() {
             prevImageHeight = fullImageHeight;
         }
     }
+    
+    // Final watchdog reset before function exit
+    systemMonitor.forceResetWatchdog();
 }
 
 void downloadAndDisplayImage() {
+    // Reset watchdog at function start
+    systemMonitor.forceResetWatchdog();
+    
     if (!wifiManager.isConnected()) {
         debugPrint("ERROR: No WiFi connection", COLOR_RED);
+        systemMonitor.forceResetWatchdog();
         return;
     }
-    
-    systemMonitor.resetWatchdog();
     
     debugPrint("=== Starting Download ===", COLOR_CYAN);
     debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
     debugPrintf(COLOR_WHITE, "URL: %s", IMAGE_URL);
     
+    // Reset watchdog before HTTP operations
+    systemMonitor.forceResetWatchdog();
+    
     HTTPClient http;
+    
+    // Add timeout protection for HTTP begin
+    debugPrint("Initializing HTTP client...", COLOR_WHITE);
+    unsigned long httpBeginStart = millis();
     http.begin(IMAGE_URL);
-    http.setTimeout(10000);
+    unsigned long httpBeginTime = millis() - httpBeginStart;
+    debugPrintf(COLOR_WHITE, "HTTP begin took: %lu ms", httpBeginTime);
+    
+    // Set very aggressive timeouts to prevent any blocking
+    http.setTimeout(3000);         // 3 seconds max for any operation
+    http.setConnectTimeout(2000);  // 2 seconds for connection
+    
+    // Add User-Agent and other headers for better compatibility
+    http.addHeader("User-Agent", "ESP32-AllSky/1.0");
+    http.addHeader("Connection", "close");
+    
+    // Reset watchdog before GET request
+    systemMonitor.forceResetWatchdog();
     
     debugPrint("Sending HTTP request...", COLOR_WHITE);
     unsigned long downloadStart = millis();
-    systemMonitor.resetWatchdog();
-    int httpCode = http.GET();
-    unsigned long downloadTime = millis() - downloadStart;
     
-    debugPrintf(COLOR_WHITE, "HTTP code: %d (%lu ms)", httpCode, downloadTime);
+    // Use non-blocking approach for GET request
+    int httpCode = -1;
+    unsigned long getRequestStart = millis();
     
-    if (httpCode == HTTP_CODE_OK) {
-        WiFiClient* stream = http.getStreamPtr();
-        size_t size = http.getSize();
-        
-        debugPrintf(COLOR_WHITE, "Image size: %d bytes", size);
-        
-        if (size > 0 && size < imageBufferSize) {
-            debugPrint("Downloading image data...", COLOR_YELLOW);
-            
-            size_t bytesRead = 0;
-            uint8_t* buffer = imageBuffer;
-            unsigned long readStart = millis();
-            
-            while (http.connected() && bytesRead < size) {
-                systemMonitor.resetWatchdog();
-                size_t available = stream->available();
-                if (available) {
-                    size_t toRead = min(available, size - bytesRead);
-                    size_t read = stream->readBytes(buffer + bytesRead, toRead);
-                    bytesRead += read;
-                    
-                    // Show progress and reset watchdog
-                    if (bytesRead % 20480 == 0) {
-                        debugPrintf(COLOR_YELLOW, "Downloaded: %.1f%%", (float)bytesRead/size*100);
-                        systemMonitor.resetWatchdog();
-                    }
-                }
-                systemMonitor.safeYield();
-            }
-            
-            unsigned long readTime = millis() - readStart;
-            debugPrintf(COLOR_GREEN, "Download complete: %d bytes", bytesRead);
-            debugPrintf(COLOR_WHITE, "Speed: %.2f KB/s", (float)bytesRead/readTime);
-            
-            // Decode and display JPEG
-            debugPrint("Decoding JPEG...", COLOR_YELLOW);
-            
-            if (jpeg.openRAM(imageBuffer, bytesRead, JPEGDraw)) {
-                fullImageWidth = jpeg.getWidth();
-                fullImageHeight = jpeg.getHeight();
-                
-                debugPrintf(COLOR_WHITE, "JPEG: %dx%d pixels", fullImageWidth, fullImageHeight);
-                
-                // Check if image fits in our full image buffer
-                if (fullImageWidth * fullImageHeight * 2 <= fullImageBufferSize) {
-                    debugPrint("Decoding to full buffer...", COLOR_YELLOW);
-                    
-                    // Clear the full image buffer
-                    memset(fullImageBuffer, 0, fullImageWidth * fullImageHeight * sizeof(uint16_t));
-                    
-                    // Decode the full image into our buffer
-                    systemMonitor.resetWatchdog();
-                    jpeg.decode(0, 0, 0);
-                    jpeg.close();
-                    
-                    debugPrint("Rendering image...", COLOR_GREEN);
-                    
-                    // Now render the full image with transformations
-                    renderFullImage();
-                    
-                    // Mark first image as loaded (only once)
-                    if (!firstImageLoaded) {
-                        firstImageLoaded = true;
-                        displayManager.setFirstImageLoaded(true);
-                        Serial.println("First image loaded successfully - switching to image mode");
-                    } else {
-                        Serial.println("Image updated successfully");
-                    }
-                } else {
-                    debugPrint("ERROR: Image too large for buffer!", COLOR_RED);
-                    jpeg.close();
-                }
-            } else {
-                debugPrint("ERROR: JPEG decode failed!", COLOR_RED);
-            }
-        } else {
-            debugPrintf(COLOR_RED, "Invalid size: %d bytes", size);
-        }
-    } else {
-        debugPrintf(COLOR_RED, "HTTP error: %d", httpCode);
+    // Try HTTP GET with very tight timeout monitoring
+    const unsigned long GET_TIMEOUT = 5000;  // 5 second absolute timeout for GET
+    
+    // Start GET request
+    httpCode = http.GET();
+    
+    unsigned long getRequestTime = millis() - getRequestStart;
+    
+    // Immediate timeout check
+    if (getRequestTime >= GET_TIMEOUT) {
+        debugPrintf(COLOR_RED, "ERROR: HTTP GET timed out after %lu ms", getRequestTime);
+        http.end();
+        systemMonitor.forceResetWatchdog();
+        return;
     }
     
+    // Reset watchdog immediately after GET
+    systemMonitor.forceResetWatchdog();
+    
+    debugPrintf(COLOR_WHITE, "HTTP code: %d (GET: %lu ms)", httpCode, getRequestTime);
+    
+    // Early exit on HTTP errors
+    if (httpCode != HTTP_CODE_OK) {
+        debugPrintf(COLOR_RED, "HTTP error: %d", httpCode);
+        http.end();
+        systemMonitor.forceResetWatchdog();
+        return;
+    }
+    
+    // Reset watchdog before processing response
+    systemMonitor.forceResetWatchdog();
+    
+    WiFiClient* stream = http.getStreamPtr();
+    size_t size = http.getSize();
+    
+    debugPrintf(COLOR_WHITE, "Image size: %d bytes", size);
+    
+    // Validate size before proceeding
+    if (size <= 0 || size >= imageBufferSize) {
+        debugPrintf(COLOR_RED, "Invalid size: %d bytes", size);
+        http.end();
+        systemMonitor.forceResetWatchdog();
+        return;
+    }
+    
+    debugPrint("Downloading image data...", COLOR_YELLOW);
+    
+    size_t bytesRead = 0;
+    uint8_t* buffer = imageBuffer;
+    unsigned long readStart = millis();
+    
+    // Use very small chunks for maximum responsiveness
+    const size_t MICRO_CHUNK_SIZE = 256;  // 256 bytes - extremely small chunks
+    const unsigned long PER_CHUNK_TIMEOUT = 1000;  // 1 second timeout per micro-chunk
+    const unsigned long TOTAL_DOWNLOAD_TIMEOUT = 12000;  // 12 seconds total
+    
+    unsigned long downloadStartTime = millis();
+    unsigned long lastProgressTime = millis();
+    
+    while (http.connected() && bytesRead < size) {
+        // Force watchdog reset at start of each micro-chunk
+        systemMonitor.forceResetWatchdog();
+        
+        // Check for overall download timeout
+        if (millis() - downloadStartTime > TOTAL_DOWNLOAD_TIMEOUT) {
+            debugPrint("ERROR: Total download timeout", COLOR_RED);
+            break;
+        }
+        
+        // Check stream availability with timeout
+        unsigned long availableCheckStart = millis();
+        size_t available = stream->available();
+        
+        if (available > 0) {
+            // Calculate micro-chunk size
+            size_t remainingBytes = size - bytesRead;
+            size_t microChunkSize = min(min(MICRO_CHUNK_SIZE, available), remainingBytes);
+            
+            // Read micro-chunk with individual byte timeout protection
+            unsigned long microChunkStart = millis();
+            size_t microChunkRead = 0;
+            
+            // Read in very small pieces with timeout per piece
+            while (microChunkRead < microChunkSize && 
+                   (millis() - microChunkStart) < PER_CHUNK_TIMEOUT) {
+                
+                systemMonitor.forceResetWatchdog();
+                
+                // Read single bytes or very small pieces to prevent any blocking
+                size_t pieceSize = min((size_t)64, microChunkSize - microChunkRead);  // 64 byte pieces
+                size_t read = 0;
+                
+                // Timeout protection for individual read
+                unsigned long readStart = millis();
+                if (stream->available() >= pieceSize) {
+                    read = stream->readBytes(buffer + bytesRead + microChunkRead, pieceSize);
+                }
+                
+                // Check for read timeout
+                if (millis() - readStart > 500) {  // 500ms timeout per tiny read
+                    debugPrint("WARNING: Read operation timeout", COLOR_YELLOW);
+                    systemMonitor.forceResetWatchdog();
+                    break;
+                }
+                
+                if (read == 0) {
+                    break;  // No data available
+                }
+                
+                microChunkRead += read;
+                systemMonitor.forceResetWatchdog();
+                
+                // Yield after every tiny read
+                yield();
+            }
+            
+            bytesRead += microChunkRead;
+            
+            // Show progress frequently and reset watchdog
+            if (millis() - lastProgressTime > 2000) {  // Every 2 seconds
+                debugPrintf(COLOR_YELLOW, "Downloaded: %.1f%% (%d/%d bytes)", 
+                           (float)bytesRead/size*100, bytesRead, size);
+                lastProgressTime = millis();
+                systemMonitor.forceResetWatchdog();
+            }
+            
+            // Check for micro-chunk timeout
+            if ((millis() - microChunkStart) >= PER_CHUNK_TIMEOUT) {
+                debugPrint("WARNING: Micro-chunk timeout", COLOR_YELLOW);
+                // Don't break - continue trying
+            }
+            
+        } else {
+            // No data available - brief delay with aggressive watchdog protection
+            systemMonitor.forceResetWatchdog();
+            delay(25);  // Very brief delay
+            systemMonitor.forceResetWatchdog();
+            
+            // Check for completely stalled connection
+            if (millis() - downloadStartTime > 8000 && bytesRead == 0) {
+                debugPrint("ERROR: Connection completely stalled", COLOR_RED);
+                break;
+            }
+        }
+        
+        // Force yield and watchdog reset after each loop iteration
+        systemMonitor.safeYield();
+        systemMonitor.forceResetWatchdog();
+    }
+    
+    unsigned long readTime = millis() - readStart;
+    debugPrintf(COLOR_GREEN, "Download complete: %d bytes in %lu ms", bytesRead, readTime);
+    
+    if (readTime > 0) {
+        debugPrintf(COLOR_WHITE, "Speed: %.2f KB/s", (float)bytesRead/readTime);
+    }
+    
+    // Close HTTP connection immediately
     http.end();
+    systemMonitor.forceResetWatchdog();
+    
+    // Validate download completeness
+    if (bytesRead < size) {
+        debugPrintf(COLOR_RED, "Incomplete download: %d/%d bytes", bytesRead, size);
+        return;
+    }
+    
+    // Reset watchdog before JPEG processing
+    systemMonitor.forceResetWatchdog();
+    
+    // Decode and display JPEG
+    debugPrint("Decoding JPEG...", COLOR_YELLOW);
+    
+    if (jpeg.openRAM(imageBuffer, bytesRead, JPEGDraw)) {
+        fullImageWidth = jpeg.getWidth();
+        fullImageHeight = jpeg.getHeight();
+        
+        debugPrintf(COLOR_WHITE, "JPEG: %dx%d pixels", fullImageWidth, fullImageHeight);
+        
+        // Check if image fits in our full image buffer
+        if (fullImageWidth * fullImageHeight * 2 <= fullImageBufferSize) {
+            debugPrint("Decoding to full buffer...", COLOR_YELLOW);
+            
+            // Clear the full image buffer
+            memset(fullImageBuffer, 0, fullImageWidth * fullImageHeight * sizeof(uint16_t));
+            
+            // Decode the full image into our buffer with watchdog protection
+            debugPrint("Starting JPEG decode...", COLOR_YELLOW);
+            systemMonitor.forceResetWatchdog();
+            
+            unsigned long decodeStart = millis();
+            
+            // JPEG decode with timeout monitoring
+            const unsigned long DECODE_TIMEOUT = 8000;  // 8 second timeout for decode
+            unsigned long decodeStartTime = millis();
+            
+            jpeg.decode(0, 0, 0);
+            
+            unsigned long decodeTime = millis() - decodeStart;
+            
+            // Check for decode timeout
+            if (decodeTime >= DECODE_TIMEOUT) {
+                debugPrintf(COLOR_RED, "ERROR: JPEG decode timeout after %lu ms", decodeTime);
+                jpeg.close();
+                systemMonitor.forceResetWatchdog();
+                return;
+            }
+            
+            jpeg.close();
+            systemMonitor.forceResetWatchdog();
+            
+            debugPrintf(COLOR_WHITE, "JPEG decode completed in %lu ms", decodeTime);
+            debugPrint("Rendering image...", COLOR_GREEN);
+            
+            // Reset watchdog before rendering
+            systemMonitor.forceResetWatchdog();
+            
+            // Now render the full image with transformations
+            renderFullImage();
+            
+            // Reset watchdog after rendering
+            systemMonitor.forceResetWatchdog();
+            
+            // Mark first image as loaded (only once)
+            if (!firstImageLoaded) {
+                firstImageLoaded = true;
+                displayManager.setFirstImageLoaded(true);
+                Serial.println("First image loaded successfully - switching to image mode");
+            } else {
+                Serial.println("Image updated successfully");
+            }
+        } else {
+            debugPrint("ERROR: Image too large for buffer!", COLOR_RED);
+            jpeg.close();
+        }
+    } else {
+        debugPrint("ERROR: JPEG decode failed!", COLOR_RED);
+    }
+    
+    // Final watchdog reset and cleanup
+    systemMonitor.forceResetWatchdog();
     debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
+    debugPrint("Download cycle completed", COLOR_GREEN);
 }
 
 void processSerialCommands() {
@@ -606,23 +824,46 @@ void processSerialCommands() {
 }
 
 void loop() {
-    // Update all system modules
-    systemMonitor.update();
-    wifiManager.update();
+    // Force watchdog reset at start of each loop iteration
+    systemMonitor.forceResetWatchdog();
     
-    // Handle web configuration server
+    unsigned long loopStartTime = millis();
+    
+    // Update all system modules with watchdog protection
+    systemMonitor.update();
+    systemMonitor.forceResetWatchdog();
+    
+    wifiManager.update();
+    systemMonitor.forceResetWatchdog();
+    
+    // Handle web configuration server with timeout protection
     if (webConfig.isRunning()) {
+        unsigned long webStartTime = millis();
         webConfig.handleClient();
+        
+        // Check if web handling took too long
+        if (millis() - webStartTime > 1000) {
+            Serial.printf("WARNING: Web client handling took %lu ms\n", millis() - webStartTime);
+        }
+        systemMonitor.forceResetWatchdog();
     } else if (wifiManager.isConnected()) {
         // Start web server if WiFi is connected but server isn't running
         if (webConfig.begin(80)) {
             Serial.printf("Web configuration server started at: http://%s\n", WiFi.localIP().toString().c_str());
         }
+        systemMonitor.forceResetWatchdog();
     }
     
-    // Update MQTT manager (connect to MQTT after WiFi is established)
+    // Update MQTT manager (connect to MQTT after WiFi is established) with protection
     if (wifiManager.isConnected()) {
+        unsigned long mqttStartTime = millis();
         mqttManager.update();
+        
+        // Check if MQTT update took too long
+        if (millis() - mqttStartTime > 2000) {
+            Serial.printf("WARNING: MQTT update took %lu ms\n", millis() - mqttStartTime);
+        }
+        systemMonitor.forceResetWatchdog();
     }
     
     // Check for critical system health issues
@@ -637,28 +878,61 @@ void loop() {
     processSerialCommands();
     systemMonitor.forceResetWatchdog();
     
-    // Check for stuck image processing
+    // Enhanced stuck image processing detection
     if (imageProcessing && (millis() - lastImageProcessTime > IMAGE_PROCESS_TIMEOUT)) {
-        Serial.println("WARNING: Image processing timeout detected, resetting...");
+        Serial.printf("WARNING: Image processing timeout detected after %lu ms, resetting...\n", 
+                     millis() - lastImageProcessTime);
         imageProcessing = false;
         systemMonitor.forceResetWatchdog();
+        
+        // Log system state for debugging
+        Serial.printf("DEBUG: Loop has been running for %lu ms\n", millis() - loopStartTime);
+        Serial.printf("DEBUG: Free heap: %d, Free PSRAM: %d\n", 
+                     systemMonitor.getCurrentFreeHeap(), systemMonitor.getCurrentFreePsram());
     }
     
     // Update dynamic configuration
     currentUpdateInterval = configStorage.getUpdateInterval();
+    systemMonitor.forceResetWatchdog();
     
     // Check if it's time to update the image (only if not currently processing)
     unsigned long currentTime = millis();
     if (!imageProcessing && (currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0)) {
-        imageProcessing = true;
-        lastImageProcessTime = currentTime;
-        systemMonitor.forceResetWatchdog();
-        
-        downloadAndDisplayImage();
-        
-        lastUpdate = currentTime;
-        imageProcessing = false;
-        systemMonitor.forceResetWatchdog();
+        // Pre-download system health check
+        if (!wifiManager.isConnected()) {
+            Serial.println("WARNING: WiFi disconnected, skipping image download");
+            lastUpdate = currentTime; // Update timestamp to prevent immediate retry
+            systemMonitor.forceResetWatchdog();
+        } else {
+            Serial.printf("DEBUG: Starting image download cycle (last update: %lu ms ago)\n", 
+                         currentTime - lastUpdate);
+            
+            imageProcessing = true;
+            lastImageProcessTime = currentTime;
+            systemMonitor.forceResetWatchdog();
+            
+            // Wrap download in timeout protection
+            unsigned long downloadStartTime = millis();
+            downloadAndDisplayImage();
+            unsigned long downloadDuration = millis() - downloadStartTime;
+            
+            Serial.printf("DEBUG: Download cycle completed in %lu ms\n", downloadDuration);
+            
+            // Log warning if download took unusually long
+            if (downloadDuration > 20000) {
+                Serial.printf("WARNING: Download cycle took %lu ms (unusually long)\n", downloadDuration);
+            }
+            
+            lastUpdate = currentTime;
+            imageProcessing = false;
+            systemMonitor.forceResetWatchdog();
+        }
+    }
+    
+    // Check total loop time for performance monitoring
+    unsigned long loopDuration = millis() - loopStartTime;
+    if (loopDuration > 1000) {
+        Serial.printf("WARNING: Loop iteration took %lu ms\n", loopDuration);
     }
     
     // Additional watchdog reset before delay
