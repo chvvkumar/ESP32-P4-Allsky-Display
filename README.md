@@ -153,6 +153,16 @@ const float ROTATION_STEP = 90.0;  // Rotation increment in degrees
 ```
 
 ## Usage
+### Web UI
+
+<p align="center">
+  <img src="images\463485063-14f22475-c623-4a3e-a9ef-dbc5a2f89b56.png" alt="" width="1024"/>
+  <img src="images\463485132-ec667784-957b-4437-a0da-340e69619511.png" alt="" width="1024"/>
+  <img src="images\463485117-a7e7cc8c-c187-489f-8325-b130a86806a3.png" alt="" width="1024"/>
+  <img src="images\463485103-4e4440ac-d0d9-4611-9b55-d9b17123a795.png" alt="" width="1024"/>
+  <img src="images\463485084-0ed7e9c8-2699-47d5-907e-cb7c9922ac40.png" alt="" width="1024"/>
+  <img src="images\463485132-ec667784-957b-4437-a0da-340e6964575.jpg" alt="" width="1024"/>
+</p>
 
 ### Serial Commands
 Control image transformations via Serial Monitor (115200 baud):
