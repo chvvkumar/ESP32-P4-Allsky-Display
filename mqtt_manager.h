@@ -13,6 +13,8 @@ private:
     PubSubClient mqttClient;
     bool mqttConnected;
     unsigned long lastReconnectAttempt;
+    unsigned long reconnectBackoff;
+    int reconnectFailures;
     
     // Debug function pointers
     void (*debugPrintFunc)(const char* message, uint16_t color);
