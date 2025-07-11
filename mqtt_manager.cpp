@@ -9,6 +9,8 @@ MQTTManager::MQTTManager() :
     mqttClient(wifiClient),
     mqttConnected(false),
     lastReconnectAttempt(0),
+    reconnectBackoff(5000),
+    reconnectFailures(0),
     debugPrintFunc(nullptr),
     debugPrintfFunc(nullptr),
     firstImageLoaded(false)
@@ -27,6 +29,9 @@ bool MQTTManager::begin() {
 void MQTTManager::connect() {
     if (mqttConnected) return;
     
+    // Reset watchdog before attempting connection
+    esp_task_wdt_reset();
+    
     if (debugPrintFunc && !firstImageLoaded) {
         debugPrintFunc("Connecting to MQTT...", COLOR_YELLOW);
         debugPrintfFunc(COLOR_WHITE, "Broker: %s:%d", MQTT_SERVER, MQTT_PORT);
@@ -35,6 +40,12 @@ void MQTTManager::connect() {
     // Generate unique client ID
     String clientId = String(MQTT_CLIENT_ID) + "_" + String(random(0xffff), HEX);
     
+    // Set connection timeout to prevent blocking
+    mqttClient.setSocketTimeout(2);  // 2 second timeout
+    
+    // Reset watchdog before connection attempt
+    esp_task_wdt_reset();
+    
     bool connected = false;
     if (strlen(MQTT_USER) > 0) {
         connected = mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD);
@@ -42,11 +53,18 @@ void MQTTManager::connect() {
         connected = mqttClient.connect(clientId.c_str());
     }
     
+    // Reset watchdog after connection attempt
+    esp_task_wdt_reset();
+    
     if (connected) {
         mqttConnected = true;
+        reconnectFailures = 0;  // Reset failure counter
+        reconnectBackoff = 5000;  // Reset backoff
+        
         Serial.printf("MQTT connected as: %s\n", clientId.c_str());
         
-        // Subscribe to reboot topic
+        // Subscribe to reboot topic with watchdog reset
+        esp_task_wdt_reset();
         if (mqttClient.subscribe(MQTT_REBOOT_TOPIC)) {
             Serial.printf("Subscribed to reboot topic: %s\n", MQTT_REBOOT_TOPIC);
             if (debugPrintFunc && !firstImageLoaded) {
@@ -60,7 +78,8 @@ void MQTTManager::connect() {
             }
         }
         
-        // Subscribe to brightness topic
+        // Subscribe to brightness topic with watchdog reset
+        esp_task_wdt_reset();
         if (mqttClient.subscribe(MQTT_BRIGHTNESS_TOPIC)) {
             Serial.printf("Subscribed to brightness topic: %s\n", MQTT_BRIGHTNESS_TOPIC);
             if (debugPrintFunc && !firstImageLoaded) {
@@ -78,11 +97,21 @@ void MQTTManager::connect() {
         
     } else {
         mqttConnected = false;
-        Serial.printf("MQTT connection failed, state: %d\n", mqttClient.state());
+        reconnectFailures++;
+        
+        // Implement exponential backoff for failed connections
+        if (reconnectFailures > 3) {
+            reconnectBackoff = min((unsigned long)(reconnectBackoff * 1.5), 60000UL);  // Max 1 minute
+        }
+        
+        Serial.printf("MQTT connection failed, state: %d (attempt %d)\n", mqttClient.state(), reconnectFailures);
         if (debugPrintFunc && !firstImageLoaded) {
             debugPrintfFunc(COLOR_RED, "MQTT failed, state: %d", mqttClient.state());
         }
     }
+    
+    // Final watchdog reset
+    esp_task_wdt_reset();
 }
 
 bool MQTTManager::isConnected() {
@@ -91,9 +120,20 @@ bool MQTTManager::isConnected() {
 
 void MQTTManager::reconnect() {
     unsigned long now = millis();
-    if (now - lastReconnectAttempt > MQTT_RECONNECT_INTERVAL) {
+    
+    // Use dynamic backoff interval instead of fixed MQTT_RECONNECT_INTERVAL
+    unsigned long interval = max(reconnectBackoff, (unsigned long)MQTT_RECONNECT_INTERVAL);
+    
+    if (now - lastReconnectAttempt > interval) {
         lastReconnectAttempt = now;
+        
+        // Reset watchdog before reconnect attempt
+        esp_task_wdt_reset();
+        
         connect();
+        
+        // Reset watchdog after reconnect attempt
+        esp_task_wdt_reset();
     }
 }
 

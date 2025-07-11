@@ -21,7 +21,6 @@ On the fly image adjustments
 - **Hardware-Accelerated Image Processing**: Utilizes ESP32-P4's PPA for fast image scaling and rotation
 - **Seamless Image Transitions**: Smart clearing algorithm eliminates flash when images change
 - **Brightness Control**: PWM-based backlight control via serial commands and MQTT
-- **Over-The-Air (OTA) Updates**: Web-based firmware updates using ElegantOTA (WIP)
 - **MQTT Integration**: Remote device reboot and brightness control via MQTT
 - **Real-Time Image Transformation**: Scale, move, and rotate images via serial commands
 - **Touch Interface Support**: GT911 touch controller integration
@@ -237,40 +236,6 @@ mosquitto_sub -h your-mqtt-broker -t "Astro/AllSky/display/brightness/status"
 ```
 
 **Note**: The brightness control uses inverted PWM logic to match the LCD backlight controller. Values are properly mapped so that 0% = minimum brightness and 100% = maximum brightness.
-
-### Over-The-Air (OTA) Updates
-The device supports wireless firmware updates through a web interface powered by ElegantOTA.
-
-#### Accessing the OTA Interface
-1. **Find the device IP address**: Check the serial monitor during startup or your router's DHCP client list
-2. **Open the OTA interface**: Navigate to `http://[DEVICE_IP]/update` in your web browser
-3. **Upload firmware**: Select your compiled `.bin` file and click "Update"
-
-#### Creating a Firmware Binary
-1. In Arduino IDE, go to **Sketch** → **Export Compiled Binary**
-2. The `.bin` file will be saved in your sketch folder
-3. Use this file for OTA updates
-
-#### OTA Update Process
-1. Navigate to `http://[DEVICE_IP]/update`
-2. Click "Choose File" and select your `.bin` firmware file
-3. Click "Update" to start the upload
-4. **Do not power off** the device during the update process
-5. The device will automatically restart after a successful update
-
-#### OTA Safety Features
-- **Progress monitoring**: Real-time upload progress display
-- **Automatic verification**: Firmware integrity checking
-- **Safe restart**: Automatic reboot after successful update
-- **Error handling**: Clear error messages if update fails
-
-#### Troubleshooting OTA Updates
-- **Cannot access OTA page**: Verify device IP address and WiFi connection
-- **Upload fails**: Ensure firmware file is valid and not corrupted
-- **Device doesn't restart**: Wait 30 seconds, then manually power cycle
-- **Update stuck**: Power cycle the device and try again with a fresh firmware file
-
-**⚠️ Important**: Always ensure a stable power supply during OTA updates. Power loss during update can brick the device.
 
 ## Logical Flow Chart
 
@@ -636,7 +601,7 @@ For issues and questions:
 - **v1.2**: Implemented hardware-accelerated scaling
 - **v1.3**: Added touch interface support
 - **v1.4**: Enhanced image transformation controls
-- **v1.5**: Added Over-The-Air (OTA) update functionality using ElegantOTA
+- **v1.5**: Enhanced web configuration interface and system stability improvements
 - **v1.6**: Added hardware-accelerated image rotation with PPA support (0°, 90°, 180°, 270°)
 - **v1.7**: Added PWM-based brightness control with serial commands and MQTT integration
 - **v1.8**: Implemented seamless image transitions with smart clearing algorithm to eliminate flash when images change

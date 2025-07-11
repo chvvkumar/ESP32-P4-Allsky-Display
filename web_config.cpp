@@ -338,7 +338,6 @@ String WebConfig::generateNavigation(const String& currentPage) {
         html += "<a href='" + urls[i] + "' class='nav-item" + activeClass + "'>" + labels[i] + "</a>";
     }
     
-    html += "<a href='/update' class='nav-item'>🔧 Firmware</a>";
     html += "</div></div></div>";
     
     return html;
@@ -407,7 +406,6 @@ String WebConfig::generateMainPage() {
     html += "<div style='display:flex;gap:1rem;flex-wrap:wrap'>";
     html += "<button class='btn btn-primary' onclick='restart()'>🔄 Restart Device</button>";
     html += "<button class='btn btn-danger' onclick='factoryReset()'>🏭 Factory Reset</button>";
-    html += "<a href='/update' class='btn btn-secondary'>🔧 Update Firmware</a>";
     html += "</div></div>";
     
     html += "</div></div>";
