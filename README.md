@@ -38,8 +38,6 @@ For complete hardware specifications, pin connections, and library compatibility
 
 ## 3D Printed Stand
 
-For a convenient desktop setup, you can 3D print a desk stand for the ESP32-P4 display:
-
 <p align="center">
   <img src="images/stand_desk.jpg" alt="3D Printed Desk Stand" width="400"/>
 </p>
