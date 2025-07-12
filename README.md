@@ -36,6 +36,22 @@ For complete hardware specifications, pin connections, and library compatibility
 
 **📖 [Waveshare ESP32-P4-WiFi6-Touch-LCD-3.4C Documentation](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-3.4C)**
 
+## 3D Printed Stand
+
+For a convenient desktop setup, you can 3D print a desk stand for the ESP32-P4 display:
+
+<p align="center">
+  <img src="images/stand_desk.jpg" alt="3D Printed Desk Stand" width="400"/>
+</p>
+
+**🔗 [3D Printable Desk Stand for Waveshare ESP32-P4-WIFI6-Touch-LCD-3.4C](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)**
+
+- **Print Settings**: No supports needed, print face down for smooth finish
+- **Fit**: Friction fit design for Prusa Mini+ and similar printers
+- **Material**: PET recommended (84g material usage)
+- **Print Time**: Approximately 3h 25m
+- **Layer Height**: 0.20mm with 0.40mm nozzle
+
 ## Software Dependencies
 
 ### Arduino IDE Libraries
