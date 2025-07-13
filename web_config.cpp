@@ -20,10 +20,16 @@ bool WebConfig::begin(int port) {
     server->on("/config/network", [this]() { handleNetworkConfig(); });
     server->on("/config/mqtt", [this]() { handleMQTTConfig(); });
     server->on("/config/image", [this]() { handleImageConfig(); });
+    server->on("/config/sources", [this]() { handleImageSources(); });
     server->on("/config/display", [this]() { handleDisplayConfig(); });
     server->on("/config/advanced", [this]() { handleAdvancedConfig(); });
     server->on("/status", [this]() { handleStatus(); });
     server->on("/api/save", HTTP_POST, [this]() { handleSaveConfig(); });
+    server->on("/api/add-source", HTTP_POST, [this]() { handleAddImageSource(); });
+    server->on("/api/remove-source", HTTP_POST, [this]() { handleRemoveImageSource(); });
+    server->on("/api/update-source", HTTP_POST, [this]() { handleUpdateImageSource(); });
+    server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
+    server->on("/api/next-image", HTTP_POST, [this]() { handleNextImage(); });
     server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
     server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
     server->onNotFound([this]() { handleNotFound(); });
@@ -55,7 +61,7 @@ void WebConfig::stop() {
 }
 
 void WebConfig::handleRoot() {
-    String html = generateHeader("AllSky Display Dashboard");
+    String html = generateHeader("ESP32 AllSky Display");
     html += generateNavigation("dashboard");
     html += generateMainPage();
     html += generateFooter();
@@ -82,6 +88,14 @@ void WebConfig::handleImageConfig() {
     String html = generateHeader("Image Configuration");
     html += generateNavigation("image");
     html += generateImagePage();
+    html += generateFooter();
+    sendResponse(200, "text/html", html);
+}
+
+void WebConfig::handleImageSources() {
+    String html = generateHeader("Image Sources");
+    html += generateNavigation("sources");
+    html += generateImageSourcesPage();
     html += generateFooter();
     sendResponse(200, "text/html", html);
 }
@@ -182,6 +196,12 @@ void WebConfig::handleSaveConfig() {
         else if (name == "backlight_freq") configStorage.setBacklightFreq(value.toInt());
         else if (name == "backlight_resolution") configStorage.setBacklightResolution(value.toInt());
         
+        // Cycling settings
+        else if (name == "cycle_interval") {
+            unsigned long interval = value.toInt() * 1000UL; // Convert seconds to milliseconds
+            configStorage.setCycleInterval(interval);
+        }
+        
         // Advanced settings - FIX: Convert minutes to milliseconds correctly
         else if (name == "update_interval") {
             unsigned long newInterval = value.toInt() * 60UL * 1000UL; // Convert minutes to ms correctly
@@ -191,6 +211,31 @@ void WebConfig::handleSaveConfig() {
         else if (name == "watchdog_timeout") configStorage.setWatchdogTimeout(value.toInt() * 1000);
         else if (name == "critical_heap_threshold") configStorage.setCriticalHeapThreshold(value.toInt());
         else if (name == "critical_psram_threshold") configStorage.setCriticalPSRAMThreshold(value.toInt());
+    }
+    
+    // Handle checkbox parameters (checkboxes only send values when checked)
+    // Check if cycling_enabled checkbox was submitted
+    bool cyclingEnabledFound = false;
+    bool randomOrderFound = false;
+    
+    for (int i = 0; i < server->args(); i++) {
+        String name = server->argName(i);
+        if (name == "cycling_enabled") {
+            cyclingEnabledFound = true;
+            configStorage.setCyclingEnabled(true);
+        }
+        else if (name == "random_order") {
+            randomOrderFound = true;
+            configStorage.setRandomOrder(true);
+        }
+    }
+    
+    // If checkbox parameters weren't found, they are unchecked
+    if (!cyclingEnabledFound) {
+        configStorage.setCyclingEnabled(false);
+    }
+    if (!randomOrderFound) {
+        configStorage.setRandomOrder(false);
     }
     
     // Save configuration to persistent storage
@@ -236,6 +281,67 @@ void WebConfig::handleRestart() {
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Restarting device...\"}");
     delay(1000);
     ESP.restart();
+}
+
+void WebConfig::handleAddImageSource() {
+    if (server->hasArg("url")) {
+        String url = server->arg("url");
+        if (url.length() > 0) {
+            configStorage.addImageSource(url);
+            configStorage.saveConfig();
+            sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Image source added successfully\"}");
+        } else {
+            sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid URL\"}");
+        }
+    } else {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"URL parameter required\"}");
+    }
+}
+
+void WebConfig::handleRemoveImageSource() {
+    if (server->hasArg("index")) {
+        int index = server->arg("index").toInt();
+        configStorage.removeImageSource(index);
+        configStorage.saveConfig();
+        sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Image source removed successfully\"}");
+    } else {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
+    }
+}
+
+void WebConfig::handleUpdateImageSource() {
+    if (server->hasArg("index") && server->hasArg("url")) {
+        int index = server->arg("index").toInt();
+        String url = server->arg("url");
+        configStorage.setImageSource(index, url);
+        configStorage.saveConfig();
+        sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Image source updated successfully\"}");
+    } else {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index and URL parameters required\"}");
+    }
+}
+
+void WebConfig::handleClearImageSources() {
+    configStorage.clearImageSources();
+    // Add back the default/legacy image URL as the first source
+    configStorage.addImageSource(configStorage.getImageURL());
+    configStorage.saveConfig();
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"All image sources cleared, reset to single default source\"}");
+}
+
+void WebConfig::handleNextImage() {
+    // Trigger next image switch by calling the cycling function
+    extern void advanceToNextImage();
+    extern void updateCyclingVariables();
+    extern void downloadAndDisplayImage();
+    
+    updateCyclingVariables();
+    advanceToNextImage();
+    
+    // Force immediate image download and display
+    downloadAndDisplayImage();
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Switched to next image and refreshed display\"}");
 }
 
 void WebConfig::handleFactoryReset() {
@@ -335,11 +441,11 @@ String WebConfig::generateHeader(const String& title) {
 String WebConfig::generateNavigation(const String& currentPage) {
     String html = "<div class='nav'><div class='container'><div class='nav-content'>";
     
-    String pages[] = {"dashboard", "network", "mqtt", "image", "display", "advanced"};
-    String labels[] = {"🏠 Dashboard", "📡 Network", "🔗 MQTT", "🖼️ Image", "💡 Display", "⚙️ Advanced"};
-    String urls[] = {"/", "/config/network", "/config/mqtt", "/config/image", "/config/display", "/config/advanced"};
+    String pages[] = {"dashboard", "network", "mqtt", "image", "sources", "display", "advanced"};
+    String labels[] = {"🏠 Dashboard", "📡 Network", "🔗 MQTT", "🖼️ Image", "🔄 Sources", "💡 Display", "⚙️ Advanced"};
+    String urls[] = {"/", "/config/network", "/config/mqtt", "/config/image", "/config/sources", "/config/display", "/config/advanced"};
     
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 7; i++) {
         String activeClass = (currentPage == pages[i]) ? " active" : "";
         html += "<a href='" + urls[i] + "' class='nav-item" + activeClass + "'>" + labels[i] + "</a>";
     }
@@ -400,8 +506,22 @@ String WebConfig::generateMainPage() {
     // Image Status
     html += "<div class='card'>";
     html += "<h2>🖼️ Image Status</h2>";
-    html += "<p>Source: " + configStorage.getImageURL() + "</p>";
-    html += "<p>Update Interval: " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p>";
+    
+    // Check if cycling is enabled and display appropriate information
+    if (configStorage.getCyclingEnabled()) {
+        int sourceCount = configStorage.getImageSourceCount();
+        int currentIndex = configStorage.getCurrentImageIndex();
+        
+        html += "<p><strong>Mode:</strong> Cycling (" + String(sourceCount) + " sources)</p>";
+        html += "<p><strong>Current Source:</strong> [" + String(currentIndex + 1) + "/" + String(sourceCount) + "] " + escapeHtml(configStorage.getCurrentImageURL()) + "</p>";
+        html += "<p><strong>Cycle Interval:</strong> " + String(configStorage.getCycleInterval() / 1000) + " seconds</p>";
+        html += "<p><strong>Order:</strong> " + String(configStorage.getRandomOrder() ? "Random" : "Sequential") + "</p>";
+    } else {
+        html += "<p><strong>Mode:</strong> Single Image</p>";
+        html += "<p><strong>Source:</strong> " + escapeHtml(configStorage.getImageURL()) + "</p>";
+    }
+    
+    html += "<p><strong>Update Interval:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p>";
     html += "</div>";
     
     html += "</div>";
@@ -512,13 +632,83 @@ String WebConfig::generateMQTTPage() {
     return html;
 }
 
+String WebConfig::generateImageSourcesPage() {
+    String html = "<div class='main'><div class='container'>";
+    
+    // Cycling Configuration
+    html += "<form id='cyclingForm'><div class='card'>";
+    html += "<h2>🔄 Image Cycling Configuration</h2>";
+    
+    html += "<div class='form-group'>";
+    html += "<label for='cycling_enabled'>Enable Cycling</label>";
+    html += "<input type='checkbox' id='cycling_enabled' name='cycling_enabled' " + 
+            String(configStorage.getCyclingEnabled() ? "checked" : "") + "> Enable automatic cycling through multiple image sources";
+    html += "</div>";
+    
+    html += "<div class='form-group'>";
+    html += "<label for='cycle_interval'>Cycle Interval (seconds)</label>";
+    html += "<input type='number' id='cycle_interval' name='cycle_interval' class='form-control' value='" + 
+            String(configStorage.getCycleInterval() / 1000) + "' min='10' max='3600'>";
+    html += "</div>";
+    
+    html += "<div class='form-group'>";
+    html += "<label for='random_order'>Random Order</label>";
+    html += "<input type='checkbox' id='random_order' name='random_order' " + 
+            String(configStorage.getRandomOrder() ? "checked" : "") + "> Randomize image order instead of sequential";
+    html += "</div>";
+    html += "</div>";
+    
+    // Image Sources List
+    html += "<div class='card'>";
+    html += "<h2>📋 Image Sources</h2>";
+    html += "<div id='imageSourcesList'>";
+    
+    int sourceCount = configStorage.getImageSourceCount();
+    for (int i = 0; i < sourceCount; i++) {
+        String url = configStorage.getImageSource(i);
+        html += "<div class='image-source-item' style='margin-bottom:1rem;padding:1rem;border:1px solid rgba(148,163,184,0.2);border-radius:8px;background:rgba(15,23,42,0.8);'>";
+        html += "<div style='display:flex;align-items:center;gap:1rem;'>";
+        html += "<span style='font-weight:bold;color:#60a5fa;'>" + String(i + 1) + ".</span>";
+        html += "<input type='url' class='form-control' style='flex:1;' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this.value)'>";
+        if (sourceCount > 1) {
+            html += "<button type='button' class='btn btn-danger' onclick='removeImageSource(" + String(i) + ")'>Remove</button>";
+        }
+        html += "</div></div>";
+    }
+    
+    html += "</div>";
+    
+    html += "<div style='margin-top:1rem;'>";
+    html += "<button type='button' class='btn btn-success' onclick='addImageSource()'>➕ Add Image Source</button>";
+    if (sourceCount > 1) {
+        html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources()' style='margin-left:1rem;'>🗑️ Clear All</button>";
+    }
+    html += "</div>";
+    html += "</div>";
+    
+    // Current Status
+    html += "<div class='card'>";
+    html += "<h2>📊 Current Status</h2>";
+    html += "<p><strong>Current Image:</strong> " + String(configStorage.getCurrentImageIndex() + 1) + " of " + String(sourceCount) + "</p>";
+    html += "<p><strong>Current URL:</strong> " + escapeHtml(configStorage.getCurrentImageURL()) + "</p>";
+    html += "<button type='button' class='btn btn-primary' onclick='nextImage()'>⏭️ Switch to Next Image</button>";
+    html += "</div>";
+    
+    html += "<div class='card'>";
+    html += "<button type='submit' class='btn btn-primary'>💾 Save Cycling Settings</button>";
+    html += "</div></form></div></div>";
+    
+    return html;
+}
+
 String WebConfig::generateImagePage() {
     String html = "<div class='main'><div class='container'>";
     html += "<form id='imageForm'><div class='grid'>";
     
     // Image source
     html += "<div class='card'>";
-    html += "<h2>🖼️ Image Source</h2>";
+    html += "<h2>🖼️ Legacy Single Image Source</h2>";
+    html += "<p style='color:#f59e0b;margin-bottom:1rem;'>⚠️ For multiple image sources, use the <a href='/config/sources' style='color:#60a5fa;'>Image Sources</a> page.</p>";
     
     html += "<div class='form-group'>";
     html += "<label for='image_url'>Image URL</label>";
@@ -702,6 +892,7 @@ String WebConfig::generateFooter() {
     html += "submitForm('networkForm','/api/save');";
     html += "submitForm('mqttForm','/api/save');";
     html += "submitForm('imageForm','/api/save');";
+    html += "submitForm('cyclingForm','/api/save');";
     html += "submitForm('displayForm','/api/save');";
     html += "submitForm('advancedForm','/api/save');";
     html += "});";
@@ -733,6 +924,93 @@ String WebConfig::generateFooter() {
     html += "});";
     html += "}";
     html += "}";
+    html += "}";
+    
+    // Image source management functions
+    html += "function addImageSource(){";
+    html += "const url=prompt('Enter image URL:');";
+    html += "if(url&&url.trim()){";
+    html += "const formData=new FormData();";
+    html += "formData.append('url',url.trim());";
+    html += "fetch('/api/add-source',{method:'POST',body:formData})";
+    html += ".then(response=>response.json())";
+    html += ".then(data=>{";
+    html += "if(data.status==='success'){";
+    html += "alert('Image source added successfully!');";
+    html += "location.reload();";
+    html += "}else{";
+    html += "alert('Error: '+data.message);";
+    html += "}";
+    html += "}).catch(error=>{";
+    html += "alert('Error adding source: '+error.message);";
+    html += "});";
+    html += "}";
+    html += "}";
+    
+    html += "function removeImageSource(index){";
+    html += "if(confirm('Are you sure you want to remove this image source?')){";
+    html += "const formData=new FormData();";
+    html += "formData.append('index',index);";
+    html += "fetch('/api/remove-source',{method:'POST',body:formData})";
+    html += ".then(response=>response.json())";
+    html += ".then(data=>{";
+    html += "if(data.status==='success'){";
+    html += "alert('Image source removed successfully!');";
+    html += "location.reload();";
+    html += "}else{";
+    html += "alert('Error: '+data.message);";
+    html += "}";
+    html += "}).catch(error=>{";
+    html += "alert('Error removing source: '+error.message);";
+    html += "});";
+    html += "}";
+    html += "}";
+    
+    html += "function updateImageSource(index,url){";
+    html += "const formData=new FormData();";
+    html += "formData.append('index',index);";
+    html += "formData.append('url',url);";
+    html += "fetch('/api/update-source',{method:'POST',body:formData})";
+    html += ".then(response=>response.json())";
+    html += ".then(data=>{";
+    html += "if(data.status!=='success'){";
+    html += "alert('Error: '+data.message);";
+    html += "}";
+    html += "}).catch(error=>{";
+    html += "alert('Error updating source: '+error.message);";
+    html += "});";
+    html += "}";
+    
+    html += "function clearAllSources(){";
+    html += "if(confirm('Are you sure you want to clear all image sources? This will reset to a single default source.')){";
+    html += "fetch('/api/clear-sources',{method:'POST'})";
+    html += ".then(response=>response.json())";
+    html += ".then(data=>{";
+    html += "if(data.status==='success'){";
+    html += "alert('All sources cleared successfully!');";
+    html += "location.reload();";
+    html += "}else{";
+    html += "alert('Error: '+data.message);";
+    html += "}";
+    html += "}).catch(error=>{";
+    html += "alert('Error clearing sources: '+error.message);";
+    html += "});";
+    html += "}";
+    html += "}";
+    
+    html += "function nextImage(){";
+    html += "fetch('/api/next-image',{method:'POST'})";
+    html += ".then(response=>response.json())";
+    html += ".then(data=>{";
+    html += "if(data.status==='success'){";
+    html += "alert('Switched to next image successfully!');";
+    html += "setTimeout(()=>location.reload(),2000);";
+    html += "}else{";
+    html += "alert('Error: '+data.message);";
+    html += "}";
+    html += "}).catch(error=>{";
+    html += "alert('Error switching image: '+error.message);";
+    html += "});";
     html += "}";
     
     html += "</script>";
@@ -846,4 +1124,31 @@ void WebConfig::applyImageSettings() {
     
     // Re-render the current image with new settings
     renderFullImage();
+}
+
+void WebConfig::reloadConfiguration() {
+    // Reload cycling configuration and notify main system
+    extern void updateCyclingVariables();
+    
+    Serial.println("Reloading configuration from web interface...");
+    
+    // Update cycling variables in the main system
+    updateCyclingVariables();
+    
+    // Force the main system to pick up new configuration
+    extern unsigned long currentUpdateInterval;
+    extern unsigned long currentCycleInterval;
+    extern bool cyclingEnabled;
+    extern bool randomOrderEnabled;
+    extern int imageSourceCount;
+    
+    // Update runtime variables immediately
+    currentUpdateInterval = configStorage.getUpdateInterval();
+    currentCycleInterval = configStorage.getCycleInterval();
+    cyclingEnabled = configStorage.getCyclingEnabled();
+    randomOrderEnabled = configStorage.getRandomOrder();
+    imageSourceCount = configStorage.getImageSourceCount();
+    
+    Serial.printf("Configuration reloaded: cycling=%s, interval=%lu ms, sources=%d\n",
+                  cyclingEnabled ? "enabled" : "disabled", currentCycleInterval, imageSourceCount);
 }

@@ -32,10 +32,16 @@ private:
     void handleNetworkConfig();
     void handleMQTTConfig();
     void handleImageConfig();
+    void handleImageSources();
     void handleDisplayConfig();
     void handleAdvancedConfig();
     void handleStatus();
     void handleSaveConfig();
+    void handleAddImageSource();
+    void handleRemoveImageSource();
+    void handleUpdateImageSource();
+    void handleClearImageSources();
+    void handleNextImage();
     void handleRestart();
     void handleFactoryReset();
     void handleNotFound();
@@ -48,6 +54,7 @@ private:
     String generateNetworkPage();
     String generateMQTTPage();
     String generateImagePage();
+    String generateImageSourcesPage();
     String generateDisplayPage();
     String generateAdvancedPage();
     String generateStatusPage();
@@ -60,6 +67,7 @@ private:
     String escapeHtml(const String& input);
     void sendResponse(int code, const String& contentType, const String& content);
     void applyImageSettings();
+    void reloadConfiguration();
 };
 
 // Global instance

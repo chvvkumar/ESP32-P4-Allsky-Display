@@ -1,592 +1,233 @@
-# ESP32-P4 Allsky Display using ESP32-P4-WIFI6-Touch-LCD-3.4C
+# ESP32-P4 AllSky Display
 
-
-<p align="center">
-  <img src="images/display.jpg" alt="ESP32-P4 Allsky Display" width="400"/>
-</p>
-
-Video:
-
-[![In action](https://img.youtube.com/vi/pPAgbkPNvvY/0.jpg)](https://www.youtube.com/watch?v=pPAgbkPNvvY)
-
-On the fly image adjustments
-
-[![Image adjustments](https://img.youtube.com/vi/3zd7zNdAdGY/0.jpg)](https://www.youtube.com/watch?v=3zd7zNdAdGY)
-
-
+A comprehensive image display system for ESP32-P4 with advanced features including multi-image cycling, hardware acceleration, web configuration, and MQTT integration.
 
 ## Features
 
-- **Display Support**: Compatible with 3.4" (800x800) and 4" (720x720) DSI displays
-- **Hardware-Accelerated Image Processing**: Utilizes ESP32-P4's PPA for fast image scaling and rotation
-- **Seamless Image Transitions**: Smart clearing algorithm eliminates flash when images change
-- **Brightness Control**: PWM-based backlight control via serial commands and MQTT
-- **MQTT Integration**: Remote device reboot and brightness control via MQTT
-- **Real-Time Image Transformation**: Scale, move, and rotate images via serial commands
-- **Touch Interface Support**: GT911 touch controller integration
-- **WiFi Connectivity**: Automatic image downloading from web servers
-- **JPEG Decoding**: Built-in JPEG decoder with bilinear interpolation scaling
-- **Memory Optimization**: PSRAM utilization for large image buffers
+### Image Display & Processing
+- **Multi-Image Cycling**: Automatically cycle through multiple image sources
+- **Hardware Acceleration**: PPA (Pixel Processing Accelerator) for fast scaling and rotation
+- **Real-time Transformations**: Scale, rotate, and position images dynamically
+- **Smart Screen Clearing**: Optimized rendering to prevent flickering
+- **JPEG Support**: Efficient JPEG decoding with format validation
+- **Memory Management**: PSRAM-optimized buffering for smooth performance
+
+### Image Cycling System
+- **Multiple Image Sources**: Support for up to 10 different image URLs
+- **Cycling Modes**: Sequential or random order
+- **Configurable Intervals**: Set custom cycling and update intervals
+- **Persistent State**: Remembers current image across reboots
+- **Real-time Control**: Change cycling settings through web interface
+
+### Web Configuration Interface
+- **Modern UI**: Clean, responsive web interface
+- **Real-time Status**: Live system and image status monitoring
+- **Network Configuration**: WiFi and MQTT settings
+- **Image Source Management**: Add, remove, and configure image sources
+- **Display Settings**: Brightness, update intervals, and cycling options
+- **System Monitoring**: Memory usage, uptime, and health status
+
+### Interactive Controls
+- **Serial Commands**: Real-time image manipulation via serial interface
+- **Transform Controls**: Scale (+/-), Move (WASD), Rotate (QE)
+- **Brightness Control**: Adjust display brightness (L/K)
+- **System Commands**: Memory info (M), Network info (I), PPA status (P)
+- **Reset Functions**: Transform reset (R), System reboot (B)
+
+### MQTT Integration
+- **Remote Control**: Control brightness and system functions via MQTT
+- **Status Publishing**: Publish brightness and system status
+- **Configurable Topics**: Customizable MQTT topic structure
+- **Secure Connection**: Support for authenticated MQTT connections
+
+### System Monitoring & Reliability
+- **Watchdog Protection**: Comprehensive watchdog timer management
+- **Memory Monitoring**: Real-time heap and PSRAM usage tracking
+- **Network Health**: WiFi connection monitoring and recovery
+- **Error Handling**: Robust error detection and recovery mechanisms
+- **Performance Metrics**: Download speeds, processing times, and system health
+
+### Hardware Acceleration
+- **PPA Integration**: Hardware-accelerated image scaling and rotation
+- **Optimized Rendering**: Direct bitmap drawing for maximum performance
+- **Memory Efficiency**: Smart buffer management for large images
+- **Fallback Support**: Software processing when hardware acceleration unavailable
+
+## Demo
+
+![Stand](images/3dprintedcase.jpg)
+
+**Watch the ESP32-P4 AllSky Display in action:**
+
+[![ESP32-P4 AllSky Display Demo](https://img.youtube.com/vi/pPAgbkPNvvY/0.jpg)](https://www.youtube.com/watch?v=pPAgbkPNvvY)
+
+[View on YouTube](https://www.youtube.com/watch?v=pPAgbkPNvvY)
+
+
+## 3D Printed case
+
+[Printables link for 3D printed case](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
+
+## Screenshots
+
+Here are some screenshots showcasing the ESP32-P4 AllSky Display system in operation:
+
+### System Display Screenshots
+
+![Screenshot 2](images/2025-07-13_15-09-10.jpg)
+
+![Screenshot 3](images/2025-07-13_15-09-15.jpg)
+
+![Screenshot 4](images/2025-07-13_15-09-19.jpg)
+
+![Screenshot 5](images/2025-07-13_15-09-23.jpg)
+
+![Screenshot 6](images/2025-07-13_15-09-31.jpg)
+
+![Screenshot 7](images/2025-07-13_15-09-38.jpg)
+
+![Screenshot 8](images/2025-07-13_15-09-43.jpg)
+
+### Hardware Setup
+![Display Hardware](images/display.jpg)
+*ESP32-P4 with DSI Display setup*
 
 ## Hardware Requirements
 
-This project is designed for the **Waveshare ESP32-P4-WiFi6-Touch-LCD-3.4C** development board.
+- **ESP32-P4** microcontroller
+- **DSI Display** compatible with ESP32-P4
+- **PSRAM** enabled (required for image buffering)
+- **WiFi Connection** for image downloading
 
-For complete hardware specifications, pin connections, and library compatibility information, please refer to the official Waveshare documentation:
+## Installation
 
-**📖 [Waveshare ESP32-P4-WiFi6-Touch-LCD-3.4C Documentation](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-3.4C)**
+1. **Arduino IDE Setup**:
+   - Install ESP32 board support (version 3.2.1 or later)
+   - Enable PSRAM in Tools menu
+   - Install required libraries (see Dependencies section)
 
-## 3D Printed Stand
+2. **Upload Code**:
+   - Flash the main sketch to your ESP32-P4
+   - Configure WiFi credentials through web interface or serial
 
-<p align="center">
-  <img src="images/stand_desk.jpg" alt="3D Printed Desk Stand" width="400"/>
-</p>
+3. **Initial Wi-Fi setup**:
+   - Edit `config_storage.cpp` file
+   - change the following piece of code to set wifi credentials
+      ```cpp
+      void ConfigStorage::setDefaults() {
+         // Set hardcoded defaults from original config.cpp
+         config.wifiSSID = "";
+         config.wifiPassword = "";
+      ```
 
-**🔗 [3D Printable Desk Stand for Waveshare ESP32-P4-WIFI6-Touch-LCD-3.4C](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)**
+4. **Configuration**:
+   - Access web interface at device IP address
+   - Configure image sources and cycling settings
+   - Set update intervals and display preferences
 
-- **Print Settings**: No supports needed, print face down for smooth finish
-- **Fit**: Friction fit design for Prusa Mini+ and similar printers
-- **Material**: PET recommended (84g material usage)
-- **Print Time**: Approximately 3h 25m
-- **Layer Height**: 0.20mm with 0.40mm nozzle
+## Dependencies
 
-## Software Dependencies
+- **ESP32 Core** (3.2.1+)
+- **GFX Library for Arduino** (1.6.0+)
+- **JPEGDEC** (1.8.2+)
+- **PubSubClient** (2.8+)
+- **Built-in Libraries**: HTTPClient, WebServer, WiFi, Preferences
 
-### Arduino IDE Libraries
-Install the following libraries through the Arduino IDE Library Manager:
+## Configuration
 
-1. **Arduino_GFX_Library** (latest version)
-   - Graphics library for ESP32 displays
-   - Provides DSI display support
-
-2. **WiFi** (built-in with ESP32 core)
-   - WiFi connectivity functions
-
-3. **HTTPClient** (built-in with ESP32 core)
-   - HTTP client for downloading images
-
-4. **JPEGDEC** (latest version)
-   - JPEG decoder library
-   - Install via Library Manager
-
-5. **PubSubClient** (latest version)
-   - MQTT client library
-   - Install via Library Manager
-
-### ESP32 Arduino Core
-- **Version**: ESP32 Arduino Core 3.0.0 or later
-- **Board**: ESP32-P4 support required
-
-## Installation and Setup
-
-### Step 1: Install Arduino IDE
-1. Download and install Arduino IDE 2.0 or later from [arduino.cc](https://www.arduino.cc/en/software)
-
-### Step 2: Install ESP32 Board Package
-1. Open Arduino IDE
-2. Go to **File** → **Preferences**
-3. Add this URL to "Additional Board Manager URLs":
-   ```
-   https://espressif.github.io/arduino-esp32/package_esp32_index.json
-   ```
-4. Go to **Tools** → **Board** → **Boards Manager**
-5. Search for "ESP32" and install "esp32 by Espressif Systems" (version 3.0.0 or later)
-
-### Step 3: Install Required Libraries
-1. Go to **Tools** → **Manage Libraries**
-2. Install each of the following libraries:
-   - Search "Arduino_GFX" → Install "GFX Library for Arduino"
-   - Search "JPEGDEC" → Install "JPEGDEC"
-   - Search "PubSubClient" → Install "PubSubClient"
-
-### Step 4: Configure Board Settings
-1. Go to **Tools** → **Board** → **ESP32 Arduino** → **ESP32P4**
-2. Configure the following settings:
-   - **Board**: "ESP32P4"
-   - **PSRAM**: "OPI PSRAM" (REQUIRED)
-   - **Flash Size**: "16MB" (or your board's flash size)
-   - **Partition Scheme**: "16M Flash (3MB APP/9.9MB FATFS)"
-   - **Upload Speed**: "921600"
-   - **Arduino Runs On**: "Core 1"
-   - **Events Run On**: "Core 1"
-
-### Step 5: Select Display Type
-1. Open `displays_config.h`
-2. Set the display type by modifying the `CURRENT_SCREEN` definition:
-   ```cpp
-   #define CURRENT_SCREEN SCREEN_3INCH_4_DSI  // For 3.4" display
-   // OR
-   #define CURRENT_SCREEN SCREEN_4INCH_DSI     // For 4" display
-   ```
-
-### Step 6: Configure Network Settings
-1. Open `ESP32-P4-Allsky-Display.ino`
-2. Update WiFi credentials:
-   ```cpp
-   const char* ssid = "Your_WiFi_SSID";
-   const char* password = "Your_WiFi_Password";
-   ```
-3. Update MQTT settings (optional):
-   ```cpp
-   const char* mqtt_server = "192.168.1.250";  // Your MQTT broker IP
-   const int mqtt_port = 1883;
-   const char* mqtt_user = "";                 // MQTT username (if required)
-   const char* mqtt_password = "";             // MQTT password (if required)
-   ```
-4. Update image URL:
-   ```cpp
-   const char* imageURL = "https://your-server.com/path/to/image.jpg";
-   ```
-
-### Step 7: Compile and Upload
-1. Connect your ESP32-P4 board via USB
-2. Select the correct COM port in **Tools** → **Port**
-3. Click **Upload** (Ctrl+U)
-
-## Configuration Options
-
-### Display Configuration
-The display configuration is handled in `displays_config.h`:
-
-- **3.4" Display**: 800x800 resolution, optimized timing parameters
-- **4" Display**: 720x720 resolution, optimized timing parameters
-
-### Image Settings
-```cpp
-const unsigned long updateInterval = 60000; // Image update interval (milliseconds)
-```
-
-### Transformation Controls
-```cpp
-const float SCALE_STEP = 0.1;      // Scale increment/decrement
-const int16_t MOVE_STEP = 10;      // Movement step in pixels
-const float MIN_SCALE = 0.1;       // Minimum scale factor
-const float MAX_SCALE = 3.0;       // Maximum scale factor
-const float ROTATION_STEP = 90.0;  // Rotation increment in degrees
-```
-
-## Usage
-### Web UI
-
-<p align="center">
-  <img src="images\463485063-14f22475-c623-4a3e-a9ef-dbc5a2f89b56.png" alt="" width="1024"/>
-  <img src="images\463485132-ec667784-957b-4437-a0da-340e69619511.png" alt="" width="1024"/>
-  <img src="images\463485117-a7e7cc8c-c187-489f-8325-b130a86806a3.png" alt="" width="1024"/>
-  <img src="images\463485103-4e4440ac-d0d9-4611-9b55-d9b17123a795.png" alt="" width="1024"/>
-  <img src="images\463485084-0ed7e9c8-2699-47d5-907e-cb7c9922ac40.png" alt="" width="1024"/>
-  <img src="images\463485132-ec667784-957b-4437-a0da-340e6964575.jpg" alt="" width="1024"/>
-</p>
+### Web Interface Configuration
+- **Access**: `http://[device-ip]:8080/`
+- **Image Sources**: Add/remove URLs in cycling configuration
+- **Display Settings**: Brightness, update intervals
+- **Network Settings**: WiFi and MQTT configuration
+- **System Monitor**: Real-time status and diagnostics
 
 ### Serial Commands
-Control image transformations via Serial Monitor (115200 baud):
-
-#### Image Control Commands
-**Scaling:**
-- `+` / `-`: Scale both axes
-
-**Movement:**
-- `W` / `S`: Move up/down
-- `A` / `D`: Move left/right
-
-**Rotation:**
-- `Q` / `E`: Rotate 90° CCW/CW
-
-**Reset:**
-- `R`: Reset all transformations
-
-**Brightness:**
-- `L` / `K`: Brightness up/down
-
-**System:**
-- `B`: Reboot device
-- `M`: Memory info
-- `I`: Network info
-- `P`: PPA info
-- `T`: MQTT info
-
-**Help:**
-- `H` / `?`: Show this help
-
-### MQTT Control
-
-#### Device Reboot
-Send a "reboot" message to restart the device:
 ```
-Topic: Astro/AllSky/display/reboot
-Message: reboot
++/-   : Scale image up/down
+W/S   : Move image up/down
+A/D   : Move image left/right
+Q/E   : Rotate image 90° CCW/CW
+R     : Reset all transformations
+L/K   : Brightness up/down
+B     : Reboot device
+M     : Memory information
+I     : Network information
+P     : PPA acceleration status
+T     : MQTT status
+H/?   : Show help
 ```
 
-Example MQTT command:
-```bash
-mosquitto_pub -h your-mqtt-broker -t "Astro/AllSky/display/reboot" -m "reboot"
-```
+## System Architecture
 
-#### Brightness Control
-Control display brightness remotely via MQTT:
-```
-Topic: Astro/AllSky/display/brightness
-Message: 0-100 (brightness percentage)
-```
+### Modular Design
+- **Config Management**: Persistent storage with web interface
+- **Display Manager**: Hardware abstraction and rendering
+- **Network Manager**: WiFi connectivity and monitoring
+- **MQTT Manager**: Message broker integration
+- **System Monitor**: Health monitoring and watchdog
+- **PPA Accelerator**: Hardware acceleration interface
 
-The device will publish brightness status confirmations to:
-```
-Topic: Astro/AllSky/display/brightness/status
-Message: Current brightness percentage
-```
+### Memory Management
+- **PSRAM Utilization**: Large image buffers stored in PSRAM
+- **Smart Buffering**: Multiple buffers for smooth transitions
+- **Memory Monitoring**: Real-time usage tracking and alerts
 
-Example MQTT brightness commands:
-```bash
-# Set brightness to 75%
-mosquitto_pub -h your-mqtt-broker -t "Astro/AllSky/display/brightness" -m "75"
+### Error Handling
+- **Watchdog Protection**: Prevents system freezes
+- **Network Recovery**: Automatic WiFi reconnection
+- **Download Timeouts**: Configurable timeout protection
+- **Format Validation**: JPEG header verification
 
-# Set brightness to minimum (0%)
-mosquitto_pub -h your-mqtt-broker -t "Astro/AllSky/display/brightness" -m "0"
+## Performance Features
 
-# Set brightness to maximum (100%)
-mosquitto_pub -h your-mqtt-broker -t "Astro/AllSky/display/brightness" -m "100"
+### Download Optimization
+- **Chunked Downloads**: Efficient streaming with progress monitoring
+- **Timeout Protection**: Multiple timeout layers prevent hanging
+- **Connection Management**: Automatic cleanup and retry logic
+- **Progress Feedback**: Real-time download status
 
-# Subscribe to brightness status updates
-mosquitto_sub -h your-mqtt-broker -t "Astro/AllSky/display/brightness/status"
-```
+### Rendering Optimization
+- **Hardware Acceleration**: PPA for scaling and rotation
+- **Smart Clearing**: Minimal screen updates to prevent flickering
+- **Buffer Management**: Optimized memory usage
+- **Transform Caching**: Efficient transformation pipeline
 
-**Note**: The brightness control uses inverted PWM logic to match the LCD backlight controller. Values are properly mapped so that 0% = minimum brightness and 100% = maximum brightness.
-
-## Logical Flow Chart
-
-The following diagrams show the program execution flow and decision points:
-
-### Main Program Flow
-
-```mermaid
-flowchart TD
-    A[Program Start] --> B[Check PSRAM]
-    B --> C{PSRAM Enabled?}
-    C -->|No| D[Error: PSRAM Required]
-    C -->|Yes| E[Initialize Display Hardware]
-    
-    E --> F[Create DSI Panel Object]
-    F --> G[Create Display Object]
-    G --> H[Initialize Display]
-    H --> I{Display Init Success?}
-    I -->|No| J[Error: Display Init Failed]
-    I -->|Yes| K[Get Display Dimensions]
-    
-    K --> L[Allocate Memory Buffers]
-    L --> M[Allocate Image Buffer]
-    M --> N[Allocate Full Image Buffer]
-    N --> O[Allocate Scaling Buffer]
-    O --> P{Memory Allocation Success?}
-    P -->|No| Q[Error: Memory Allocation Failed]
-    P -->|Yes| R[Initialize PPA Hardware]
-    
-    R --> S{PPA Available?}
-    S -->|Yes| T[Hardware Acceleration Enabled]
-    S -->|No| U[Software Scaling Fallback]
-    T --> V[Connect to WiFi]
-    U --> V
-    
-    V --> W[WiFi Connection Process]
-    W --> X{WiFi Connected?}
-    X -->|No| Y[Display WiFi Error]
-    X -->|Yes| Z[Connect to MQTT]
-    
-    Z --> AA[MQTT Connection Process]
-    AA --> BB[Setup Complete]
-    BB --> CC[Enter Main Loop]
-    
-    CC --> DD[Main Loop]
-```
-
-### Main Loop Flow
-
-```mermaid
-flowchart TD
-    A[Main Loop Start] --> B[Check WiFi Status]
-    B --> C{WiFi Connected?}
-    C -->|No| D[Attempt WiFi Reconnection]
-    C -->|Yes| E[Handle MQTT]
-    
-    D --> F{Reconnection Success?}
-    F -->|No| A
-    F -->|Yes| E
-    
-    E --> G[MQTT Connection Check]
-    G --> H{MQTT Connected?}
-    H -->|No| I[Attempt MQTT Reconnection]
-    H -->|Yes| J[Process MQTT Messages]
-    
-    I --> K[Process Serial Commands]
-    J --> K
-    
-    K --> L[Check Serial Input]
-    L --> M{Serial Command Available?}
-    M -->|Yes| N[Parse Command]
-    M -->|No| O[Check Update Timer]
-    
-    N --> P[Execute Image Transform]
-    P --> O
-    
-    O --> Q{Time for Image Update?}
-    Q -->|No| R[Delay 100ms]
-    Q -->|Yes| S{First Image?}
-    
-    S -->|Yes| T[Download with Debug]
-    S -->|No| U[Download Silent]
-    
-    T --> V[Image Processing]
-    U --> V
-    V --> R
-    R --> A
-```
-
-### Image Download and Processing Flow
-
-```mermaid
-flowchart TD
-    A[Start Image Download] --> B[Create HTTP Client]
-    B --> C[Send GET Request]
-    C --> D{HTTP Response OK?}
-    D -->|No| E[Log Error]
-    D -->|Yes| F[Get Content Size]
-    
-    F --> G{Size Valid?}
-    G -->|No| H[Log Size Error]
-    G -->|Yes| I[Download Image Data]
-    
-    I --> J[Read Data Stream]
-    J --> K{All Data Received?}
-    K -->|No| J
-    K -->|Yes| L[JPEG Decode Process]
-    
-    L --> M[Initialize JPEG Decoder]
-    M --> N[Open JPEG from RAM]
-    N --> O{JPEG Valid?}
-    O -->|No| P[Log JPEG Error]
-    O -->|Yes| Q[Get Image Dimensions]
-    
-    Q --> R{Fits in Buffer?}
-    R -->|No| S[Log Buffer Error]
-    R -->|Yes| T[Decode to Full Buffer]
-    
-    T --> U[Image Rendering Process]
-    U --> V[Calculate Transformations]
-    V --> W[Apply Scale and Offset]
-    W --> X[Render to Display]
-    X --> Y[Mark First Image Loaded]
-    Y --> Z[End]
-    
-    E --> Z
-    H --> Z
-    P --> Z
-    S --> Z
-```
-
-### Image Rendering and Scaling Flow
-
-```mermaid
-flowchart TD
-    A[Start Image Rendering] --> B[Calculate Scaled Dimensions]
-    B --> C[Calculate Display Position]
-    C --> D{Scaling Required?}
-    D -->|No| E[Direct Copy to Display]
-    D -->|Yes| F{PPA Available?}
-    
-    F -->|Yes| G[Hardware Scaling Process]
-    F -->|No| H[Software Scaling Process]
-    
-    G --> I[Copy to PPA Source Buffer]
-    I --> J[Configure PPA Operation]
-    J --> K[Execute PPA Scaling]
-    K --> L{PPA Success?}
-    L -->|No| H
-    L -->|Yes| M[Copy from PPA Destination]
-    
-    H --> N{Image Fits in Buffer?}
-    N -->|Yes| O[Scale Entire Image]
-    N -->|No| P[Strip-based Scaling]
-    
-    O --> Q[Bilinear Interpolation]
-    P --> R[Process Image Strips]
-    R --> S[Scale Each Strip]
-    S --> T[Bilinear Interpolation]
-    T --> U[Draw Strip to Display]
-    U --> V{More Strips?}
-    V -->|Yes| R
-    V -->|No| W[Scaling Complete]
-    
-    Q --> X[Draw to Display]
-    M --> X
-    E --> X
-    X --> W
-    W --> Y[End]
-```
-
-### MQTT Message Handling Flow
-
-```mermaid
-flowchart TD
-    A[MQTT Message Received] --> B[Parse Topic]
-    B --> C{Reboot Topic?}
-    C -->|No| D[Ignore Message]
-    C -->|Yes| E[Parse Message Payload]
-    
-    E --> F{Message equals reboot?}
-    F -->|No| G[Log Invalid Command]
-    F -->|Yes| H[Log Reboot Request]
-    
-    H --> I[Perform System Restart]
-    I --> J[ESP.restart call]
-    J --> K[Device Reboots]
-    
-    D --> L[End]
-    G --> L
-    K --> L
-```
-
-### Serial Command Processing Flow
-
-```mermaid
-flowchart TD
-    A[Serial Command Received] --> B[Read Command Character]
-    B --> C{Command Type?}
-    
-    C -->|+/-| D[Scale Both Axes]
-    C -->|X/Z| E[Scale X Axis]
-    C -->|Y/U| F[Scale Y Axis]
-    C -->|W/S| G[Move Vertical]
-    C -->|A/D| H[Move Horizontal]
-    C -->|R| I[Reset Transform]
-    C -->|H/?| J[Show Help]
-    C -->|Other| K[Ignore Command]
-    
-    D --> L[Update Scale Factors]
-    E --> M[Update X Scale]
-    F --> N[Update Y Scale]
-    G --> O[Update Y Offset]
-    H --> P[Update X Offset]
-    I --> Q[Reset All Values]
-    J --> R[Print Help Text]
-    
-    L --> S[Redraw Image]
-    M --> S
-    N --> S
-    O --> S
-    P --> S
-    Q --> S
-    R --> T[End]
-    K --> T
-    S --> T
-```
-
-### Error Handling and Recovery Flow
-
-```mermaid
-flowchart TD
-    A[Error Detected] --> B{Error Type?}
-    
-    B -->|PSRAM| C[Fatal: Restart Required]
-    B -->|Display Init| D[Fatal: Hardware Issue]
-    B -->|Memory Alloc| E[Fatal: Insufficient Memory]
-    B -->|WiFi| F[Recoverable: Retry Connection]
-    B -->|MQTT| G[Recoverable: Retry Connection]
-    B -->|HTTP| H[Recoverable: Skip Update]
-    B -->|JPEG| I[Recoverable: Skip Image]
-    B -->|PPA| J[Recoverable: Use Software]
-    
-    C --> K[Log Error and Halt]
-    D --> K
-    E --> K
-    
-    F --> L[WiFi Reconnection]
-    G --> M[MQTT Reconnection]
-    H --> N[Continue Operation]
-    I --> N
-    J --> O[Switch to Software Mode]
-    
-    L --> P{Success?}
-    M --> Q{Success?}
-    P -->|Yes| N
-    P -->|No| R[Retry Later]
-    Q -->|Yes| N
-    Q -->|No| R
-    
-    O --> N
-    R --> N
-    N --> S[Resume Normal Operation]
-    S --> T[End]
-    K --> T
-```
+### System Monitoring
+- **Performance Metrics**: Download speeds, processing times
+- **Memory Tracking**: Heap and PSRAM usage monitoring
+- **Health Checks**: System stability monitoring
+- **Debug Information**: Comprehensive logging system
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### "Error: This program requires PSRAM enabled"
-- **Solution**: Enable PSRAM in Arduino IDE: **Tools** → **PSRAM** → **OPI PSRAM**
+1. **Compilation Errors**:
+   - Ensure PSRAM is enabled in Arduino IDE
+   - Check ESP32 core version (3.2.1+)
+   - Verify all dependencies are installed
 
-#### Display not working
-- **Check**: DSI connections are secure
-- **Verify**: Correct display type selected in `displays_config.h`
-- **Ensure**: Power supply is adequate (5V, 2A minimum)
+2. **Memory Issues**:
+   - Monitor PSRAM usage through serial output
+   - Reduce image buffer sizes if needed
+   - Check for memory leaks in debug output
 
-#### WiFi connection fails
-- **Verify**: SSID and password are correct
-- **Check**: WiFi signal strength
-- **Ensure**: 2.4GHz network (ESP32 doesn't support 5GHz)
+3. **Network Problems**:
+   - Verify WiFi credentials
+   - Check image URL accessibility
+   - Monitor network status through web interface
 
-#### Image download fails
-- **Verify**: Image URL is accessible
-- **Check**: Image size is reasonable (<1MB recommended)
-- **Ensure**: HTTPS certificates are valid (if using HTTPS)
-
-#### Out of memory errors
-- **Ensure**: PSRAM is enabled and properly configured
-- **Check**: Image size isn't too large for available memory
-- **Verify**: Partition scheme provides adequate APP space
+4. **Display Issues**:
+   - Verify DSI display compatibility
+   - Check display initialization in serial output
+   - Ensure proper wiring and power supply
 
 ### Debug Information
-Enable debug output by monitoring the Serial port at 115200 baud. The system provides detailed logging for:
-- WiFi connection status
-- Image download progress
-- Memory usage
-- MQTT connection status
-- Touch events
-
-## Technical Specifications
-
-### Memory Usage
-- **Image Buffer**: ~1.3MB (for 800x800 display)
-- **Scaling Buffer**: ~5.2MB (for large scale factors)
-- **Full Image Buffer**: ~1MB (for smooth rendering)
-- **Total PSRAM Usage**: ~7-8MB
-
-### Performance
-- **Image Download**: Depends on network speed and image size
-- **Hardware Scaling + Rotation**: ~50-100ms for full-screen images
-- **Software Scaling**: ~200-500ms for full-screen images
-- **Hardware Rotation**: Supports 0°, 90°, 180°, 270° with no performance penalty
-- **Display Refresh**: Real-time (limited by image processing)
-
-### Supported Image Formats
-- **JPEG**: Full support with hardware-accelerated decoding
-- **Maximum Resolution**: Limited by available memory (~1024x1024)
-- **Color Depth**: 16-bit RGB565
-
-## File Structure
-
-```
-ESP32-P4-Allsky-Display/
-├── ESP32-P4-Allsky-Display.ino    # Main application file
-├── displays_config.h              # Display configuration and initialization
-├── i2c.h                         # I2C communication header
-├── i2c.cpp                       # I2C communication implementation
-├── touch.h                       # Touch interface header
-├── touch.cpp                     # Touch interface implementation
-├── gt911.h                       # GT911 touch controller header
-├── gt911.cpp                     # GT911 touch controller implementation
-├── .gitignore                    # Git ignore file
-└── README.md                     # This file
-```
+- **Serial Output**: Comprehensive debugging information
+- **Web Interface**: Real-time system status
+- **Memory Monitor**: Heap and PSRAM usage tracking
+- **Network Status**: Connection monitoring and diagnostics
 
 ## Contributing
 
@@ -598,25 +239,11 @@ ESP32-P4-Allsky-Display/
 
 ## License
 
-This project is open source. Please check the individual library licenses for their respective terms.
+This project is open source. Please check the license file for details.
 
 ## Support
 
-For issues and questions:
-1. Check the troubleshooting section above
-2. Review the serial debug output
-3. Create an issue on the project repository
-4. Refer to the [Waveshare documentation](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.4c.htm?sku=31523) for hardware-specific issues
-
-## Version History
-
-- **v1.0**: Initial release with basic image display functionality
-- **v1.1**: Added MQTT reboot control
-- **v1.2**: Implemented hardware-accelerated scaling
-- **v1.3**: Added touch interface support
-- **v1.4**: Enhanced image transformation controls
-- **v1.5**: Enhanced web configuration interface and system stability improvements
-- **v1.6**: Added hardware-accelerated image rotation with PPA support (0°, 90°, 180°, 270°)
-- **v1.7**: Added PWM-based brightness control with serial commands and MQTT integration
-- **v1.8**: Implemented seamless image transitions with smart clearing algorithm to eliminate flash when images change
-- **v1.9**: Added serial reboot command ('B') and reformatted help menu with structured command categories
+For issues, feature requests, or questions:
+- Create an issue in the GitHub repository
+- Check the troubleshooting section above
+- Monitor serial output for debugging information
