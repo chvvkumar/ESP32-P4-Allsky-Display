@@ -11,6 +11,8 @@
 #include "display_manager.h"
 #include "ppa_accelerator.h"
 #include "mqtt_manager.h"
+#include "gt911.h"
+#include "i2c.h"
 
 // Additional required libraries
 #include <HTTPClient.h>
@@ -67,6 +69,38 @@ JPEGDEC jpeg;
 bool imageProcessing = false;
 unsigned long lastImageProcessTime = 0;
 
+// Touch control variables
+esp_lcd_touch_handle_t touchHandle = nullptr;
+bool touchEnabled = false;
+
+// Touch gesture detection variables
+enum TouchState {
+    TOUCH_IDLE,
+    TOUCH_PRESSED,
+    TOUCH_RELEASED,
+    TOUCH_WAITING_FOR_SECOND_TAP
+};
+
+TouchState touchState = TOUCH_IDLE;
+unsigned long touchPressTime = 0;
+unsigned long touchReleaseTime = 0;
+unsigned long firstTapTime = 0;
+bool touchPressed = false;
+bool touchWasPressed = false;
+
+// Touch timing configuration
+const unsigned long TOUCH_DEBOUNCE_MS = 50;        // Minimum time between touch events
+const unsigned long DOUBLE_TAP_TIMEOUT_MS = 400;   // Maximum time between taps for double-tap
+const unsigned long MIN_TAP_DURATION_MS = 50;      // Minimum press duration for valid tap
+const unsigned long MAX_TAP_DURATION_MS = 2000;    // Maximum press duration for tap (vs hold)
+
+// Touch actions triggered flags
+bool touchTriggeredNextImage = false;
+bool touchTriggeredModeToggle = false;
+
+// Touch mode control
+bool singleImageRefreshMode = false;  // false = cycling mode, true = single image refresh mode
+
 // Forward declarations
 void debugPrint(const char* message, uint16_t color);
 void debugPrintf(uint16_t color, const char* format, ...);
@@ -78,6 +112,13 @@ void loadCyclingConfiguration();
 void advanceToNextImage();
 String getCurrentImageURL();
 void updateCyclingVariables();
+
+// Touch function declarations
+void initializeTouchController();
+void updateTouchState();
+void processTouchGestures();
+void handleSingleTap();
+void handleDoubleTap();
 
 // Debug output wrapper functions
 void debugPrint(const char* message, uint16_t color) {
@@ -221,6 +262,9 @@ void setup() {
     
     // Load cycling configuration after all modules are initialized
     loadCyclingConfiguration();
+    
+    // Initialize touch controller
+    initializeTouchController();
     
     debugPrint("Setup complete!", COLOR_GREEN);
     delay(1000);
@@ -989,6 +1033,9 @@ void processSerialCommands() {
                 Serial.println("  P   : PPA info");
                 Serial.println("  T   : MQTT info");
                 Serial.println("  X   : Web server status/restart");
+                Serial.println("Touch:");
+                Serial.println("  Single tap : Next image");
+                Serial.println("  Double tap : Toggle cycling/single refresh mode");
                 Serial.println("Help:");
                 Serial.println("  H/? : Show this help");
                 break;
@@ -1127,6 +1174,13 @@ void loop() {
     processSerialCommands();
     systemMonitor.forceResetWatchdog();
     
+    // Update touch state and process gestures
+    if (touchEnabled) {
+        updateTouchState();
+        processTouchGestures();
+        systemMonitor.forceResetWatchdog();
+    }
+    
     // Handle web server again after serial processing
     if (wifiManager.isConnected() && webConfig.isRunning()) {
         webConfig.handleClient();
@@ -1149,11 +1203,49 @@ void loop() {
     currentUpdateInterval = configStorage.getUpdateInterval();
     systemMonitor.forceResetWatchdog();
     
+    // Check for touch-triggered actions
+    if (touchTriggeredNextImage) {
+        touchTriggeredNextImage = false;
+        Serial.println("Touch: Advancing to next image");
+        debugPrint("Touch: Next image requested", COLOR_CYAN);
+        
+        // If cycling is enabled, advance to next image
+        if (cyclingEnabled && imageSourceCount > 1) {
+            advanceToNextImage();
+            // Force immediate image download
+            lastUpdate = 0;
+        } else {
+            Serial.println("Touch: Cycling not enabled or only one source configured");
+            debugPrint("Touch: Single image mode - cannot advance", COLOR_YELLOW);
+        }
+        systemMonitor.forceResetWatchdog();
+    }
+    
+    if (touchTriggeredModeToggle) {
+        touchTriggeredModeToggle = false;
+        
+        // Toggle between cycling mode and single image refresh mode
+        singleImageRefreshMode = !singleImageRefreshMode;
+        
+        if (singleImageRefreshMode) {
+            Serial.println("Touch: Switched to SINGLE IMAGE REFRESH mode");
+            debugPrint("Mode: Single Image Refresh (no auto-cycling)", COLOR_MAGENTA);
+            Serial.printf("Current image will refresh every %lu minutes\n", currentUpdateInterval / 60000);
+        } else {
+            Serial.println("Touch: Switched to CYCLING mode");
+            debugPrint("Mode: Auto-Cycling Enabled", COLOR_MAGENTA);
+            Serial.printf("Will cycle every %lu minutes, update every %lu minutes\n", 
+                         currentCycleInterval / 60000, currentUpdateInterval / 60000);
+        }
+        systemMonitor.forceResetWatchdog();
+    }
+    
     // Check for image cycling (independent of update interval)
     unsigned long currentTime = millis();
     bool shouldCycle = false;
     
-    if (cyclingEnabled && imageSourceCount > 1 && !imageProcessing) {
+    // Only auto-cycle if not in single image refresh mode
+    if (cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode) {
         if (currentTime - lastCycleTime >= currentCycleInterval || lastCycleTime == 0) {
             shouldCycle = true;
             lastCycleTime = currentTime;
@@ -1238,4 +1330,163 @@ void loop() {
     // Use shorter delay to keep web server responsive
     systemMonitor.safeDelay(50);
     systemMonitor.forceResetWatchdog();
+}
+
+// Touch controller functions implementation
+
+void initializeTouchController() {
+    debugPrint("Initializing touch controller...", COLOR_YELLOW);
+    
+    try {
+        // Initialize I2C interface first
+        DEV_I2C_Port i2cPort = DEV_I2C_Init();
+        
+        // Initialize the GT911 touch controller
+        touchHandle = touch_gt911_init(i2cPort);
+        
+        if (touchHandle != nullptr) {
+            touchEnabled = true;
+            debugPrint("Touch controller initialized successfully!", COLOR_GREEN);
+            Serial.println("GT911 touch controller ready");
+        } else {
+            debugPrint("Touch controller initialization failed", COLOR_RED);
+            Serial.println("Warning: Touch functionality disabled - GT911 init failed");
+            touchEnabled = false;
+        }
+    } catch (...) {
+        debugPrint("Touch controller initialization exception", COLOR_RED);
+        Serial.println("Warning: Touch functionality disabled - exception during init");
+        touchEnabled = false;
+    }
+    
+    // Initialize touch state variables
+    touchState = TOUCH_IDLE;
+    touchPressed = false;
+    touchWasPressed = false;
+    touchPressTime = 0;
+    touchReleaseTime = 0;
+    firstTapTime = 0;
+    touchTriggeredNextImage = false;
+    touchTriggeredModeToggle = false;
+}
+
+void updateTouchState() {
+    if (!touchEnabled || touchHandle == nullptr) {
+        return;
+    }
+    
+    // Read touch data from GT911
+    touch_gt911_point_t touchData = touch_gt911_read_point(1);  // Read max 1 touch point
+    
+    unsigned long currentTime = millis();
+    bool currentlyPressed = (touchData.cnt > 0);
+    
+    // Debouncing: ignore rapid state changes
+    if (currentlyPressed != touchPressed) {
+        if (currentTime - touchReleaseTime < TOUCH_DEBOUNCE_MS && 
+            currentTime - touchPressTime < TOUCH_DEBOUNCE_MS) {
+            return; // Too soon since last state change
+        }
+    }
+    
+    // Update touch state
+    touchWasPressed = touchPressed;
+    touchPressed = currentlyPressed;
+    
+    // Handle touch press
+    if (touchPressed && !touchWasPressed) {
+        touchPressTime = currentTime;
+        
+        if (touchState == TOUCH_IDLE) {
+            touchState = TOUCH_PRESSED;
+            Serial.printf("Touch: Press detected at %lu ms\n", currentTime);
+        } else if (touchState == TOUCH_WAITING_FOR_SECOND_TAP) {
+            // Second tap detected within timeout
+            if (currentTime - firstTapTime <= DOUBLE_TAP_TIMEOUT_MS) {
+                touchState = TOUCH_PRESSED;
+                Serial.printf("Touch: Second tap detected at %lu ms (delta: %lu ms)\n", 
+                             currentTime, currentTime - firstTapTime);
+            } else {
+                // Timeout exceeded, treat as new first tap
+                touchState = TOUCH_PRESSED;
+                Serial.printf("Touch: Double-tap timeout, treating as new press at %lu ms\n", currentTime);
+            }
+        }
+    }
+    
+    // Handle touch release
+    if (!touchPressed && touchWasPressed) {
+        touchReleaseTime = currentTime;
+        unsigned long pressDuration = currentTime - touchPressTime;
+        
+        Serial.printf("Touch: Release detected at %lu ms (duration: %lu ms)\n", 
+                     currentTime, pressDuration);
+        
+        if (touchState == TOUCH_PRESSED) {
+            // Valid tap duration check
+            if (pressDuration >= MIN_TAP_DURATION_MS && pressDuration <= MAX_TAP_DURATION_MS) {
+                if (firstTapTime == 0) {
+                    // First tap
+                    firstTapTime = touchReleaseTime;
+                    touchState = TOUCH_WAITING_FOR_SECOND_TAP;
+                    Serial.printf("Touch: First tap completed, waiting for second tap\n");
+                } else {
+                    // Second tap
+                    if (currentTime - firstTapTime <= DOUBLE_TAP_TIMEOUT_MS) {
+                        // Valid double tap - toggle mode
+                        touchTriggeredModeToggle = true;
+                        touchState = TOUCH_IDLE;
+                        firstTapTime = 0;
+                        Serial.printf("Touch: Double-tap detected! (total time: %lu ms)\n", 
+                                     currentTime - firstTapTime);
+                    } else {
+                        // Timeout exceeded, treat as single tap
+                        touchTriggeredNextImage = true;
+                        touchState = TOUCH_IDLE;
+                        firstTapTime = 0;
+                        Serial.printf("Touch: Double-tap timeout, treating as single tap\n");
+                    }
+                }
+            } else {
+                // Invalid tap duration (too short or too long)
+                touchState = TOUCH_IDLE;
+                firstTapTime = 0;
+                Serial.printf("Touch: Invalid tap duration: %lu ms (min: %lu, max: %lu)\n", 
+                             pressDuration, MIN_TAP_DURATION_MS, MAX_TAP_DURATION_MS);
+            }
+        }
+    }
+    
+    // Check for double-tap timeout in waiting state
+    if (touchState == TOUCH_WAITING_FOR_SECOND_TAP && firstTapTime > 0) {
+        if (currentTime - firstTapTime > DOUBLE_TAP_TIMEOUT_MS) {
+            // Timeout exceeded - trigger single tap action
+            touchTriggeredNextImage = true;
+            touchState = TOUCH_IDLE;
+            firstTapTime = 0;
+            Serial.printf("Touch: Double-tap timeout - triggering single tap action\n");
+        }
+    }
+}
+
+void processTouchGestures() {
+    // This function is called from the main loop
+    // The actual gesture processing is handled in updateTouchState()
+    // Touch-triggered actions are processed in the main loop via flags
+}
+
+void handleSingleTap() {
+    Serial.println("Touch: Single tap - advancing to next image");
+    debugPrint("Touch: Single tap detected", COLOR_GREEN);
+    
+    // Set flag to trigger next image in main loop
+    touchTriggeredNextImage = true;
+}
+
+void handleDoubleTap() {
+    Serial.println("Touch: Double tap - toggling mode");
+    debugPrint("Touch: Double tap detected", COLOR_GREEN);
+    
+    // Set flag to trigger mode toggle in main loop
+    touchTriggeredModeToggle = true;
 }
