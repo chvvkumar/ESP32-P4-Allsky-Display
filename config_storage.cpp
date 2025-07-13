@@ -32,6 +32,22 @@ void ConfigStorage::setDefaults() {
     
     config.imageURL = "https://allsky.challa.co:1982/current/resized/image.jpg";
     
+    // Multi-image cycling defaults using external config arrays
+    config.cyclingEnabled = DEFAULT_CYCLING_ENABLED;
+    config.cycleInterval = DEFAULT_CYCLE_INTERVAL;
+    config.randomOrder = DEFAULT_RANDOM_ORDER;
+    config.currentImageIndex = 0;
+    config.imageSourceCount = DEFAULT_IMAGE_SOURCE_COUNT;
+    
+    // Initialize with default image sources from config.cpp
+    for (int i = 0; i < DEFAULT_IMAGE_SOURCE_COUNT && i < 10; i++) {
+        config.imageSources[i] = String(DEFAULT_IMAGE_SOURCES[i]);
+    }
+    // Clear remaining slots
+    for (int i = DEFAULT_IMAGE_SOURCE_COUNT; i < 10; i++) {
+        config.imageSources[i] = "";
+    }
+    
     config.defaultBrightness = DEFAULT_BRIGHTNESS;
     config.defaultScaleX = DEFAULT_SCALE_X;
     config.defaultScaleY = DEFAULT_SCALE_Y;
@@ -65,6 +81,19 @@ void ConfigStorage::loadConfig() {
         config.mqttBrightnessStatusTopic = preferences.getString("mqtt_b_stat", config.mqttBrightnessStatusTopic);
         
         config.imageURL = preferences.getString("image_url", config.imageURL);
+        
+        // Load multi-image cycling settings
+        config.cyclingEnabled = preferences.getBool("cycling_en", config.cyclingEnabled);
+        config.cycleInterval = preferences.getULong("cycle_intv", config.cycleInterval);
+        config.randomOrder = preferences.getBool("random_ord", config.randomOrder);
+        config.currentImageIndex = preferences.getInt("curr_img_idx", config.currentImageIndex);
+        config.imageSourceCount = preferences.getInt("img_src_cnt", config.imageSourceCount);
+        
+        // Load image sources array
+        for (int i = 0; i < 10; i++) {
+            String key = "img_src_" + String(i);
+            config.imageSources[i] = preferences.getString(key.c_str(), config.imageSources[i]);
+        }
         
         config.defaultBrightness = preferences.getInt("def_bright", config.defaultBrightness);
         config.defaultScaleX = preferences.getFloat("def_scale_x", config.defaultScaleX);
@@ -101,6 +130,19 @@ void ConfigStorage::saveConfig() {
     preferences.putString("mqtt_b_stat", config.mqttBrightnessStatusTopic);
     
     preferences.putString("image_url", config.imageURL);
+    
+    // Save multi-image cycling settings
+    preferences.putBool("cycling_en", config.cyclingEnabled);
+    preferences.putULong("cycle_intv", config.cycleInterval);
+    preferences.putBool("random_ord", config.randomOrder);
+    preferences.putInt("curr_img_idx", config.currentImageIndex);
+    preferences.putInt("img_src_cnt", config.imageSourceCount);
+    
+    // Save image sources array
+    for (int i = 0; i < 10; i++) {
+        String key = "img_src_" + String(i);
+        preferences.putString(key.c_str(), config.imageSources[i]);
+    }
     
     preferences.putInt("def_bright", config.defaultBrightness);
     preferences.putFloat("def_scale_x", config.defaultScaleX);
@@ -187,3 +229,110 @@ int ConfigStorage::getBacklightResolution() { return config.backlightResolution;
 unsigned long ConfigStorage::getWatchdogTimeout() { return config.watchdogTimeout; }
 size_t ConfigStorage::getCriticalHeapThreshold() { return config.criticalHeapThreshold; }
 size_t ConfigStorage::getCriticalPSRAMThreshold() { return config.criticalPSRAMThreshold; }
+
+// Multi-image cycling setters
+void ConfigStorage::setCyclingEnabled(bool enabled) { 
+    config.cyclingEnabled = enabled; 
+}
+
+void ConfigStorage::setCycleInterval(unsigned long interval) { 
+    config.cycleInterval = constrain(interval, MIN_CYCLE_INTERVAL, MAX_CYCLE_INTERVAL);
+}
+
+void ConfigStorage::setRandomOrder(bool random) { 
+    config.randomOrder = random; 
+}
+
+void ConfigStorage::setCurrentImageIndex(int index) { 
+    if (index >= 0 && index < config.imageSourceCount) {
+        config.currentImageIndex = index;
+    }
+}
+
+void ConfigStorage::setImageSourceCount(int count) { 
+    config.imageSourceCount = constrain(count, 1, 10);
+}
+
+void ConfigStorage::setImageSource(int index, const String& url) {
+    if (index >= 0 && index < 10) {
+        config.imageSources[index] = url;
+    }
+}
+
+void ConfigStorage::addImageSource(const String& url) {
+    if (config.imageSourceCount < 10) {
+        config.imageSources[config.imageSourceCount] = url;
+        config.imageSourceCount++;
+    }
+}
+
+void ConfigStorage::removeImageSource(int index) {
+    if (index >= 0 && index < config.imageSourceCount && config.imageSourceCount > 1) {
+        // Shift all sources after the removed index
+        for (int i = index; i < config.imageSourceCount - 1; i++) {
+            config.imageSources[i] = config.imageSources[i + 1];
+        }
+        config.imageSources[config.imageSourceCount - 1] = "";
+        config.imageSourceCount--;
+        
+        // Adjust current index if necessary
+        if (config.currentImageIndex >= config.imageSourceCount) {
+            config.currentImageIndex = 0;
+        }
+    }
+}
+
+void ConfigStorage::clearImageSources() {
+    for (int i = 0; i < 10; i++) {
+        config.imageSources[i] = "";
+    }
+    config.imageSourceCount = 0;
+    config.currentImageIndex = 0;
+}
+
+// Multi-image cycling getters
+bool ConfigStorage::getCyclingEnabled() { 
+    return config.cyclingEnabled; 
+}
+
+unsigned long ConfigStorage::getCycleInterval() { 
+    return config.cycleInterval; 
+}
+
+bool ConfigStorage::getRandomOrder() { 
+    return config.randomOrder; 
+}
+
+int ConfigStorage::getCurrentImageIndex() { 
+    return config.currentImageIndex; 
+}
+
+int ConfigStorage::getImageSourceCount() { 
+    return config.imageSourceCount; 
+}
+
+String ConfigStorage::getImageSource(int index) {
+    if (index >= 0 && index < config.imageSourceCount) {
+        return config.imageSources[index];
+    }
+    return "";
+}
+
+String ConfigStorage::getCurrentImageURL() {
+    if (config.cyclingEnabled && config.imageSourceCount > 0) {
+        return getImageSource(config.currentImageIndex);
+    } else {
+        // Fallback to legacy single image URL
+        return config.imageURL;
+    }
+}
+
+String ConfigStorage::getAllImageSources() {
+    String json = "[";
+    for (int i = 0; i < config.imageSourceCount; i++) {
+        if (i > 0) json += ",";
+        json += "\"" + config.imageSources[i] + "\"";
+    }
+    json += "]";
+    return json;
+}

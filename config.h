@@ -59,8 +59,20 @@ extern const char* MQTT_BRIGHTNESS_STATUS_TOPIC;
 // IMAGE CONFIGURATION
 // =============================================================================
 
-// Image source URL
+// Image source URL (legacy single image support)
 extern const char* IMAGE_URL;
+
+// Multi-image cycling configuration
+#define MAX_IMAGE_SOURCES 10             // Maximum number of image sources
+#define DEFAULT_CYCLE_INTERVAL 60000     // 1 minute between image switches
+#define MIN_CYCLE_INTERVAL 10000         // Minimum 10 seconds between switches
+#define MAX_CYCLE_INTERVAL 3600000       // Maximum 1 hour between switches
+
+// Default image sources array (configure your image URLs here)
+extern const char* DEFAULT_IMAGE_SOURCES[];
+extern const int DEFAULT_IMAGE_SOURCE_COUNT;
+extern const bool DEFAULT_CYCLING_ENABLED;
+extern const bool DEFAULT_RANDOM_ORDER;
 
 // Image transformation defaults
 #define DEFAULT_SCALE_X 1.2f

@@ -49,6 +49,17 @@ public:
     void setCriticalHeapThreshold(size_t threshold);
     void setCriticalPSRAMThreshold(size_t threshold);
     
+    // Multi-image cycling setters
+    void setCyclingEnabled(bool enabled);
+    void setCycleInterval(unsigned long interval);
+    void setRandomOrder(bool random);
+    void setCurrentImageIndex(int index);
+    void setImageSourceCount(int count);
+    void setImageSource(int index, const String& url);
+    void addImageSource(const String& url);
+    void removeImageSource(int index);
+    void clearImageSources();
+    
     // Individual parameter getters
     String getWiFiSSID();
     String getWiFiPassword();
@@ -75,6 +86,16 @@ public:
     size_t getCriticalHeapThreshold();
     size_t getCriticalPSRAMThreshold();
     
+    // Multi-image cycling getters
+    bool getCyclingEnabled();
+    unsigned long getCycleInterval();
+    bool getRandomOrder();
+    int getCurrentImageIndex();
+    int getImageSourceCount();
+    String getImageSource(int index);
+    String getCurrentImageURL();
+    String getAllImageSources(); // Returns JSON-formatted string of all sources
+    
     // Check if configuration exists
     bool hasStoredConfig();
 
@@ -99,7 +120,15 @@ private:
         String mqttBrightnessStatusTopic;
         
         // Image settings
-        String imageURL;
+        String imageURL;  // Legacy single image URL
+        
+        // Multi-image cycling settings
+        bool cyclingEnabled;
+        unsigned long cycleInterval;
+        bool randomOrder;
+        int currentImageIndex;
+        int imageSourceCount;
+        String imageSources[10];  // Array of image source URLs (MAX_IMAGE_SOURCES)
         
         // Display settings
         int defaultBrightness;

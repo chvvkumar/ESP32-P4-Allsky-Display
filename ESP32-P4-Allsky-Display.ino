@@ -36,6 +36,15 @@ float rotationAngle = DEFAULT_ROTATION;
 // Dynamic configuration variables
 unsigned long currentUpdateInterval = UPDATE_INTERVAL;
 
+// Multi-image cycling variables
+unsigned long lastCycleTime = 0;
+unsigned long currentCycleInterval = DEFAULT_CYCLE_INTERVAL;
+bool cyclingEnabled = false;
+bool randomOrderEnabled = false;
+int currentImageIndex = 0;
+int imageSourceCount = 1;
+String currentImageURL = "";
+
 // Full image buffer for smooth rendering
 uint16_t* fullImageBuffer = nullptr;
 size_t fullImageBufferSize = 0;
@@ -65,6 +74,10 @@ int JPEGDraw(JPEGDRAW *pDraw);
 void downloadAndDisplayImage();
 void processSerialCommands();
 void renderFullImage();
+void loadCyclingConfiguration();
+void advanceToNextImage();
+String getCurrentImageURL();
+void updateCyclingVariables();
 
 // Debug output wrapper functions
 void debugPrint(const char* message, uint16_t color) {
@@ -202,6 +215,9 @@ void setup() {
             debugPrint("ERROR: Web config server failed to start", COLOR_RED);
         }
     }
+    
+    // Load cycling configuration after all modules are initialized
+    loadCyclingConfiguration();
     
     debugPrint("Setup complete!", COLOR_GREEN);
     delay(1000);
@@ -399,9 +415,12 @@ void downloadAndDisplayImage() {
         return;
     }
     
+    // Get current image URL based on cycling configuration
+    String imageURL = getCurrentImageURL();
+    
     debugPrint("=== Starting Download ===", COLOR_CYAN);
     debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
-    debugPrintf(COLOR_WHITE, "URL: %s", IMAGE_URL);
+    debugPrintf(COLOR_WHITE, "URL: %s", imageURL.c_str());
     
     // Reset watchdog before HTTP operations
     systemMonitor.forceResetWatchdog();
@@ -411,7 +430,7 @@ void downloadAndDisplayImage() {
     // Add timeout protection for HTTP begin
     debugPrint("Initializing HTTP client...", COLOR_WHITE);
     unsigned long httpBeginStart = millis();
-    http.begin(IMAGE_URL);
+    http.begin(imageURL);
     unsigned long httpBeginTime = millis() - httpBeginStart;
     debugPrintf(COLOR_WHITE, "HTTP begin took: %lu ms", httpBeginTime);
     
@@ -484,103 +503,101 @@ void downloadAndDisplayImage() {
     uint8_t* buffer = imageBuffer;
     unsigned long readStart = millis();
     
-    // Use very small chunks for maximum responsiveness
-    const size_t MICRO_CHUNK_SIZE = 256;  // 256 bytes - extremely small chunks
-    const unsigned long PER_CHUNK_TIMEOUT = 1000;  // 1 second timeout per micro-chunk
-    const unsigned long TOTAL_DOWNLOAD_TIMEOUT = 12000;  // 12 seconds total
+    // Ultra-aggressive settings to prevent watchdog timeout
+    const size_t ULTRA_CHUNK_SIZE = 128;  // Even smaller chunks - 128 bytes
+    const unsigned long CHUNK_TIMEOUT = 500;  // 500ms timeout per chunk  
+    const unsigned long TOTAL_DOWNLOAD_TIMEOUT = 8000;  // 8 seconds total - shorter timeout
+    const unsigned long DOWNLOAD_WATCHDOG_INTERVAL = 100;  // Reset every 100ms
     
     unsigned long downloadStartTime = millis();
     unsigned long lastProgressTime = millis();
+    unsigned long lastWatchdogReset = millis();
     
     while (http.connected() && bytesRead < size) {
-        // Force watchdog reset at start of each micro-chunk
-        systemMonitor.forceResetWatchdog();
+        // Ultra-frequent watchdog reset - every 100ms
+        if (millis() - lastWatchdogReset > DOWNLOAD_WATCHDOG_INTERVAL) {
+            systemMonitor.forceResetWatchdog();
+            lastWatchdogReset = millis();
+        }
         
-        // Check for overall download timeout
+        // Check for overall download timeout - much shorter now
         if (millis() - downloadStartTime > TOTAL_DOWNLOAD_TIMEOUT) {
-            debugPrint("ERROR: Total download timeout", COLOR_RED);
+            debugPrint("ERROR: Download timeout - aborting", COLOR_RED);
             break;
         }
         
-        // Check stream availability with timeout
-        unsigned long availableCheckStart = millis();
+        // Check stream availability
         size_t available = stream->available();
         
         if (available > 0) {
-            // Calculate micro-chunk size
+            // Calculate ultra-small chunk size
             size_t remainingBytes = size - bytesRead;
-            size_t microChunkSize = min(min(MICRO_CHUNK_SIZE, available), remainingBytes);
+            size_t chunkSize = min(min(ULTRA_CHUNK_SIZE, available), remainingBytes);
             
-            // Read micro-chunk with individual byte timeout protection
-            unsigned long microChunkStart = millis();
-            size_t microChunkRead = 0;
+            // Read with very tight timeout monitoring
+            unsigned long chunkStart = millis();
             
-            // Read in very small pieces with timeout per piece
-            while (microChunkRead < microChunkSize && 
-                   (millis() - microChunkStart) < PER_CHUNK_TIMEOUT) {
-                
+            // Reset watchdog before read operation
+            systemMonitor.forceResetWatchdog();
+            
+            // Use readBytes with immediate timeout check
+            size_t read = stream->readBytes(buffer + bytesRead, chunkSize);
+            
+            // Reset watchdog after read operation
+            systemMonitor.forceResetWatchdog();
+            
+            unsigned long chunkTime = millis() - chunkStart;
+            
+            // Check for chunk timeout
+            if (chunkTime > CHUNK_TIMEOUT) {
+                debugPrintf(COLOR_YELLOW, "WARNING: Chunk read took %lu ms", chunkTime);
+                // Continue anyway but reset watchdog
                 systemMonitor.forceResetWatchdog();
-                
-                // Read single bytes or very small pieces to prevent any blocking
-                size_t pieceSize = min((size_t)64, microChunkSize - microChunkRead);  // 64 byte pieces
-                size_t read = 0;
-                
-                // Timeout protection for individual read
-                unsigned long readStart = millis();
-                if (stream->available() >= pieceSize) {
-                    read = stream->readBytes(buffer + bytesRead + microChunkRead, pieceSize);
-                }
-                
-                // Check for read timeout
-                if (millis() - readStart > 500) {  // 500ms timeout per tiny read
-                    debugPrint("WARNING: Read operation timeout", COLOR_YELLOW);
-                    systemMonitor.forceResetWatchdog();
-                    break;
-                }
-                
-                if (read == 0) {
-                    break;  // No data available
-                }
-                
-                microChunkRead += read;
-                systemMonitor.forceResetWatchdog();
-                
-                // Yield after every tiny read
-                yield();
             }
             
-            bytesRead += microChunkRead;
+            if (read > 0) {
+                bytesRead += read;
+            } else {
+                // No data read - brief yield and continue
+                systemMonitor.forceResetWatchdog();
+                delay(10);  // Very brief delay
+                systemMonitor.forceResetWatchdog();
+            }
             
-            // Show progress frequently and reset watchdog
-            if (millis() - lastProgressTime > 2000) {  // Every 2 seconds
+            // Show progress more frequently and always reset watchdog
+            if (millis() - lastProgressTime > 1000) {  // Every 1 second
                 debugPrintf(COLOR_YELLOW, "Downloaded: %.1f%% (%d/%d bytes)", 
                            (float)bytesRead/size*100, bytesRead, size);
                 lastProgressTime = millis();
                 systemMonitor.forceResetWatchdog();
             }
             
-            // Check for micro-chunk timeout
-            if ((millis() - microChunkStart) >= PER_CHUNK_TIMEOUT) {
-                debugPrint("WARNING: Micro-chunk timeout", COLOR_YELLOW);
-                // Don't break - continue trying
-            }
-            
         } else {
-            // No data available - brief delay with aggressive watchdog protection
+            // No data available - very brief delay with watchdog protection
             systemMonitor.forceResetWatchdog();
-            delay(25);  // Very brief delay
+            delay(10);  // Very brief delay
             systemMonitor.forceResetWatchdog();
             
             // Check for completely stalled connection
-            if (millis() - downloadStartTime > 8000 && bytesRead == 0) {
-                debugPrint("ERROR: Connection completely stalled", COLOR_RED);
+            if (millis() - downloadStartTime > 3000 && bytesRead == 0) {
+                debugPrint("ERROR: Connection stalled - no data received", COLOR_RED);
                 break;
             }
         }
         
-        // Force yield and watchdog reset after each loop iteration
-        systemMonitor.safeYield();
+        // Force yield and watchdog reset after each iteration
+        yield();
         systemMonitor.forceResetWatchdog();
+        
+        // Additional safety check - if download is taking too long per byte
+        if (bytesRead > 0) {
+            unsigned long avgTimePerByte = (millis() - downloadStartTime) / bytesRead;
+            if (avgTimePerByte > 50) {  // More than 50ms per byte is too slow
+                debugPrintf(COLOR_YELLOW, "WARNING: Slow download detected: %lu ms/byte", avgTimePerByte);
+                // Continue but reset watchdog more frequently
+                systemMonitor.forceResetWatchdog();
+            }
+        }
     }
     
     unsigned long readTime = millis() - readStart;
@@ -606,6 +623,24 @@ void downloadAndDisplayImage() {
     // Decode and display JPEG
     debugPrint("Decoding JPEG...", COLOR_YELLOW);
     
+    // Check JPEG header first
+    if (bytesRead < 10) {
+        debugPrintf(COLOR_RED, "ERROR: Downloaded data too small: %d bytes", bytesRead);
+        return;
+    }
+    
+    // Check for JPEG magic numbers
+    if (imageBuffer[0] != 0xFF || imageBuffer[1] != 0xD8) {
+        debugPrintf(COLOR_RED, "ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)", imageBuffer[0], imageBuffer[1]);
+        // Print first few bytes for debugging
+        Serial.print("First bytes: ");
+        for (int i = 0; i < min(16, (int)bytesRead); i++) {
+            Serial.printf("0x%02X ", imageBuffer[i]);
+        }
+        Serial.println();
+        return;
+    }
+    
     if (jpeg.openRAM(imageBuffer, bytesRead, JPEGDraw)) {
         fullImageWidth = jpeg.getWidth();
         fullImageHeight = jpeg.getHeight();
@@ -629,53 +664,105 @@ void downloadAndDisplayImage() {
             const unsigned long DECODE_TIMEOUT = 8000;  // 8 second timeout for decode
             unsigned long decodeStartTime = millis();
             
-            jpeg.decode(0, 0, 0);
-            
-            unsigned long decodeTime = millis() - decodeStart;
-            
-            // Check for decode timeout
-            if (decodeTime >= DECODE_TIMEOUT) {
-                debugPrintf(COLOR_RED, "ERROR: JPEG decode timeout after %lu ms", decodeTime);
-                jpeg.close();
+            if (jpeg.decode(0, 0, 0)) {
+                unsigned long decodeTime = millis() - decodeStart;
+                debugPrintf(COLOR_WHITE, "JPEG decode completed in %lu ms", decodeTime);
+                debugPrint("Rendering image...", COLOR_GREEN);
+                
+                // Reset watchdog before rendering
                 systemMonitor.forceResetWatchdog();
-                return;
+                
+                // Now render the full image with transformations
+                renderFullImage();
+                
+                // Reset watchdog after rendering
+                systemMonitor.forceResetWatchdog();
+                
+                // Mark first image as loaded (only once)
+                if (!firstImageLoaded) {
+                    firstImageLoaded = true;
+                    displayManager.setFirstImageLoaded(true);
+                    Serial.println("First image loaded successfully - switching to image mode");
+                } else {
+                    Serial.println("Image updated successfully");
+                }
+            } else {
+                debugPrint("ERROR: JPEG decode() function failed!", COLOR_RED);
             }
             
             jpeg.close();
             systemMonitor.forceResetWatchdog();
-            
-            debugPrintf(COLOR_WHITE, "JPEG decode completed in %lu ms", decodeTime);
-            debugPrint("Rendering image...", COLOR_GREEN);
-            
-            // Reset watchdog before rendering
-            systemMonitor.forceResetWatchdog();
-            
-            // Now render the full image with transformations
-            renderFullImage();
-            
-            // Reset watchdog after rendering
-            systemMonitor.forceResetWatchdog();
-            
-            // Mark first image as loaded (only once)
-            if (!firstImageLoaded) {
-                firstImageLoaded = true;
-                displayManager.setFirstImageLoaded(true);
-                Serial.println("First image loaded successfully - switching to image mode");
-            } else {
-                Serial.println("Image updated successfully");
-            }
         } else {
-            debugPrint("ERROR: Image too large for buffer!", COLOR_RED);
+            debugPrintf(COLOR_RED, "ERROR: Image too large for buffer! Required: %d, Available: %d", 
+                       fullImageWidth * fullImageHeight * 2, fullImageBufferSize);
             jpeg.close();
         }
     } else {
-        debugPrint("ERROR: JPEG decode failed!", COLOR_RED);
+        debugPrint("ERROR: JPEG openRAM() failed!", COLOR_RED);
+        debugPrintf(COLOR_RED, "Downloaded %d bytes, buffer size: %d", bytesRead, imageBufferSize);
     }
     
     // Final watchdog reset and cleanup
     systemMonitor.forceResetWatchdog();
     debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
     debugPrint("Download cycle completed", COLOR_GREEN);
+}
+
+// Load cycling configuration from storage
+void loadCyclingConfiguration() {
+    cyclingEnabled = configStorage.getCyclingEnabled();
+    currentCycleInterval = configStorage.getCycleInterval();
+    randomOrderEnabled = configStorage.getRandomOrder();
+    currentImageIndex = configStorage.getCurrentImageIndex();
+    imageSourceCount = configStorage.getImageSourceCount();
+    
+    Serial.printf("Cycling config loaded: enabled=%s, interval=%lu ms, random=%s, sources=%d\n",
+                  cyclingEnabled ? "true" : "false", currentCycleInterval,
+                  randomOrderEnabled ? "true" : "false", imageSourceCount);
+}
+
+// Update cycling variables from configuration storage
+void updateCyclingVariables() {
+    loadCyclingConfiguration();
+}
+
+// Advance to next image in cycling sequence
+void advanceToNextImage() {
+    if (!cyclingEnabled || imageSourceCount <= 1) {
+        return;
+    }
+    
+    if (randomOrderEnabled) {
+        // Random order: pick a different random image
+        int newIndex;
+        do {
+            newIndex = random(0, imageSourceCount);
+        } while (newIndex == currentImageIndex && imageSourceCount > 1);
+        currentImageIndex = newIndex;
+    } else {
+        // Sequential order: advance to next image
+        currentImageIndex = (currentImageIndex + 1) % imageSourceCount;
+    }
+    
+    // Save the new index to persistent storage
+    configStorage.setCurrentImageIndex(currentImageIndex);
+    configStorage.saveConfig();
+    
+    Serial.printf("Advanced to image %d/%d: %s\n", 
+                  currentImageIndex + 1, imageSourceCount, getCurrentImageURL().c_str());
+}
+
+// Get current image URL based on cycling configuration
+String getCurrentImageURL() {
+    if (cyclingEnabled && imageSourceCount > 0) {
+        String url = configStorage.getImageSource(currentImageIndex);
+        if (url.length() > 0) {
+            return url;
+        }
+    }
+    
+    // Fallback to legacy single image URL
+    return configStorage.getImageURL();
 }
 
 void processSerialCommands() {
@@ -895,9 +982,21 @@ void loop() {
     currentUpdateInterval = configStorage.getUpdateInterval();
     systemMonitor.forceResetWatchdog();
     
-    // Check if it's time to update the image (only if not currently processing)
+    // Check for image cycling (independent of update interval)
     unsigned long currentTime = millis();
-    if (!imageProcessing && (currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0)) {
+    bool shouldCycle = false;
+    
+    if (cyclingEnabled && imageSourceCount > 1 && !imageProcessing) {
+        if (currentTime - lastCycleTime >= currentCycleInterval || lastCycleTime == 0) {
+            shouldCycle = true;
+            lastCycleTime = currentTime;
+            Serial.println("DEBUG: Time to cycle to next image source");
+            advanceToNextImage();
+        }
+    }
+    
+    // Check if it's time to update the image (either scheduled update or cycling)
+    if (!imageProcessing && (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0)) {
         // Pre-download system health check
         if (!wifiManager.isConnected()) {
             Serial.println("WARNING: WiFi disconnected, skipping image download");
