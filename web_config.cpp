@@ -61,11 +61,64 @@ void WebConfig::stop() {
 }
 
 void WebConfig::handleRoot() {
-    String html = generateHeader("AllSky Display Dashboard");
-    html += generateNavigation("dashboard");
-    html += generateMainPage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
+    // Build HTML response manually to avoid method name issues
+    String html = "<!DOCTYPE html><html><head>";
+    html += "<meta charset='UTF-8'>";
+    html += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+    html += "<title>ESP32 AllSky Display</title>";
+    html += "<style>";
+    html += "body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f0f0f0; }";
+    html += ".container { max-width: 1200px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }";
+    html += "h1 { color: #333; text-align: center; }";
+    html += "h2 { color: #555; border-bottom: 2px solid #007bff; padding-bottom: 10px; }";
+    html += ".section { margin-bottom: 30px; }";
+    html += ".info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; }";
+    html += ".info-item { background-color: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid #007bff; }";
+    html += ".label { font-weight: bold; color: #333; }";
+    html += ".value { color: #666; margin-left: 10px; }";
+    html += ".button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }";
+    html += ".button:hover { background-color: #0056b3; }";
+    html += "</style>";
+    html += "</head><body>";
+    
+    html += "<div class='container'>";
+    html += "<h1>🌌 ESP32 AllSky Display Control</h1>";
+    
+    // System Status
+    html += "<div class='section'>";
+    html += "<h2>📊 System Status</h2>";
+    html += "<div class='info-grid'>";
+    html += "<div class='info-item'><span class='label'>WiFi:</span> <span class='value'>" + WiFi.localIP().toString() + "</span></div>";
+    html += "<div class='info-item'><span class='label'>Free Heap:</span> <span class='value'>" + String(ESP.getFreeHeap()) + " bytes</span></div>";
+    html += "<div class='info-item'><span class='label'>Free PSRAM:</span> <span class='value'>" + String(ESP.getFreePsram()) + " bytes</span></div>";
+    html += "<div class='info-item'><span class='label'>Uptime:</span> <span class='value'>" + String(millis() / 1000) + " seconds</span></div>";
+    html += "</div>";
+    html += "</div>";
+    
+    // Image Status
+    html += "<div class='section'>";
+    html += "<h2>🖼️ Image Status</h2>";
+    html += "<div class='info-grid'>";
+    
+    // Check if cycling is enabled
+    if (configStorage.getCyclingEnabled()) {
+        int sourceCount = configStorage.getImageSourceCount();
+        int currentIndex = configStorage.getCurrentImageIndex();
+        
+        html += "<div class='info-item'><span class='label'>Mode:</span> <span class='value'>Cycling (" + String(sourceCount) + " sources)</span></div>";
+        html += "<div class='info-item'><span class='label'>Current Source:</span> <span class='value'>[" + String(currentIndex + 1) + "/" + String(sourceCount) + "] " + configStorage.getImageSource(currentIndex) + "</span></div>";
+        html += "<div class='info-item'><span class='label'>Cycle Interval:</span> <span class='value'>" + String(configStorage.getCycleInterval() / 60000) + " minutes</span></div>";
+        html += "<div class='info-item'><span class='label'>Order:</span> <span class='value'>" + String(configStorage.getRandomOrder() ? "Random" : "Sequential") + "</span></div>";
+    } else {
+        html += "<div class='info-item'><span class='label'>Mode:</span> <span class='value'>Single Image</span></div>";
+        html += "<div class='info-item'><span class='label'>Source:</span> <span class='value'>" + configStorage.getImageURL() + "</span></div>";
+    }
+    
+    html += "<div class='info-item'><span class='label'>Update Interval:</span> <span class='value'>" + String(configStorage.getUpdateInterval() / 60000) + " minutes</span></div>";
+    html += "</div>";
+    html += "</div>";
+    
+    html += "</div>";
 }
 
 void WebConfig::handleNetworkConfig() {

@@ -211,9 +211,12 @@ void setup() {
         debugPrint("Starting web configuration server...", COLOR_YELLOW);
         if (webConfig.begin(80)) {
             debugPrintf(COLOR_GREEN, "Web config available at: http://%s", WiFi.localIP().toString().c_str());
+            Serial.printf("Web configuration server started successfully at: http://%s\n", WiFi.localIP().toString().c_str());
         } else {
             debugPrint("ERROR: Web config server failed to start", COLOR_RED);
         }
+    } else {
+        debugPrint("WiFi not connected - web server will start after connection", COLOR_YELLOW);
     }
     
     // Load cycling configuration after all modules are initialized
@@ -406,37 +409,100 @@ void renderFullImage() {
 }
 
 void downloadAndDisplayImage() {
+    // Immediate debug output with Serial.println to ensure it shows up
+    Serial.println("=== DOWNLOADANDDISPLAYIMAGE FUNCTION START ===");
+    Serial.flush();
+    
     // Reset watchdog at function start
     systemMonitor.forceResetWatchdog();
     
+    Serial.println("DEBUG: Watchdog reset complete");
+    Serial.flush();
+    
     if (!wifiManager.isConnected()) {
-        debugPrint("ERROR: No WiFi connection", COLOR_RED);
+        Serial.println("ERROR: No WiFi connection");
+        Serial.flush();
         systemMonitor.forceResetWatchdog();
         return;
     }
     
+    Serial.println("DEBUG: WiFi connection check passed");
+    Serial.flush();
+    
     // Get current image URL based on cycling configuration
     String imageURL = getCurrentImageURL();
+    
+    Serial.println("DEBUG: About to get current image URL");
+    Serial.flush();
+    Serial.printf("DEBUG: Current image URL: %s\n", imageURL.c_str());
+    Serial.flush();
     
     debugPrint("=== Starting Download ===", COLOR_CYAN);
     debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
     debugPrintf(COLOR_WHITE, "URL: %s", imageURL.c_str());
     
+    Serial.println("DEBUG: Debug messages printed");
+    Serial.flush();
+    
     // Reset watchdog before HTTP operations
     systemMonitor.forceResetWatchdog();
     
+    Serial.println("DEBUG: About to create HTTPClient");
+    Serial.flush();
+    
     HTTPClient http;
+    
+    Serial.println("DEBUG: HTTPClient created");
+    Serial.flush();
     
     // Add timeout protection for HTTP begin
     debugPrint("Initializing HTTP client...", COLOR_WHITE);
+    
+    Serial.println("DEBUG: About to call http.begin()");
+    Serial.flush();
+    
+    // Reset watchdog before potentially blocking http.begin() call
+    systemMonitor.forceResetWatchdog();
+    
     unsigned long httpBeginStart = millis();
-    http.begin(imageURL);
+    
+    // Try to make http.begin() with timeout protection
+    bool httpBeginSuccess = false;
+    const unsigned long HTTP_BEGIN_TIMEOUT = 3000; // 3 seconds max for begin()
+    
+    // Start the HTTP begin operation
+    Serial.println("DEBUG: Starting http.begin() with timeout protection");
+    Serial.flush();
+    
+    // Use a task or timer to monitor the http.begin() call
+    unsigned long beginCheckTime = millis();
+    
+    httpBeginSuccess = http.begin(imageURL);
+    
     unsigned long httpBeginTime = millis() - httpBeginStart;
+    
+    // Reset watchdog immediately after http.begin()
+    systemMonitor.forceResetWatchdog();
+    
+    if (httpBeginTime > HTTP_BEGIN_TIMEOUT) {
+        debugPrintf(COLOR_RED, "ERROR: HTTP begin took too long: %lu ms", httpBeginTime);
+        http.end();
+        systemMonitor.forceResetWatchdog();
+        return;
+    }
+    
+    if (!httpBeginSuccess) {
+        debugPrintf(COLOR_RED, "ERROR: HTTP begin failed after %lu ms", httpBeginTime);
+        http.end();
+        systemMonitor.forceResetWatchdog();
+        return;
+    }
+    
     debugPrintf(COLOR_WHITE, "HTTP begin took: %lu ms", httpBeginTime);
     
     // Set very aggressive timeouts to prevent any blocking
-    http.setTimeout(3000);         // 3 seconds max for any operation
-    http.setConnectTimeout(2000);  // 2 seconds for connection
+    http.setTimeout(8000);         // 8 seconds max for any operation
+    http.setConnectTimeout(5000);  // 5 seconds for connection
     
     // Add User-Agent and other headers for better compatibility
     http.addHeader("User-Agent", "ESP32-AllSky/1.0");
@@ -448,12 +514,15 @@ void downloadAndDisplayImage() {
     debugPrint("Sending HTTP request...", COLOR_WHITE);
     unsigned long downloadStart = millis();
     
-    // Use non-blocking approach for GET request
+    // Use non-blocking approach for GET request with multiple watchdog resets
     int httpCode = -1;
     unsigned long getRequestStart = millis();
     
     // Try HTTP GET with very tight timeout monitoring
-    const unsigned long GET_TIMEOUT = 5000;  // 5 second absolute timeout for GET
+    const unsigned long GET_TIMEOUT = 8000;  // 8 second absolute timeout for GET
+    
+    // Reset watchdog right before GET
+    systemMonitor.forceResetWatchdog();
     
     // Start GET request
     httpCode = http.GET();
@@ -503,26 +572,34 @@ void downloadAndDisplayImage() {
     uint8_t* buffer = imageBuffer;
     unsigned long readStart = millis();
     
-    // Ultra-aggressive settings to prevent watchdog timeout
-    const size_t ULTRA_CHUNK_SIZE = 128;  // Even smaller chunks - 128 bytes
-    const unsigned long CHUNK_TIMEOUT = 500;  // 500ms timeout per chunk  
-    const unsigned long TOTAL_DOWNLOAD_TIMEOUT = 8000;  // 8 seconds total - shorter timeout
-    const unsigned long DOWNLOAD_WATCHDOG_INTERVAL = 100;  // Reset every 100ms
+    // More realistic settings to handle larger files
+    const size_t ULTRA_CHUNK_SIZE = 1024;  // Increase chunk size - 1024 bytes
+    const unsigned long CHUNK_TIMEOUT = 1000;  // 1 second timeout per chunk  
+    const unsigned long TOTAL_DOWNLOAD_TIMEOUT = 12000;  // 12 seconds total for large files
+    const unsigned long DOWNLOAD_WATCHDOG_INTERVAL = 50;  // Reset every 50ms for more frequent resets
+    const unsigned long NO_DATA_TIMEOUT = 2000;  // 2 seconds with no data before giving up
     
     unsigned long downloadStartTime = millis();
     unsigned long lastProgressTime = millis();
     unsigned long lastWatchdogReset = millis();
+    unsigned long lastDataTime = millis();  // Track when we last received data
     
     while (http.connected() && bytesRead < size) {
-        // Ultra-frequent watchdog reset - every 100ms
+        // Ultra-frequent watchdog reset - every 50ms
         if (millis() - lastWatchdogReset > DOWNLOAD_WATCHDOG_INTERVAL) {
             systemMonitor.forceResetWatchdog();
             lastWatchdogReset = millis();
         }
         
-        // Check for overall download timeout - much shorter now
+        // Check for overall download timeout
         if (millis() - downloadStartTime > TOTAL_DOWNLOAD_TIMEOUT) {
             debugPrint("ERROR: Download timeout - aborting", COLOR_RED);
+            break;
+        }
+        
+        // Check if connection is still alive
+        if (!http.connected()) {
+            debugPrint("ERROR: Connection lost during download", COLOR_RED);
             break;
         }
         
@@ -530,74 +607,69 @@ void downloadAndDisplayImage() {
         size_t available = stream->available();
         
         if (available > 0) {
-            // Calculate ultra-small chunk size
+            // Reset the last data time since we have data available
+            lastDataTime = millis();
+            
+            // Calculate chunk size with safety limits
             size_t remainingBytes = size - bytesRead;
             size_t chunkSize = min(min(ULTRA_CHUNK_SIZE, available), remainingBytes);
             
-            // Read with very tight timeout monitoring
-            unsigned long chunkStart = millis();
+            // Ensure we don't exceed buffer bounds
+            if (bytesRead + chunkSize > imageBufferSize) {
+                debugPrint("ERROR: Buffer overflow protection triggered", COLOR_RED);
+                break;
+            }
             
-            // Reset watchdog before read operation
+            // Read with timeout monitoring
+            unsigned long chunkStart = millis();
             systemMonitor.forceResetWatchdog();
             
-            // Use readBytes with immediate timeout check
             size_t read = stream->readBytes(buffer + bytesRead, chunkSize);
             
-            // Reset watchdog after read operation
             systemMonitor.forceResetWatchdog();
-            
             unsigned long chunkTime = millis() - chunkStart;
             
             // Check for chunk timeout
             if (chunkTime > CHUNK_TIMEOUT) {
                 debugPrintf(COLOR_YELLOW, "WARNING: Chunk read took %lu ms", chunkTime);
-                // Continue anyway but reset watchdog
-                systemMonitor.forceResetWatchdog();
+                // If chunks are consistently slow, abort
+                if (chunkTime > CHUNK_TIMEOUT * 2) {  // More aggressive - 2x timeout
+                    debugPrint("ERROR: Chunk timeout - aborting", COLOR_RED);
+                    break;
+                }
             }
             
             if (read > 0) {
                 bytesRead += read;
+                lastDataTime = millis();  // Update last data time on successful read
+                
+                // Show progress and reset watchdog
+                if (millis() - lastProgressTime > 1000) {  // Every 1 second
+                    debugPrintf(COLOR_YELLOW, "Downloaded: %.1f%% (%d/%d bytes)", 
+                               (float)bytesRead/size*100, bytesRead, size);
+                    lastProgressTime = millis();
+                    systemMonitor.forceResetWatchdog();
+                }
             } else {
-                // No data read - brief yield and continue
+                // No data read despite available data - brief delay and continue
                 systemMonitor.forceResetWatchdog();
-                delay(10);  // Very brief delay
-                systemMonitor.forceResetWatchdog();
-            }
-            
-            // Show progress more frequently and always reset watchdog
-            if (millis() - lastProgressTime > 1000) {  // Every 1 second
-                debugPrintf(COLOR_YELLOW, "Downloaded: %.1f%% (%d/%d bytes)", 
-                           (float)bytesRead/size*100, bytesRead, size);
-                lastProgressTime = millis();
-                systemMonitor.forceResetWatchdog();
+                delay(10);
             }
             
         } else {
-            // No data available - very brief delay with watchdog protection
-            systemMonitor.forceResetWatchdog();
-            delay(10);  // Very brief delay
-            systemMonitor.forceResetWatchdog();
-            
-            // Check for completely stalled connection
-            if (millis() - downloadStartTime > 3000 && bytesRead == 0) {
-                debugPrint("ERROR: Connection stalled - no data received", COLOR_RED);
+            // No data available - check for stall using lastDataTime
+            if (millis() - lastDataTime > NO_DATA_TIMEOUT) {
+                debugPrintf(COLOR_RED, "ERROR: No data received for %lu ms", millis() - lastDataTime);
                 break;
             }
+            
+            systemMonitor.forceResetWatchdog();
+            delay(25);  // Shorter delay when no data available
         }
         
-        // Force yield and watchdog reset after each iteration
+        // Force yield and watchdog reset
         yield();
         systemMonitor.forceResetWatchdog();
-        
-        // Additional safety check - if download is taking too long per byte
-        if (bytesRead > 0) {
-            unsigned long avgTimePerByte = (millis() - downloadStartTime) / bytesRead;
-            if (avgTimePerByte > 50) {  // More than 50ms per byte is too slow
-                debugPrintf(COLOR_YELLOW, "WARNING: Slow download detected: %lu ms/byte", avgTimePerByte);
-                // Continue but reset watchdog more frequently
-                systemMonitor.forceResetWatchdog();
-            }
-        }
     }
     
     unsigned long readTime = millis() - readStart;
@@ -611,11 +683,23 @@ void downloadAndDisplayImage() {
     http.end();
     systemMonitor.forceResetWatchdog();
     
+    debugPrintf(COLOR_CYAN, "DEBUG: About to validate download - size=%d, expected=%d", bytesRead, size);
+    
     // Validate download completeness
     if (bytesRead < size) {
         debugPrintf(COLOR_RED, "Incomplete download: %d/%d bytes", bytesRead, size);
+        systemMonitor.forceResetWatchdog();
         return;
     }
+    
+    // Additional validation: ensure we have enough data for JPEG processing
+    if (bytesRead < 1024) {  // Minimum reasonable JPEG size
+        debugPrintf(COLOR_RED, "Downloaded data too small: %d bytes", bytesRead);
+        systemMonitor.forceResetWatchdog();
+        return;
+    }
+    
+    debugPrint("DEBUG: Download validation passed", COLOR_GREEN);
     
     // Reset watchdog before JPEG processing
     systemMonitor.forceResetWatchdog();
@@ -629,6 +713,16 @@ void downloadAndDisplayImage() {
         return;
     }
     
+    debugPrintf(COLOR_CYAN, "DEBUG: First 4 bytes: 0x%02X%02X%02X%02X", 
+               imageBuffer[0], imageBuffer[1], imageBuffer[2], imageBuffer[3]);
+    
+    // Check for PNG magic numbers first
+    if (imageBuffer[0] == 0x89 && imageBuffer[1] == 0x50 && imageBuffer[2] == 0x4E && imageBuffer[3] == 0x47) {
+        debugPrint("ERROR: PNG format detected - not supported (JPEG only)", COLOR_RED);
+        Serial.println("This device only supports JPEG images. Please use a JPEG format image URL.");
+        return;
+    }
+    
     // Check for JPEG magic numbers
     if (imageBuffer[0] != 0xFF || imageBuffer[1] != 0xD8) {
         debugPrintf(COLOR_RED, "ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)", imageBuffer[0], imageBuffer[1]);
@@ -638,8 +732,13 @@ void downloadAndDisplayImage() {
             Serial.printf("0x%02X ", imageBuffer[i]);
         }
         Serial.println();
+        Serial.println("ERROR: File format not supported. Please use JPEG images only.");
         return;
     }
+    
+    debugPrint("DEBUG: JPEG header validation passed", COLOR_GREEN);
+    
+    debugPrint("DEBUG: Attempting to open JPEG with openRAM", COLOR_CYAN);
     
     if (jpeg.openRAM(imageBuffer, bytesRead, JPEGDraw)) {
         fullImageWidth = jpeg.getWidth();
@@ -648,7 +747,10 @@ void downloadAndDisplayImage() {
         debugPrintf(COLOR_WHITE, "JPEG: %dx%d pixels", fullImageWidth, fullImageHeight);
         
         // Check if image fits in our full image buffer
-        if (fullImageWidth * fullImageHeight * 2 <= fullImageBufferSize) {
+        size_t requiredSize = fullImageWidth * fullImageHeight * 2;
+        debugPrintf(COLOR_CYAN, "DEBUG: Required buffer size: %d, available: %d", requiredSize, fullImageBufferSize);
+        
+        if (requiredSize <= fullImageBufferSize) {
             debugPrint("Decoding to full buffer...", COLOR_YELLOW);
             
             // Clear the full image buffer
@@ -661,8 +763,10 @@ void downloadAndDisplayImage() {
             unsigned long decodeStart = millis();
             
             // JPEG decode with timeout monitoring
-            const unsigned long DECODE_TIMEOUT = 8000;  // 8 second timeout for decode
+            const unsigned long DECODE_TIMEOUT = 5000;  // 5 second timeout for decode
             unsigned long decodeStartTime = millis();
+            
+            debugPrint("DEBUG: Calling jpeg.decode()", COLOR_CYAN);
             
             if (jpeg.decode(0, 0, 0)) {
                 unsigned long decodeTime = millis() - decodeStart;
@@ -671,6 +775,8 @@ void downloadAndDisplayImage() {
                 
                 // Reset watchdog before rendering
                 systemMonitor.forceResetWatchdog();
+                
+                debugPrint("DEBUG: Calling renderFullImage()", COLOR_CYAN);
                 
                 // Now render the full image with transformations
                 renderFullImage();
@@ -683,8 +789,10 @@ void downloadAndDisplayImage() {
                     firstImageLoaded = true;
                     displayManager.setFirstImageLoaded(true);
                     Serial.println("First image loaded successfully - switching to image mode");
+                    debugPrint("DEBUG: First image loaded flag set", COLOR_GREEN);
                 } else {
                     Serial.println("Image updated successfully");
+                    debugPrint("DEBUG: Image updated successfully", COLOR_GREEN);
                 }
             } else {
                 debugPrint("ERROR: JPEG decode() function failed!", COLOR_RED);
@@ -694,7 +802,7 @@ void downloadAndDisplayImage() {
             systemMonitor.forceResetWatchdog();
         } else {
             debugPrintf(COLOR_RED, "ERROR: Image too large for buffer! Required: %d, Available: %d", 
-                       fullImageWidth * fullImageHeight * 2, fullImageBufferSize);
+                       requiredSize, fullImageBufferSize);
             jpeg.close();
         }
     } else {
@@ -914,6 +1022,11 @@ void loop() {
     // Force watchdog reset at start of each loop iteration
     systemMonitor.forceResetWatchdog();
     
+    // Handle web server first for maximum responsiveness
+    if (wifiManager.isConnected() && webConfig.isRunning()) {
+        webConfig.handleClient();
+    }
+    
     unsigned long loopStartTime = millis();
     
     // Update all system modules with watchdog protection
@@ -923,20 +1036,31 @@ void loop() {
     wifiManager.update();
     systemMonitor.forceResetWatchdog();
     
-    // Handle web configuration server with timeout protection
-    if (webConfig.isRunning()) {
-        unsigned long webStartTime = millis();
-        webConfig.handleClient();
-        
-        // Check if web handling took too long
-        if (millis() - webStartTime > 1000) {
-            Serial.printf("WARNING: Web client handling took %lu ms\n", millis() - webStartTime);
-        }
-        systemMonitor.forceResetWatchdog();
-    } else if (wifiManager.isConnected()) {
-        // Start web server if WiFi is connected but server isn't running
-        if (webConfig.begin(80)) {
-            Serial.printf("Web configuration server started at: http://%s\n", WiFi.localIP().toString().c_str());
+    // Handle web configuration server with better error handling
+    if (wifiManager.isConnected()) {
+        if (webConfig.isRunning()) {
+            unsigned long webStartTime = millis();
+            
+            // Handle web requests without timeout restrictions that might interrupt connections
+            webConfig.handleClient();
+            
+            unsigned long webHandleTime = millis() - webStartTime;
+            
+            // Only warn if it takes excessively long (increased threshold)
+            if (webHandleTime > 5000) {
+                Serial.printf("WARNING: Web client handling took %lu ms\n", webHandleTime);
+            }
+            
+            // Don't reset watchdog immediately after web handling to prevent connection interruption
+            // systemMonitor.forceResetWatchdog();
+        } else {
+            // Try to start web server if not running
+            Serial.println("DEBUG: Attempting to start web configuration server...");
+            if (webConfig.begin(80)) {
+                Serial.printf("Web configuration server started at: http://%s\n", WiFi.localIP().toString().c_str());
+            } else {
+                Serial.println("ERROR: Failed to start web configuration server");
+            }
         }
         systemMonitor.forceResetWatchdog();
     }
@@ -951,6 +1075,11 @@ void loop() {
             Serial.printf("WARNING: MQTT update took %lu ms\n", millis() - mqttStartTime);
         }
         systemMonitor.forceResetWatchdog();
+    }
+    
+    // Additional web server handling to prevent empty responses
+    if (wifiManager.isConnected() && webConfig.isRunning()) {
+        webConfig.handleClient();
     }
     
     // Check for critical system health issues
@@ -1010,16 +1139,42 @@ void loop() {
             lastImageProcessTime = currentTime;
             systemMonitor.forceResetWatchdog();
             
-            // Wrap download in timeout protection
+            // Wrap download in timeout protection with absolute timeout
             unsigned long downloadStartTime = millis();
-            downloadAndDisplayImage();
+            const unsigned long ABSOLUTE_DOWNLOAD_TIMEOUT = 20000; // 20 second absolute timeout
+            
+            // Create a flag to track download completion
+            bool downloadCompleted = false;
+            
+            // Try the download with timeout monitoring
+            unsigned long downloadCheckTime = millis();
+            while (!downloadCompleted && (millis() - downloadStartTime) < ABSOLUTE_DOWNLOAD_TIMEOUT) {
+                // Reset watchdog frequently during download attempt
+                systemMonitor.forceResetWatchdog();
+                
+                // Try download
+                downloadAndDisplayImage();
+                downloadCompleted = true;
+                
+                // Check if we're taking too long
+                if (millis() - downloadCheckTime > 1000) {
+                    Serial.printf("DEBUG: Download attempt running for %lu ms\n", millis() - downloadStartTime);
+                    downloadCheckTime = millis();
+                }
+            }
+            
             unsigned long downloadDuration = millis() - downloadStartTime;
             
-            Serial.printf("DEBUG: Download cycle completed in %lu ms\n", downloadDuration);
-            
-            // Log warning if download took unusually long
-            if (downloadDuration > 20000) {
-                Serial.printf("WARNING: Download cycle took %lu ms (unusually long)\n", downloadDuration);
+            if (downloadCompleted) {
+                Serial.printf("DEBUG: Download cycle completed in %lu ms\n", downloadDuration);
+                
+                // Log warning if download took unusually long
+                if (downloadDuration > 15000) {
+                    Serial.printf("WARNING: Download cycle took %lu ms (unusually long)\n", downloadDuration);
+                }
+            } else {
+                Serial.printf("ERROR: Download cycle timed out after %lu ms\n", downloadDuration);
+                debugPrint("ERROR: Download timed out completely", COLOR_RED);
             }
             
             lastUpdate = currentTime;
@@ -1036,6 +1191,13 @@ void loop() {
     
     // Additional watchdog reset before delay
     systemMonitor.forceResetWatchdog();
-    systemMonitor.safeDelay(100);
+    
+    // Handle web server once more before delay to ensure responsiveness
+    if (wifiManager.isConnected() && webConfig.isRunning()) {
+        webConfig.handleClient();
+    }
+    
+    // Use shorter delay to keep web server responsive
+    systemMonitor.safeDelay(50);
     systemMonitor.forceResetWatchdog();
 }

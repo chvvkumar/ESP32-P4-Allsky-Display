@@ -34,8 +34,8 @@ const char* IMAGE_URL = nullptr;
 
 const char* DEFAULT_IMAGE_SOURCES[] = {
     "https://allsky.challa.co:1982/current/resized/image.jpg",      // Default source 1
-    "https://fastly.picsum.photos/id/551/720/720.jpg?hmac=RT5hdGuSvul91j-uHTMU5X1woPVs1P8y4GOocnmfqUc",      // Default source 2
-    "https://fastly.picsum.photos/id/347/720/720.jpg?hmac=c3yDc0pyO_igCbwInd1pkUntoD1EvduZfFTlvIoCy8g",      // Default source 3
+    "https://i.imgur.com/zxcg8jM.jpeg",
+    "https://i.imgur.com/t0PwA4f.jpeg"
     // Add more image URLs here as needed (up to MAX_IMAGE_SOURCES = 10)
     // "https://your-server.com/camera/image4.jpg",
     // "https://your-server.com/camera/image5.jpg",
