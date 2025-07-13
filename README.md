@@ -55,7 +55,7 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 
 ## Demo
 
-![Stand](images\3dprintedcase.jpg)
+![Stand](images/3dprintedcase.jpg)
 
 **Watch the ESP32-P4 AllSky Display in action:**
 
