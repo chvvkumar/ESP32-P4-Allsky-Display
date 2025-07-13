@@ -136,7 +136,7 @@ Here are some screenshots showcasing the ESP32-P4 AllSky Display system in opera
 ## Configuration
 
 ### Web Interface Configuration
-- **Access**: `http://[device-ip]/`
+- **Access**: `http://[device-ip]:8080/`
 - **Image Sources**: Add/remove URLs in cycling configuration
 - **Display Settings**: Brightness, update intervals
 - **Network Settings**: WiFi and MQTT configuration
