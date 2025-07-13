@@ -4,7 +4,7 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 
 ## Features
 
-### 🖼️ Image Display & Processing
+### Image Display & Processing
 - **Multi-Image Cycling**: Automatically cycle through multiple image sources
 - **Hardware Acceleration**: PPA (Pixel Processing Accelerator) for fast scaling and rotation
 - **Real-time Transformations**: Scale, rotate, and position images dynamically
@@ -12,14 +12,14 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 - **JPEG Support**: Efficient JPEG decoding with format validation
 - **Memory Management**: PSRAM-optimized buffering for smooth performance
 
-### 🔄 Image Cycling System
+### Image Cycling System
 - **Multiple Image Sources**: Support for up to 10 different image URLs
 - **Cycling Modes**: Sequential or random order
 - **Configurable Intervals**: Set custom cycling and update intervals
 - **Persistent State**: Remembers current image across reboots
 - **Real-time Control**: Change cycling settings through web interface
 
-### 🌐 Web Configuration Interface
+### Web Configuration Interface
 - **Modern UI**: Clean, responsive web interface
 - **Real-time Status**: Live system and image status monitoring
 - **Network Configuration**: WiFi and MQTT settings
@@ -27,27 +27,27 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 - **Display Settings**: Brightness, update intervals, and cycling options
 - **System Monitoring**: Memory usage, uptime, and health status
 
-### 🔧 Interactive Controls
+### Interactive Controls
 - **Serial Commands**: Real-time image manipulation via serial interface
 - **Transform Controls**: Scale (+/-), Move (WASD), Rotate (QE)
 - **Brightness Control**: Adjust display brightness (L/K)
 - **System Commands**: Memory info (M), Network info (I), PPA status (P)
 - **Reset Functions**: Transform reset (R), System reboot (B)
 
-### 📡 MQTT Integration
+### MQTT Integration
 - **Remote Control**: Control brightness and system functions via MQTT
 - **Status Publishing**: Publish brightness and system status
 - **Configurable Topics**: Customizable MQTT topic structure
 - **Secure Connection**: Support for authenticated MQTT connections
 
-### 🛡️ System Monitoring & Reliability
+### System Monitoring & Reliability
 - **Watchdog Protection**: Comprehensive watchdog timer management
 - **Memory Monitoring**: Real-time heap and PSRAM usage tracking
 - **Network Health**: WiFi connection monitoring and recovery
 - **Error Handling**: Robust error detection and recovery mechanisms
 - **Performance Metrics**: Download speeds, processing times, and system health
 
-### ⚡ Hardware Acceleration
+### Hardware Acceleration
 - **PPA Integration**: Hardware-accelerated image scaling and rotation
 - **Optimized Rendering**: Direct bitmap drawing for maximum performance
 - **Memory Efficiency**: Smart buffer management for large images
@@ -55,10 +55,10 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 
 ## Demo Video
 
-📺 **Watch the ESP32-P4 AllSky Display in action:**
+**Watch the ESP32-P4 AllSky Display in action:**
 [![ESP32-P4 AllSky Display Demo](https://img.youtube.com/vi/pPAgbkPNvvY/0.jpg)](https://www.youtube.com/watch?v=pPAgbkPNvvY)
 
-[🎥 View on YouTube](https://www.youtube.com/watch?v=pPAgbkPNvvY)
+[View on YouTube](https://www.youtube.com/watch?v=pPAgbkPNvvY)
 
 ## Screenshots
 
