@@ -56,6 +56,7 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 ## Demo Video
 
 **Watch the ESP32-P4 AllSky Display in action:**
+
 [![ESP32-P4 AllSky Display Demo](https://img.youtube.com/vi/pPAgbkPNvvY/0.jpg)](https://www.youtube.com/watch?v=pPAgbkPNvvY)
 
 [View on YouTube](https://www.youtube.com/watch?v=pPAgbkPNvvY)
