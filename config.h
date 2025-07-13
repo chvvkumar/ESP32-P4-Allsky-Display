@@ -126,9 +126,21 @@ extern const bool DEFAULT_RANDOM_ORDER;
 // WATCHDOG CONFIGURATION
 // =============================================================================
 
-#define WATCHDOG_TIMEOUT_MS 30000        // 30 second timeout
+#define WATCHDOG_TIMEOUT_MS 15000        // 15 second timeout for faster recovery
 #define WATCHDOG_IDLE_CORE_MASK 0        // Don't monitor idle tasks
 #define WATCHDOG_TRIGGER_PANIC false     // Don't panic on timeout, just reset
+
+// =============================================================================
+// NETWORK TIMEOUT CONFIGURATION
+// =============================================================================
+
+#define HTTP_CONNECT_TIMEOUT 8000        // 8 second connection timeout
+#define HTTP_REQUEST_TIMEOUT 10000       // 10 second request timeout
+#define DNS_RESOLUTION_TIMEOUT 5000      // 5 second DNS timeout
+#define NETWORK_CHECK_TIMEOUT 3000       // 3 second network connectivity check
+#define HTTP_BEGIN_TIMEOUT 5000          // 5 second timeout for http.begin()
+#define DOWNLOAD_CHUNK_TIMEOUT 2000      // 2 second timeout per download chunk
+#define TOTAL_DOWNLOAD_TIMEOUT 15000     // 15 second total download timeout
 
 // =============================================================================
 // CONFIGURATION FUNCTIONS

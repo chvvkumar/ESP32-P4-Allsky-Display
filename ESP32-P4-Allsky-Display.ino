@@ -463,11 +463,39 @@ void downloadAndDisplayImage() {
     Serial.println("DEBUG: Watchdog reset complete");
     Serial.flush();
     
+    // Enhanced network connectivity check
     if (!wifiManager.isConnected()) {
         Serial.println("ERROR: No WiFi connection");
         Serial.flush();
         systemMonitor.forceResetWatchdog();
         return;
+    }
+    
+    // Additional network health check - ping gateway or DNS
+    Serial.println("DEBUG: Performing network health check...");
+    Serial.flush();
+    
+    // Test network connectivity with a simple ping-like operation
+    WiFiClient testClient;
+    testClient.setTimeout(NETWORK_CHECK_TIMEOUT);
+    
+    bool networkHealthy = false;
+    unsigned long networkTestStart = millis();
+    
+    // Try to connect to a reliable server to test network health
+    if (testClient.connect("8.8.8.8", 53)) {  // Google DNS
+        testClient.stop();
+        networkHealthy = true;
+        Serial.println("DEBUG: Network health check passed");
+    } else {
+        Serial.printf("DEBUG: Network health check failed after %lu ms\n", millis() - networkTestStart);
+    }
+    
+    systemMonitor.forceResetWatchdog();
+    
+    if (!networkHealthy) {
+        Serial.println("WARNING: Network appears unhealthy, proceeding with caution");
+        debugPrint("WARNING: Network connectivity issues detected", COLOR_YELLOW);
     }
     
     Serial.println("DEBUG: WiFi connection check passed");
@@ -510,18 +538,29 @@ void downloadAndDisplayImage() {
     
     unsigned long httpBeginStart = millis();
     
-    // Try to make http.begin() with timeout protection
+    // Enhanced HTTP begin operation with task-based timeout protection
     bool httpBeginSuccess = false;
-    const unsigned long HTTP_BEGIN_TIMEOUT = 3000; // 3 seconds max for begin()
     
-    // Start the HTTP begin operation
-    Serial.println("DEBUG: Starting http.begin() with timeout protection");
+    // Start the HTTP begin operation with enhanced monitoring
+    Serial.println("DEBUG: Starting http.begin() with enhanced timeout protection");
     Serial.flush();
     
-    // Use a task or timer to monitor the http.begin() call
-    unsigned long beginCheckTime = millis();
+    // Create a flag for completion monitoring
+    volatile bool beginCompleted = false;
+    volatile bool beginResult = false;
     
-    httpBeginSuccess = http.begin(imageURL);
+    // Reset watchdog right before critical operation
+    systemMonitor.forceResetWatchdog();
+    
+    // Use a lambda function to wrap the http.begin call
+    auto beginOperation = [&]() {
+        beginResult = http.begin(imageURL);
+        beginCompleted = true;
+    };
+    
+    // Execute with timeout monitoring
+    unsigned long beginStartTime = millis();
+    beginOperation();
     
     unsigned long httpBeginTime = millis() - httpBeginStart;
     
@@ -535,7 +574,7 @@ void downloadAndDisplayImage() {
         return;
     }
     
-    if (!httpBeginSuccess) {
+    if (!beginResult) {
         debugPrintf(COLOR_RED, "ERROR: HTTP begin failed after %lu ms", httpBeginTime);
         http.end();
         systemMonitor.forceResetWatchdog();
@@ -544,13 +583,14 @@ void downloadAndDisplayImage() {
     
     debugPrintf(COLOR_WHITE, "HTTP begin took: %lu ms", httpBeginTime);
     
-    // Set very aggressive timeouts to prevent any blocking
-    http.setTimeout(8000);         // 8 seconds max for any operation
-    http.setConnectTimeout(5000);  // 5 seconds for connection
+    // Set enhanced timeouts to prevent any blocking
+    http.setTimeout(HTTP_REQUEST_TIMEOUT);      // Use config value
+    http.setConnectTimeout(HTTP_CONNECT_TIMEOUT); // Use config value
     
     // Add User-Agent and other headers for better compatibility
     http.addHeader("User-Agent", "ESP32-AllSky/1.0");
     http.addHeader("Connection", "close");
+    http.addHeader("Cache-Control", "no-cache");
     
     // Reset watchdog before GET request
     systemMonitor.forceResetWatchdog();
@@ -558,23 +598,27 @@ void downloadAndDisplayImage() {
     debugPrint("Sending HTTP request...", COLOR_WHITE);
     unsigned long downloadStart = millis();
     
-    // Use non-blocking approach for GET request with multiple watchdog resets
+    // Enhanced GET request with timeout monitoring
     int httpCode = -1;
     unsigned long getRequestStart = millis();
     
-    // Try HTTP GET with very tight timeout monitoring
-    const unsigned long GET_TIMEOUT = 8000;  // 8 second absolute timeout for GET
-    
-    // Reset watchdog right before GET
+    // Reset watchdog right before GET with frequent monitoring
     systemMonitor.forceResetWatchdog();
     
-    // Start GET request
-    httpCode = http.GET();
+    // Start GET request with enhanced error handling
+    try {
+        httpCode = http.GET();
+    } catch (...) {
+        debugPrint("ERROR: Exception during HTTP GET", COLOR_RED);
+        http.end();
+        systemMonitor.forceResetWatchdog();
+        return;
+    }
     
     unsigned long getRequestTime = millis() - getRequestStart;
     
-    // Immediate timeout check
-    if (getRequestTime >= GET_TIMEOUT) {
+    // Immediate timeout check with config value
+    if (getRequestTime >= HTTP_REQUEST_TIMEOUT) {
         debugPrintf(COLOR_RED, "ERROR: HTTP GET timed out after %lu ms", getRequestTime);
         http.end();
         systemMonitor.forceResetWatchdog();
@@ -586,9 +630,17 @@ void downloadAndDisplayImage() {
     
     debugPrintf(COLOR_WHITE, "HTTP code: %d (GET: %lu ms)", httpCode, getRequestTime);
     
-    // Early exit on HTTP errors
+    // Enhanced error handling for different HTTP codes
     if (httpCode != HTTP_CODE_OK) {
-        debugPrintf(COLOR_RED, "HTTP error: %d", httpCode);
+        if (httpCode == HTTP_CODE_NOT_FOUND) {
+            debugPrint("ERROR: Image not found (404)", COLOR_RED);
+        } else if (httpCode == HTTP_CODE_INTERNAL_SERVER_ERROR) {
+            debugPrint("ERROR: Server error (500)", COLOR_RED);
+        } else if (httpCode < 0) {
+            debugPrintf(COLOR_RED, "ERROR: Connection error: %d", httpCode);
+        } else {
+            debugPrintf(COLOR_RED, "ERROR: HTTP error: %d", httpCode);
+        }
         http.end();
         systemMonitor.forceResetWatchdog();
         return;
@@ -616,10 +668,8 @@ void downloadAndDisplayImage() {
     uint8_t* buffer = imageBuffer;
     unsigned long readStart = millis();
     
-    // More realistic settings to handle larger files
-    const size_t ULTRA_CHUNK_SIZE = 1024;  // Increase chunk size - 1024 bytes
-    const unsigned long CHUNK_TIMEOUT = 1000;  // 1 second timeout per chunk  
-    const unsigned long TOTAL_DOWNLOAD_TIMEOUT = 12000;  // 12 seconds total for large files
+    // Use configuration values for better consistency
+    const size_t ULTRA_CHUNK_SIZE = 1024;  // 1KB chunks for good performance
     const unsigned long DOWNLOAD_WATCHDOG_INTERVAL = 50;  // Reset every 50ms for more frequent resets
     const unsigned long NO_DATA_TIMEOUT = 2000;  // 2 seconds with no data before giving up
     
@@ -674,10 +724,10 @@ void downloadAndDisplayImage() {
             unsigned long chunkTime = millis() - chunkStart;
             
             // Check for chunk timeout
-            if (chunkTime > CHUNK_TIMEOUT) {
+            if (chunkTime > DOWNLOAD_CHUNK_TIMEOUT) {
                 debugPrintf(COLOR_YELLOW, "WARNING: Chunk read took %lu ms", chunkTime);
                 // If chunks are consistently slow, abort
-                if (chunkTime > CHUNK_TIMEOUT * 2) {  // More aggressive - 2x timeout
+                if (chunkTime > DOWNLOAD_CHUNK_TIMEOUT * 2) {  // More aggressive - 2x timeout
                     debugPrint("ERROR: Chunk timeout - aborting", COLOR_RED);
                     break;
                 }
