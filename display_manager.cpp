@@ -46,7 +46,7 @@ bool DisplayManager::begin() {
         display_cfg.width,
         display_cfg.height,
         dsipanel,
-        0,
+        display_cfg.rotation,
         true,
         display_cfg.lcd_rst,
         display_cfg.init_cmds,
