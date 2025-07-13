@@ -65,29 +65,20 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 Here are some screenshots showcasing the ESP32-P4 AllSky Display system in operation:
 
 ### System Display Screenshots
-![Screenshot 1](images/2025-07-13_14-57-24.jpg)
-*Initial system display setup*
 
 ![Screenshot 2](images/2025-07-13_15-09-10.jpg)
-*Image cycling in progress*
 
 ![Screenshot 3](images/2025-07-13_15-09-15.jpg)
-*Display showing different image source*
 
 ![Screenshot 4](images/2025-07-13_15-09-19.jpg)
-*Real-time image transformation*
 
 ![Screenshot 5](images/2025-07-13_15-09-23.jpg)
-*Hardware acceleration demonstration*
 
 ![Screenshot 6](images/2025-07-13_15-09-31.jpg)
-*Web interface configuration view*
 
 ![Screenshot 7](images/2025-07-13_15-09-38.jpg)
-*MQTT integration status*
 
 ![Screenshot 8](images/2025-07-13_15-09-43.jpg)
-*System monitoring dashboard*
 
 ### Hardware Setup
 ![Display Hardware](images/display.jpg)
@@ -126,16 +117,6 @@ Here are some screenshots showcasing the ESP32-P4 AllSky Display system in opera
 - **Built-in Libraries**: HTTPClient, WebServer, WiFi, Preferences
 
 ## Configuration
-
-### Default Image Sources
-The system comes preconfigured with sample image sources:
-```cpp
-const char* DEFAULT_IMAGE_SOURCES[] = {
-    "https://allsky.challa.co:1982/current/resized/image.jpg",
-    "https://i.imgur.com/zxcg8jM.jpeg",
-    "https://i.imgur.com/t0PwA4f.jpeg"
-};
-```
 
 ### Web Interface Configuration
 - **Access**: `http://[device-ip]/`
