@@ -53,13 +53,20 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 - **Memory Efficiency**: Smart buffer management for large images
 - **Fallback Support**: Software processing when hardware acceleration unavailable
 
-## Demo Video
+## Demo
+
+![Stand](images\3dprintedcase.jpg)
 
 **Watch the ESP32-P4 AllSky Display in action:**
 
 [![ESP32-P4 AllSky Display Demo](https://img.youtube.com/vi/pPAgbkPNvvY/0.jpg)](https://www.youtube.com/watch?v=pPAgbkPNvvY)
 
 [View on YouTube](https://www.youtube.com/watch?v=pPAgbkPNvvY)
+
+
+## 3D Printed case
+
+[Printables link for 3D printed case](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
 
 ## Screenshots
 
