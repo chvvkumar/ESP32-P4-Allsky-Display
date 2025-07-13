@@ -110,7 +110,17 @@ Here are some screenshots showcasing the ESP32-P4 AllSky Display system in opera
    - Flash the main sketch to your ESP32-P4
    - Configure WiFi credentials through web interface or serial
 
-3. **Configuration**:
+3. **Initial Wi-Fi setup**:
+   - Edit `config_storage.cpp` file
+   - change the following piece of code to set wifi credentials
+      ```cpp
+      void ConfigStorage::setDefaults() {
+         // Set hardcoded defaults from original config.cpp
+         config.wifiSSID = "";
+         config.wifiPassword = "";
+      ```
+
+4. **Configuration**:
    - Access web interface at device IP address
    - Configure image sources and cycling settings
    - Set update intervals and display preferences
@@ -121,7 +131,6 @@ Here are some screenshots showcasing the ESP32-P4 AllSky Display system in opera
 - **GFX Library for Arduino** (1.6.0+)
 - **JPEGDEC** (1.8.2+)
 - **PubSubClient** (2.8+)
-- **ElegantOTA** (3.1.7+)
 - **Built-in Libraries**: HTTPClient, WebServer, WiFi, Preferences
 
 ## Configuration
