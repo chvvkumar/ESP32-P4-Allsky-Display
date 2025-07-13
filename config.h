@@ -67,7 +67,7 @@ extern const char* IMAGE_URL;
 #define DEFAULT_SCALE_Y 1.2f
 #define DEFAULT_OFFSET_X 0
 #define DEFAULT_OFFSET_Y 0
-#define DEFAULT_ROTATION 0.0f
+#define DEFAULT_ROTATION 180.0f
 
 // Image control constants
 #define SCALE_STEP 0.1f                  // Scale increment/decrement
