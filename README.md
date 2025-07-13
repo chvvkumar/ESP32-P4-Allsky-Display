@@ -53,6 +53,46 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 - **Memory Efficiency**: Smart buffer management for large images
 - **Fallback Support**: Software processing when hardware acceleration unavailable
 
+## Demo Video
+
+📺 **Watch the ESP32-P4 AllSky Display in action:**
+[![ESP32-P4 AllSky Display Demo](https://img.youtube.com/vi/pPAgbkPNvvY/0.jpg)](https://www.youtube.com/watch?v=pPAgbkPNvvY)
+
+[🎥 View on YouTube](https://www.youtube.com/watch?v=pPAgbkPNvvY)
+
+## Screenshots
+
+Here are some screenshots showcasing the ESP32-P4 AllSky Display system in operation:
+
+### System Display Screenshots
+![Screenshot 1](images/2025-07-13_14-57-24.jpg)
+*Initial system display setup*
+
+![Screenshot 2](images/2025-07-13_15-09-10.jpg)
+*Image cycling in progress*
+
+![Screenshot 3](images/2025-07-13_15-09-15.jpg)
+*Display showing different image source*
+
+![Screenshot 4](images/2025-07-13_15-09-19.jpg)
+*Real-time image transformation*
+
+![Screenshot 5](images/2025-07-13_15-09-23.jpg)
+*Hardware acceleration demonstration*
+
+![Screenshot 6](images/2025-07-13_15-09-31.jpg)
+*Web interface configuration view*
+
+![Screenshot 7](images/2025-07-13_15-09-38.jpg)
+*MQTT integration status*
+
+![Screenshot 8](images/2025-07-13_15-09-43.jpg)
+*System monitoring dashboard*
+
+### Hardware Setup
+![Display Hardware](images/display.jpg)
+*ESP32-P4 with DSI Display setup*
+
 ## Hardware Requirements
 
 - **ESP32-P4** microcontroller

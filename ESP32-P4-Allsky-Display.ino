@@ -209,9 +209,9 @@ void setup() {
     // Start web configuration server if WiFi is connected
     if (wifiManager.isConnected()) {
         debugPrint("Starting web configuration server...", COLOR_YELLOW);
-        if (webConfig.begin(80)) {
-            debugPrintf(COLOR_GREEN, "Web config available at: http://%s", WiFi.localIP().toString().c_str());
-            Serial.printf("Web configuration server started successfully at: http://%s\n", WiFi.localIP().toString().c_str());
+        if (webConfig.begin(8080)) {
+            debugPrintf(COLOR_GREEN, "Web config available at: http://%s:8080", WiFi.localIP().toString().c_str());
+            Serial.printf("Web configuration server started successfully at: http://%s:8080\n", WiFi.localIP().toString().c_str());
         } else {
             debugPrint("ERROR: Web config server failed to start", COLOR_RED);
         }
@@ -988,6 +988,7 @@ void processSerialCommands() {
                 Serial.println("  I   : Network info");
                 Serial.println("  P   : PPA info");
                 Serial.println("  T   : MQTT info");
+                Serial.println("  X   : Web server status/restart");
                 Serial.println("Help:");
                 Serial.println("  H/? : Show this help");
                 break;
@@ -1009,6 +1010,30 @@ void processSerialCommands() {
             case 't':
                 mqttManager.printConnectionInfo();
                 break;
+            case 'X':
+            case 'x':
+                // Web server status and restart
+                Serial.println("\n=== Web Server Status ===");
+                Serial.printf("WiFi connected: %s\n", wifiManager.isConnected() ? "YES" : "NO");
+                if (wifiManager.isConnected()) {
+                    Serial.printf("IP Address: %s\n", WiFi.localIP().toString().c_str());
+                }
+                Serial.printf("Web server running: %s\n", webConfig.isRunning() ? "YES" : "NO");
+                
+                // Try to restart web server
+                if (wifiManager.isConnected()) {
+                    Serial.println("Attempting to restart web server...");
+                    webConfig.stop();
+                    delay(500);
+                    if (webConfig.begin(8080)) {
+                        Serial.printf("Web server restarted successfully at: http://%s:8080\n", WiFi.localIP().toString().c_str());
+                    } else {
+                        Serial.println("ERROR: Failed to restart web server");
+                    }
+                } else {
+                    Serial.println("Cannot start web server - WiFi not connected");
+                }
+                break;
         }
         
         // Clear any remaining characters
@@ -1024,7 +1049,15 @@ void loop() {
     
     // Handle web server first for maximum responsiveness
     if (wifiManager.isConnected() && webConfig.isRunning()) {
+        // Add debugging for web server activity
+        unsigned long webHandleStart = millis();
         webConfig.handleClient();
+        unsigned long webHandleTime = millis() - webHandleStart;
+        
+        // Log if web server handling takes significant time (may indicate activity)
+        if (webHandleTime > 10) {
+            Serial.printf("DEBUG: Web server handling took %lu ms (potential request processed)\n", webHandleTime);
+        }
     }
     
     unsigned long loopStartTime = millis();
@@ -1055,11 +1088,11 @@ void loop() {
             // systemMonitor.forceResetWatchdog();
         } else {
             // Try to start web server if not running
-            Serial.println("DEBUG: Attempting to start web configuration server...");
-            if (webConfig.begin(80)) {
-                Serial.printf("Web configuration server started at: http://%s\n", WiFi.localIP().toString().c_str());
+            Serial.println("DEBUG: Web server not running, attempting to restart...");
+            if (webConfig.begin(8080)) {
+                Serial.printf("Web configuration server restarted at: http://%s:8080\n", WiFi.localIP().toString().c_str());
             } else {
-                Serial.println("ERROR: Failed to start web configuration server");
+                Serial.println("ERROR: Failed to restart web configuration server");
             }
         }
         systemMonitor.forceResetWatchdog();
@@ -1093,6 +1126,11 @@ void loop() {
     // Process serial commands for image control
     processSerialCommands();
     systemMonitor.forceResetWatchdog();
+    
+    // Handle web server again after serial processing
+    if (wifiManager.isConnected() && webConfig.isRunning()) {
+        webConfig.handleClient();
+    }
     
     // Enhanced stuck image processing detection
     if (imageProcessing && (millis() - lastImageProcessTime > IMAGE_PROCESS_TIMEOUT)) {
