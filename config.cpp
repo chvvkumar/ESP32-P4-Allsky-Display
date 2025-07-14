@@ -33,7 +33,7 @@ const char* IMAGE_URL = nullptr;
 // or when the configuration is reset to defaults.
 
 const char* DEFAULT_IMAGE_SOURCES[] = {
-    "https://i.imgur.com/zxcg8jM.jpeg"      // Default source 1
+    "http://allskypi5.lan/current/resized/image.jpg"      // Default source 1
     // Add more image URLs here as needed (up to MAX_IMAGE_SOURCES = 10)
     // "https://your-server.com/camera/image4.jpg",
     // "https://your-server.com/camera/image5.jpg",
