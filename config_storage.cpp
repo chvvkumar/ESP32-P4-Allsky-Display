@@ -30,7 +30,7 @@ void ConfigStorage::setDefaults() {
     config.mqttBrightnessTopic = "Astro/AllSky/display/brightness";
     config.mqttBrightnessStatusTopic = "Astro/AllSky/display/brightness/status";
     
-    config.imageURL = "https://allsky.challa.co:1982/current/resized/image.jpg";
+    config.imageURL = "http://allskypi5.lan/current/resized/image.jpg";
     
     // Multi-image cycling defaults using external config arrays
     config.cyclingEnabled = DEFAULT_CYCLING_ENABLED;

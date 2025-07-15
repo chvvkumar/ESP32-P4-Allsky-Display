@@ -28,6 +28,7 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 - **System Monitoring**: Memory usage, uptime, and health status
 
 ### Interactive Controls
+- **Touch Interface**: Intuitive touch gestures for image control
 - **Serial Commands**: Real-time image manipulation via serial interface
 - **Transform Controls**: Scale (+/-), Move (WASD), Rotate (QE)
 - **Brightness Control**: Adjust display brightness (L/K)
@@ -46,6 +47,16 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 - **Network Health**: WiFi connection monitoring and recovery
 - **Error Handling**: Robust error detection and recovery mechanisms
 - **Performance Metrics**: Download speeds, processing times, and system health
+
+### Touch Interface
+- **GT911 Touch Controller**: Capacitive touch support via I2C interface
+- **Gesture Recognition**: Single and double-tap gesture detection
+- **Smart Debouncing**: Advanced timing controls to prevent false triggers
+- **Touch Actions**: 
+  - Single tap: Advance to next image in cycling sequence
+  - Double tap: Toggle between cycling and single refresh modes
+- **Mode Control**: Switch between automatic cycling and manual refresh modes
+- **Visual Feedback**: Touch actions confirmed via debug output
 
 ### Hardware Acceleration
 - **PPA Integration**: Hardware-accelerated image scaling and rotation
@@ -95,7 +106,8 @@ Here are some screenshots showcasing the ESP32-P4 AllSky Display system in opera
 ## Hardware Requirements
 
 - **ESP32-P4** microcontroller
-- **DSI Display** compatible with ESP32-P4
+- **DSI Display** compatible with ESP32-P4 (with touch interface)
+- **GT911 Touch Controller** (integrated with compatible displays)
 - **PSRAM** enabled (required for image buffering)
 - **WiFi Connection** for image downloading
 
@@ -142,6 +154,16 @@ Here are some screenshots showcasing the ESP32-P4 AllSky Display system in opera
 - **Network Settings**: WiFi and MQTT configuration
 - **System Monitor**: Real-time status and diagnostics
 
+### Touch Controls
+```
+Single Tap    : Advance to next image (cycling mode)
+Double Tap    : Toggle cycling/single refresh modes
+```
+
+**Touch Modes:**
+- **Cycling Mode**: Automatically cycles through multiple image sources
+- **Single Refresh Mode**: Stays on current image, refreshes periodically
+
 ### Serial Commands
 ```
 +/-   : Scale image up/down
@@ -163,6 +185,7 @@ H/?   : Show help
 ### Modular Design
 - **Config Management**: Persistent storage with web interface
 - **Display Manager**: Hardware abstraction and rendering
+- **Touch Manager**: GT911 touch controller interface and gesture recognition
 - **Network Manager**: WiFi connectivity and monitoring
 - **MQTT Manager**: Message broker integration
 - **System Monitor**: Health monitoring and watchdog
@@ -222,6 +245,12 @@ H/?   : Show help
    - Verify DSI display compatibility
    - Check display initialization in serial output
    - Ensure proper wiring and power supply
+
+5. **Touch Issues**:
+   - Verify GT911 touch controller is properly connected
+   - Check I2C connection and address configuration
+   - Monitor touch debug output in serial console
+   - Ensure touch controller reset pin is properly configured
 
 ### Debug Information
 - **Serial Output**: Comprehensive debugging information
