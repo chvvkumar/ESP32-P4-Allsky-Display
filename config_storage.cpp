@@ -18,8 +18,8 @@ bool ConfigStorage::begin() {
 
 void ConfigStorage::setDefaults() {
     // Set hardcoded defaults from original config.cpp
-    config.wifiSSID = "IoT";
-    config.wifiPassword = "kkkkkkkk";
+    config.wifiSSID = "";
+    config.wifiPassword = "";
     
     config.mqttServer = "192.168.1.250";
     config.mqttPort = 1883;

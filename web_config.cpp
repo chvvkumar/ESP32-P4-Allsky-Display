@@ -529,6 +529,7 @@ String WebConfig::generateHeader(const String& title) {
     
     // Inline CSS for fast loading - Dark Theme
     html += "<style>";
+    html += "@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css');";
     html += "*{margin:0;padding:0;box-sizing:border-box}";
     html += "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;";
     html += "background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);min-height:100vh;color:#e2e8f0}";
@@ -542,6 +543,9 @@ String WebConfig::generateHeader(const String& title) {
     html += ".badge.success{background:#059669;color:white}";
     html += ".badge.error{background:#dc2626;color:white}";
     html += ".badge.warning{background:#d97706;color:white}";
+    html += ".github-link{display:flex;align-items:center;margin-right:1rem;padding:0.4rem 0.8rem;background:rgba(15,23,42,0.8);color:#f1f5f9;border-radius:8px;text-decoration:none;font-size:0.9rem;border:1px solid rgba(148,163,184,0.3);transition:all 0.2s ease}";
+    html += ".github-link:hover{background:rgba(30,41,59,0.9);border-color:rgba(148,163,184,0.6);transform:translateY(-2px)}";
+    html += ".github-link .github-icon{font-family:'Font Awesome 6 Brands';margin-right:0.4rem}";
     html += ".nav{background:rgba(15,23,42,0.8);padding:0.5rem 0;border-bottom:1px solid rgba(148,163,184,0.1)}";
     html += ".nav-content{display:flex;gap:1rem;overflow-x:auto}";
     html += ".nav-item{padding:0.5rem 1rem;border-radius:8px;text-decoration:none;color:#94a3b8;";
@@ -594,6 +598,7 @@ String WebConfig::generateHeader(const String& title) {
     html += "<div class='header-content'>";
     html += "<div class='logo'>🛰️ ESP32 AllSky Display</div>";
     html += "<div class='status-badges'>";
+    html += "<a href='https://github.com/chvvkumar/ESP32-P4-Allsky-Display' target='_blank' class='github-link'><i class='github-icon fa-github'></i> GitHub</a>";
     html += getConnectionStatus();
     html += "</div></div></div></div>";
     
@@ -639,8 +644,8 @@ String WebConfig::generateMainPage() {
     html += "<div class='stat-label'>Brightness</div></div>";
     html += "</div>";
     
-    // Brightness control card - with reduced width
-    html += "<div class='card' style='max-width: 600px; margin-left: auto; margin-right: auto;'>";
+    // Brightness control card
+    html += "<div class='card'>";
     html += "<h2>💡 Screen Brightness</h2>";
     
     // Auto/Manual toggle
@@ -725,15 +730,15 @@ String WebConfig::generateMainPage() {
     }
     
     html += "<p><strong>Update Interval:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p>";
+    html += "</div>";
     
-    // Add switch to next image button on the dashboard
+    // Add switch to next image button on the dashboard (outside the card)
     if (configStorage.getImageSourceCount() > 1) {
-        html += "<div style='margin-top:1rem;'>";
-        html += "<button type='button' class='btn btn-primary' onclick='nextImage()'>⏭️ Switch to Next Image</button>";
+        html += "<div class='card'>";
+        html += "<h2>⏭️ Image Control</h2>";
+        html += "<button type='button' class='btn btn-primary' onclick='nextImage()'>Switch to Next Image</button>";
         html += "</div>";
     }
-    
-    html += "</div>";
     
     html += "</div>";
     
