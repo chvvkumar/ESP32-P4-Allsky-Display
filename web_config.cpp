@@ -30,6 +30,9 @@ bool WebConfig::begin(int port) {
     server->on("/api/update-source", HTTP_POST, [this]() { handleUpdateImageSource(); });
     server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
     server->on("/api/next-image", HTTP_POST, [this]() { handleNextImage(); });
+    server->on("/api/update-transform", HTTP_POST, [this]() { handleUpdateImageTransform(); });
+    server->on("/api/copy-defaults", HTTP_POST, [this]() { handleCopyDefaultsToImage(); });
+    server->on("/api/apply-transform", HTTP_POST, [this]() { handleApplyTransform(); });
     server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
     server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
     server->onNotFound([this]() { handleNotFound(); });
@@ -230,12 +233,26 @@ void WebConfig::handleSaveConfig() {
         }
     }
     
+    // Check if brightness_auto_mode checkbox was submitted
+    bool brightnessAutoModeFound = false;
+    
+    for (int i = 0; i < server->args(); i++) {
+        String name = server->argName(i);
+        if (name == "brightness_auto_mode") {
+            brightnessAutoModeFound = true;
+            configStorage.setBrightnessAutoMode(true);
+        }
+    }
+    
     // If checkbox parameters weren't found, they are unchecked
     if (!cyclingEnabledFound) {
         configStorage.setCyclingEnabled(false);
     }
     if (!randomOrderFound) {
         configStorage.setRandomOrder(false);
+    }
+    if (!brightnessAutoModeFound) {
+        configStorage.setBrightnessAutoMode(false);
     }
     
     // Save configuration to persistent storage
@@ -344,6 +361,151 @@ void WebConfig::handleNextImage() {
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Switched to next image and refreshed display\"}");
 }
 
+void WebConfig::handleUpdateImageTransform() {
+    if (server->hasArg("index") && server->hasArg("property") && server->hasArg("value")) {
+        int index = server->arg("index").toInt();
+        String property = server->arg("property");
+        String value = server->arg("value");
+        
+        bool success = true;
+        String message = "Transform updated successfully";
+        
+        // Apply the correct property
+        if (property == "scaleX") {
+            configStorage.setImageScaleX(index, value.toFloat());
+        } 
+        else if (property == "scaleY") {
+            configStorage.setImageScaleY(index, value.toFloat());
+        } 
+        else if (property == "offsetX") {
+            configStorage.setImageOffsetX(index, value.toInt());
+        } 
+        else if (property == "offsetY") {
+            configStorage.setImageOffsetY(index, value.toInt());
+        } 
+        else if (property == "rotation") {
+            configStorage.setImageRotation(index, value.toFloat());
+        } 
+        else {
+            success = false;
+            message = "Invalid property name";
+        }
+        
+        if (success) {
+            configStorage.saveConfig();
+            
+            // If this is the current image, apply the changes immediately
+            if (index == configStorage.getCurrentImageIndex()) {
+                // Apply the transform if this is the current image
+                extern float scaleX, scaleY;
+                extern int16_t offsetX, offsetY;
+                extern float rotationAngle;
+                extern void renderFullImage();
+                
+                // Update only the modified property
+                if (property == "scaleX") {
+                    scaleX = configStorage.getImageScaleX(index);
+                } 
+                else if (property == "scaleY") {
+                    scaleY = configStorage.getImageScaleY(index);
+                } 
+                else if (property == "offsetX") {
+                    offsetX = configStorage.getImageOffsetX(index);
+                } 
+                else if (property == "offsetY") {
+                    offsetY = configStorage.getImageOffsetY(index);
+                } 
+                else if (property == "rotation") {
+                    rotationAngle = configStorage.getImageRotation(index);
+                }
+                
+                // Re-render the current image with new settings
+                renderFullImage();
+                Serial.printf("Applied transform property %s=%.2f to current image\n", 
+                            property.c_str(), value.toFloat());
+            }
+        }
+        
+        String response = "{\"status\":\"" + String(success ? "success" : "error") + "\",\"message\":\"" + message + "\"}";
+        sendResponse(200, "application/json", response);
+    } else {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing parameters\"}");
+    }
+}
+
+void WebConfig::handleCopyDefaultsToImage() {
+    if (server->hasArg("index")) {
+        int index = server->arg("index").toInt();
+        
+        configStorage.copyDefaultsToImageTransform(index);
+        configStorage.saveConfig();
+        
+        // If this is the current image, apply the changes immediately
+        if (index == configStorage.getCurrentImageIndex()) {
+            // Apply the transform if this is the current image
+            extern float scaleX, scaleY;
+            extern int16_t offsetX, offsetY;
+            extern float rotationAngle;
+            extern void renderFullImage();
+            
+            // Update all properties from the stored transform
+            scaleX = configStorage.getImageScaleX(index);
+            scaleY = configStorage.getImageScaleY(index);
+            offsetX = configStorage.getImageOffsetX(index);
+            offsetY = configStorage.getImageOffsetY(index);
+            rotationAngle = configStorage.getImageRotation(index);
+            
+            // Re-render the current image with new settings
+            renderFullImage();
+            Serial.println("Applied global defaults to current image");
+        }
+        
+        sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Default settings copied to image\"}");
+    } else {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
+    }
+}
+
+void WebConfig::handleApplyTransform() {
+    if (server->hasArg("index")) {
+        int index = server->arg("index").toInt();
+        int currentIndex = configStorage.getCurrentImageIndex();
+        
+        // If the requested transform is not for the current image, switch to it
+        if (index != currentIndex) {
+            configStorage.setCurrentImageIndex(index);
+            configStorage.saveConfig();
+            
+            // Trigger image change
+            extern void downloadAndDisplayImage();
+            downloadAndDisplayImage();
+            
+            Serial.printf("Switched to image %d and applied its transform\n", index);
+        } else {
+            // Apply transform for current image
+            extern float scaleX, scaleY;
+            extern int16_t offsetX, offsetY;
+            extern float rotationAngle;
+            extern void renderFullImage();
+            
+            // Update all properties from the stored transform
+            scaleX = configStorage.getImageScaleX(index);
+            scaleY = configStorage.getImageScaleY(index);
+            offsetX = configStorage.getImageOffsetX(index);
+            offsetY = configStorage.getImageOffsetY(index);
+            rotationAngle = configStorage.getImageRotation(index);
+            
+            // Re-render the current image with new settings
+            renderFullImage();
+            Serial.printf("Applied transform settings for image %d\n", index);
+        }
+        
+        sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Transform applied successfully\"}");
+    } else {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
+    }
+}
+
 void WebConfig::handleFactoryReset() {
     configStorage.resetToDefaults();
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Factory reset completed\"}");
@@ -442,7 +604,7 @@ String WebConfig::generateNavigation(const String& currentPage) {
     String html = "<div class='nav'><div class='container'><div class='nav-content'>";
     
     String pages[] = {"dashboard", "network", "mqtt", "image", "sources", "display", "advanced"};
-    String labels[] = {"🏠 Dashboard", "📡 Network", "🔗 MQTT", "🖼️ Image", "🔄 Sources", "💡 Display", "⚙️ Advanced"};
+    String labels[] = {"🏠 Dashboard", "📡 Network", "🔗 MQTT", "🖼️ Single Image", "🔄 Multi-Image", "💡 Display", "⚙️ Advanced"};
     String urls[] = {"/", "/config/network", "/config/mqtt", "/config/image", "/config/sources", "/config/display", "/config/advanced"};
     
     for (int i = 0; i < 7; i++) {
@@ -477,6 +639,47 @@ String WebConfig::generateMainPage() {
     html += "<div class='stat-label'>Brightness</div></div>";
     html += "</div>";
     
+    // Brightness control card - with reduced width
+    html += "<div class='card' style='max-width: 600px; margin-left: auto; margin-right: auto;'>";
+    html += "<h2>💡 Screen Brightness</h2>";
+    
+    // Auto/Manual toggle
+    html += "<div class='form-group'>";
+    html += "<label>Control Mode</label>";
+    html += "<div style='margin-top:0.5rem;'>";
+    html += "<input type='checkbox' id='brightness_auto_mode' name='brightness_auto_mode'";
+    if (configStorage.getBrightnessAutoMode()) {
+        html += " checked";
+    }
+    html += " onchange='updateBrightnessMode(this.checked)'> ";
+    html += "<label for='brightness_auto_mode' style='display:inline;margin-left:0.5rem;'>Auto (MQTT controlled)</label>";
+    html += "</div>";
+    html += "</div>";
+    
+    // Brightness slider
+    html += "<div class='form-group' id='brightness_slider_container' style='";
+    if (configStorage.getBrightnessAutoMode()) {
+        html += "opacity:0.5;";
+    }
+    html += "'>";
+    html += "<label for='main_brightness'>Brightness (%)</label>";
+    html += "<input type='range' id='main_brightness' name='default_brightness' class='form-control' value='" + 
+            String(displayManager.getBrightness()) + "' min='0' max='100' oninput='updateMainBrightnessValue(this.value)'";
+    if (configStorage.getBrightnessAutoMode()) {
+        html += " disabled";
+    }
+    html += ">";
+    html += "<div style='text-align:center;margin-top:0.5rem'><span id='mainBrightnessValue'>" + 
+            String(displayManager.getBrightness()) + "</span>%</div>";
+    html += "</div>";
+    
+    html += "<button type='button' class='btn btn-primary' onclick='saveMainBrightness()'";
+    if (configStorage.getBrightnessAutoMode()) {
+        html += " disabled";
+    }
+    html += " id='save_brightness_btn'>Apply Brightness</button>";
+    html += "</div>";
+    
     // Quick status cards
     html += "<div class='grid'>";
     
@@ -503,7 +706,7 @@ String WebConfig::generateMainPage() {
     }
     html += "</div>";
     
-    // Image Status
+    // Image Status with "Switch to Next Image" button
     html += "<div class='card'>";
     html += "<h2>🖼️ Image Status</h2>";
     
@@ -522,6 +725,14 @@ String WebConfig::generateMainPage() {
     }
     
     html += "<p><strong>Update Interval:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p>";
+    
+    // Add switch to next image button on the dashboard
+    if (configStorage.getImageSourceCount() > 1) {
+        html += "<div style='margin-top:1rem;'>";
+        html += "<button type='button' class='btn btn-primary' onclick='nextImage()'>⏭️ Switch to Next Image</button>";
+        html += "</div>";
+    }
+    
     html += "</div>";
     
     html += "</div>";
@@ -658,26 +869,90 @@ String WebConfig::generateImageSourcesPage() {
     html += "</div>";
     html += "</div>";
     
-    // Image Sources List
+    // Image Sources List with Transformation Settings
     html += "<div class='card'>";
-    html += "<h2>📋 Image Sources</h2>";
+    html += "<h2>📋 Image Sources & Transformations</h2>";
     html += "<div id='imageSourcesList'>";
     
     int sourceCount = configStorage.getImageSourceCount();
     for (int i = 0; i < sourceCount; i++) {
         String url = configStorage.getImageSource(i);
-        html += "<div class='image-source-item' style='margin-bottom:1rem;padding:1rem;border:1px solid rgba(148,163,184,0.2);border-radius:8px;background:rgba(15,23,42,0.8);'>";
-        html += "<div style='display:flex;align-items:center;gap:1rem;'>";
+        
+        // Start image source item
+        html += "<div class='image-source-item' style='margin-bottom:1.5rem;padding:1rem;border:1px solid rgba(148,163,184,0.2);border-radius:8px;background:rgba(15,23,42,0.8);'>";
+        
+        // URL input and controls
+        html += "<div style='display:flex;align-items:center;gap:1rem;margin-bottom:1rem;'>";
         html += "<span style='font-weight:bold;color:#60a5fa;'>" + String(i + 1) + ".</span>";
         html += "<input type='url' class='form-control' style='flex:1;' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this.value)'>";
+        html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(" + String(i) + ")'>⚙️ Transform</button>";
         if (sourceCount > 1) {
             html += "<button type='button' class='btn btn-danger' onclick='removeImageSource(" + String(i) + ")'>Remove</button>";
         }
-        html += "</div></div>";
+        html += "</div>";
+        
+        // Transformation settings section (initially hidden)
+        html += "<div id='transformSection_" + String(i) + "' class='transform-section' style='display:none;margin-top:1rem;padding:1rem;background:rgba(30,41,59,0.6);border-radius:8px;border:1px dashed rgba(148,163,184,0.3);'>";
+        html += "<h3 style='margin-top:0;font-size:1rem;color:#cbd5e1;'>Transform Settings for Image " + String(i + 1) + "</h3>";
+        
+        // Transformation controls
+        html += "<div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:1rem;'>";
+        
+        // Scale X
+        html += "<div class='form-group'>";
+        html += "<label for='img_scale_x_" + String(i) + "'>Scale X</label>";
+        html += "<input type='number' id='img_scale_x_" + String(i) + "' class='form-control' value='" + 
+                String(configStorage.getImageScaleX(i)) + "' step='0.1' min='0.1' max='5.0' onchange='updateImageTransform(" + String(i) + ", \"scaleX\", this.value)'>";
+        html += "</div>";
+        
+        // Scale Y
+        html += "<div class='form-group'>";
+        html += "<label for='img_scale_y_" + String(i) + "'>Scale Y</label>";
+        html += "<input type='number' id='img_scale_y_" + String(i) + "' class='form-control' value='" + 
+                String(configStorage.getImageScaleY(i)) + "' step='0.1' min='0.1' max='5.0' onchange='updateImageTransform(" + String(i) + ", \"scaleY\", this.value)'>";
+        html += "</div>";
+        
+        // Offset X
+        html += "<div class='form-group'>";
+        html += "<label for='img_offset_x_" + String(i) + "'>Offset X (px)</label>";
+        html += "<input type='number' id='img_offset_x_" + String(i) + "' class='form-control' value='" + 
+                String(configStorage.getImageOffsetX(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetX\", this.value)'>";
+        html += "</div>";
+        
+        // Offset Y
+        html += "<div class='form-group'>";
+        html += "<label for='img_offset_y_" + String(i) + "'>Offset Y (px)</label>";
+        html += "<input type='number' id='img_offset_y_" + String(i) + "' class='form-control' value='" + 
+                String(configStorage.getImageOffsetY(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetY\", this.value)'>";
+        html += "</div>";
+        
+        // Rotation
+        html += "<div class='form-group'>";
+        html += "<label for='img_rotation_" + String(i) + "'>Rotation (°)</label>";
+        html += "<select id='img_rotation_" + String(i) + "' class='form-control' onchange='updateImageTransform(" + String(i) + ", \"rotation\", this.value)'>";
+        int rotation = (int)configStorage.getImageRotation(i);
+        html += String("<option value='0'") + (rotation == 0 ? " selected" : "") + ">0°</option>";
+        html += String("<option value='90'") + (rotation == 90 ? " selected" : "") + ">90°</option>";
+        html += String("<option value='180'") + (rotation == 180 ? " selected" : "") + ">180°</option>";
+        html += String("<option value='270'") + (rotation == 270 ? " selected" : "") + ">270°</option>";
+        html += "</select>";
+        html += "</div>";
+        
+        html += "</div>"; // End grid layout
+        
+        // Action buttons for transformations
+        html += "<div style='margin-top:1rem;display:flex;gap:0.5rem;'>";
+        html += "<button type='button' class='btn btn-secondary' onclick='copyDefaultsToImage(" + String(i) + ")'>Copy from Global Defaults</button>";
+        html += "<button type='button' class='btn btn-secondary' onclick='applyTransformImmediately(" + String(i) + ")'>Apply Now</button>";
+        html += "</div>";
+        
+        html += "</div>"; // End transform section
+        html += "</div>"; // End image source item
     }
     
-    html += "</div>";
+    html += "</div>"; // End imageSourcesList
     
+    // Image source action buttons
     html += "<div style='margin-top:1rem;'>";
     html += "<button type='button' class='btn btn-success' onclick='addImageSource()'>➕ Add Image Source</button>";
     if (sourceCount > 1) {
@@ -707,7 +982,7 @@ String WebConfig::generateImagePage() {
     
     // Image source
     html += "<div class='card'>";
-    html += "<h2>🖼️ Legacy Single Image Source</h2>";
+    html += "<h2>🖼️ Image Source</h2>";
     html += "<p style='color:#f59e0b;margin-bottom:1rem;'>⚠️ For multiple image sources, use the <a href='/config/sources' style='color:#60a5fa;'>Image Sources</a> page.</p>";
     
     html += "<div class='form-group'>";
@@ -749,6 +1024,17 @@ String WebConfig::generateImagePage() {
     html += "<label for='default_rotation'>Rotation (degrees)</label>";
     html += "<input type='number' id='default_rotation' name='default_rotation' class='form-control' value='" + 
             String(configStorage.getDefaultRotation()) + "' step='90' min='0' max='270'>";
+    html += "</div>";
+    html += "</div>";
+    
+    // Add update interval control (moved from Advanced page)
+    html += "<div class='card'>";
+    html += "<h2>⏱️ Image Update Settings</h2>";
+    
+    html += "<div class='form-group'>";
+    html += "<label for='update_interval'>Image Update Interval (minutes)</label>";
+    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + 
+            String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
     html += "</div>";
     html += "</div>";
     
@@ -809,12 +1095,6 @@ String WebConfig::generateAdvancedPage() {
     // Timing settings
     html += "<div class='card'>";
     html += "<h2>⏱️ Timing Settings</h2>";
-    
-    html += "<div class='form-group'>";
-    html += "<label for='update_interval'>Image Update Interval (minutes)</label>";
-    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + 
-            String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
-    html += "</div>";
     
     html += "<div class='form-group'>";
     html += "<label for='mqtt_reconnect_interval'>MQTT Reconnect Interval (seconds)</label>";
@@ -900,6 +1180,54 @@ String WebConfig::generateFooter() {
     // Brightness slider update
     html += "function updateBrightnessValue(value){";
     html += "document.getElementById('brightnessValue').textContent=value;";
+    html += "}";
+    
+    // Main page brightness slider update
+    html += "function updateMainBrightnessValue(value){";
+    html += "document.getElementById('mainBrightnessValue').textContent=value;";
+    html += "}";
+    
+    // Brightness mode toggle
+    html += "function updateBrightnessMode(isAuto){";
+    html += "const slider=document.getElementById('main_brightness');";
+    html += "const container=document.getElementById('brightness_slider_container');";
+    html += "const saveButton=document.getElementById('save_brightness_btn');";
+    html += "if(isAuto){";
+    html += "slider.disabled=true;";
+    html += "saveButton.disabled=true;";
+    html += "container.style.opacity='0.5';";
+    html += "}else{";
+    html += "slider.disabled=false;";
+    html += "saveButton.disabled=false;";
+    html += "container.style.opacity='1';";
+    html += "}";
+    
+    // Save the form data and apply brightness without page reload
+    html += "const formData=new FormData();";
+    html += "formData.append('brightness_auto_mode',isAuto?'on':'');";
+    html += "fetch('/api/save',{method:'POST',body:formData})";
+    html += ".then(response=>response.json())";
+    html += ".then(data=>{";
+    html += "if(data.status!=='success'){";
+    html += "alert('Error: '+data.message);";
+    html += "}";
+    html += "});";
+    html += "}";
+    
+    // Save main brightness
+    html += "function saveMainBrightness(){";
+    html += "const value=document.getElementById('main_brightness').value;";
+    html += "const formData=new FormData();";
+    html += "formData.append('default_brightness',value);";
+    html += "fetch('/api/save',{method:'POST',body:formData})";
+    html += ".then(response=>response.json())";
+    html += ".then(data=>{";
+    html += "if(data.status==='success'){";
+    html += "alert('Brightness updated successfully!');";
+    html += "}else{";
+    html += "alert('Error: '+data.message);";
+    html += "}";
+    html += "});";
     html += "}";
     
     // Restart function
@@ -994,6 +1322,67 @@ String WebConfig::generateFooter() {
     html += "}";
     html += "}).catch(error=>{";
     html += "alert('Error clearing sources: '+error.message);";
+    html += "});";
+    html += "}";
+    html += "}";
+    
+    // Per-image transform functions
+    html += "function toggleTransformSection(index){";
+    html += "const section=document.getElementById('transformSection_'+index);";
+    html += "if(section){";
+    html += "section.style.display=section.style.display==='none'?'block':'none';";
+    html += "}";
+    html += "}";
+    
+    html += "function updateImageTransform(index,property,value){";
+    html += "const formData=new FormData();";
+    html += "formData.append('index',index);";
+    html += "formData.append('property',property);";
+    html += "formData.append('value',value);";
+    html += "fetch('/api/update-transform',{method:'POST',body:formData})";
+    html += ".then(response=>response.json())";
+    html += ".then(data=>{";
+    html += "if(data.status!=='success'){";
+    html += "alert('Error: '+data.message);";
+    html += "}";
+    html += "}).catch(error=>{";
+    html += "alert('Error updating transform: '+error.message);";
+    html += "});";
+    html += "}";
+    
+    html += "function copyDefaultsToImage(index){";
+    html += "if(confirm('Are you sure you want to copy global default transformation settings to this image?')){";
+    html += "const formData=new FormData();";
+    html += "formData.append('index',index);";
+    html += "fetch('/api/copy-defaults',{method:'POST',body:formData})";
+    html += ".then(response=>response.json())";
+    html += ".then(data=>{";
+    html += "if(data.status==='success'){";
+    html += "alert('Settings copied successfully!');";
+    html += "location.reload();";
+    html += "}else{";
+    html += "alert('Error: '+data.message);";
+    html += "}";
+    html += "}).catch(error=>{";
+    html += "alert('Error copying defaults: '+error.message);";
+    html += "});";
+    html += "}";
+    html += "}";
+    
+    html += "function applyTransformImmediately(index){";
+    html += "if(confirm('Apply these transformation settings immediately?')){";
+    html += "const formData=new FormData();";
+    html += "formData.append('index',index);";
+    html += "fetch('/api/apply-transform',{method:'POST',body:formData})";
+    html += ".then(response=>response.json())";
+    html += ".then(data=>{";
+    html += "if(data.status==='success'){";
+    html += "alert('Transform applied successfully!');";
+    html += "}else{";
+    html += "alert('Error: '+data.message);";
+    html += "}";
+    html += "}).catch(error=>{";
+    html += "alert('Error applying transform: '+error.message);";
     html += "});";
     html += "}";
     html += "}";

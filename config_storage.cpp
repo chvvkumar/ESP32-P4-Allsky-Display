@@ -18,8 +18,8 @@ bool ConfigStorage::begin() {
 
 void ConfigStorage::setDefaults() {
     // Set hardcoded defaults from original config.cpp
-    config.wifiSSID = "";
-    config.wifiPassword = "";
+    config.wifiSSID = "IoT";
+    config.wifiPassword = "kkkkkkkk";
     
     config.mqttServer = "192.168.1.250";
     config.mqttPort = 1883;
@@ -48,7 +48,17 @@ void ConfigStorage::setDefaults() {
         config.imageSources[i] = "";
     }
     
+    // Initialize per-image transformation settings with global defaults
+    for (int i = 0; i < 10; i++) {
+        config.imageTransforms[i].scaleX = DEFAULT_SCALE_X;
+        config.imageTransforms[i].scaleY = DEFAULT_SCALE_Y;
+        config.imageTransforms[i].offsetX = DEFAULT_OFFSET_X;
+        config.imageTransforms[i].offsetY = DEFAULT_OFFSET_Y;
+        config.imageTransforms[i].rotation = DEFAULT_ROTATION;
+    }
+    
     config.defaultBrightness = DEFAULT_BRIGHTNESS;
+    config.brightnessAutoMode = true; // Default to auto mode (MQTT control)
     config.defaultScaleX = DEFAULT_SCALE_X;
     config.defaultScaleY = DEFAULT_SCALE_Y;
     config.defaultOffsetX = DEFAULT_OFFSET_X;
@@ -95,7 +105,18 @@ void ConfigStorage::loadConfig() {
             config.imageSources[i] = preferences.getString(key.c_str(), config.imageSources[i]);
         }
         
+        // Load per-image transform settings
+        for (int i = 0; i < 10; i++) {
+            String prefix = "img_tf_" + String(i) + "_";
+            config.imageTransforms[i].scaleX = preferences.getFloat((prefix + "sx").c_str(), config.imageTransforms[i].scaleX);
+            config.imageTransforms[i].scaleY = preferences.getFloat((prefix + "sy").c_str(), config.imageTransforms[i].scaleY);
+            config.imageTransforms[i].offsetX = preferences.getInt((prefix + "ox").c_str(), config.imageTransforms[i].offsetX);
+            config.imageTransforms[i].offsetY = preferences.getInt((prefix + "oy").c_str(), config.imageTransforms[i].offsetY);
+            config.imageTransforms[i].rotation = preferences.getFloat((prefix + "rot").c_str(), config.imageTransforms[i].rotation);
+        }
+        
         config.defaultBrightness = preferences.getInt("def_bright", config.defaultBrightness);
+        config.brightnessAutoMode = preferences.getBool("bright_auto", config.brightnessAutoMode);
         config.defaultScaleX = preferences.getFloat("def_scale_x", config.defaultScaleX);
         config.defaultScaleY = preferences.getFloat("def_scale_y", config.defaultScaleY);
         config.defaultOffsetX = preferences.getInt("def_off_x", config.defaultOffsetX);
@@ -144,7 +165,18 @@ void ConfigStorage::saveConfig() {
         preferences.putString(key.c_str(), config.imageSources[i]);
     }
     
+    // Save per-image transform settings
+    for (int i = 0; i < 10; i++) {
+        String prefix = "img_tf_" + String(i) + "_";
+        preferences.putFloat((prefix + "sx").c_str(), config.imageTransforms[i].scaleX);
+        preferences.putFloat((prefix + "sy").c_str(), config.imageTransforms[i].scaleY);
+        preferences.putInt((prefix + "ox").c_str(), config.imageTransforms[i].offsetX);
+        preferences.putInt((prefix + "oy").c_str(), config.imageTransforms[i].offsetY);
+        preferences.putFloat((prefix + "rot").c_str(), config.imageTransforms[i].rotation);
+    }
+    
     preferences.putInt("def_bright", config.defaultBrightness);
+    preferences.putBool("bright_auto", config.brightnessAutoMode);
     preferences.putFloat("def_scale_x", config.defaultScaleX);
     preferences.putFloat("def_scale_y", config.defaultScaleY);
     preferences.putInt("def_off_x", config.defaultOffsetX);
@@ -191,6 +223,7 @@ void ConfigStorage::setMQTTBrightnessTopic(const String& topic) { config.mqttBri
 void ConfigStorage::setMQTTBrightnessStatusTopic(const String& topic) { config.mqttBrightnessStatusTopic = topic; }
 void ConfigStorage::setImageURL(const String& url) { config.imageURL = url; }
 void ConfigStorage::setDefaultBrightness(int brightness) { config.defaultBrightness = brightness; }
+void ConfigStorage::setBrightnessAutoMode(bool autoMode) { config.brightnessAutoMode = autoMode; }
 void ConfigStorage::setUpdateInterval(unsigned long interval) { config.updateInterval = interval; }
 void ConfigStorage::setMQTTReconnectInterval(unsigned long interval) { config.mqttReconnectInterval = interval; }
 void ConfigStorage::setDefaultScaleX(float scale) { config.defaultScaleX = scale; }
@@ -217,6 +250,7 @@ String ConfigStorage::getMQTTBrightnessTopic() { return config.mqttBrightnessTop
 String ConfigStorage::getMQTTBrightnessStatusTopic() { return config.mqttBrightnessStatusTopic; }
 String ConfigStorage::getImageURL() { return config.imageURL; }
 int ConfigStorage::getDefaultBrightness() { return config.defaultBrightness; }
+bool ConfigStorage::getBrightnessAutoMode() { return config.brightnessAutoMode; }
 unsigned long ConfigStorage::getUpdateInterval() { return config.updateInterval; }
 unsigned long ConfigStorage::getMQTTReconnectInterval() { return config.mqttReconnectInterval; }
 float ConfigStorage::getDefaultScaleX() { return config.defaultScaleX; }
@@ -332,6 +366,112 @@ String ConfigStorage::getAllImageSources() {
     for (int i = 0; i < config.imageSourceCount; i++) {
         if (i > 0) json += ",";
         json += "\"" + config.imageSources[i] + "\"";
+    }
+    json += "]";
+    return json;
+}
+
+// Per-image transformation setters
+void ConfigStorage::setImageScaleX(int index, float scale) {
+    if (index >= 0 && index < 10) {
+        config.imageTransforms[index].scaleX = constrain(scale, MIN_SCALE, MAX_SCALE);
+    }
+}
+
+void ConfigStorage::setImageScaleY(int index, float scale) {
+    if (index >= 0 && index < 10) {
+        config.imageTransforms[index].scaleY = constrain(scale, MIN_SCALE, MAX_SCALE);
+    }
+}
+
+void ConfigStorage::setImageOffsetX(int index, int offset) {
+    if (index >= 0 && index < 10) {
+        config.imageTransforms[index].offsetX = offset;
+    }
+}
+
+void ConfigStorage::setImageOffsetY(int index, int offset) {
+    if (index >= 0 && index < 10) {
+        config.imageTransforms[index].offsetY = offset;
+    }
+}
+
+void ConfigStorage::setImageRotation(int index, float rotation) {
+    if (index >= 0 && index < 10) {
+        // Normalize rotation to 0, 90, 180, or 270 degrees
+        float normalizedRotation = rotation;
+        while (normalizedRotation >= 360.0f) normalizedRotation -= 360.0f;
+        while (normalizedRotation < 0.0f) normalizedRotation += 360.0f;
+        
+        // Round to nearest 90 degrees for valid rotation values
+        int rotationStep = round(normalizedRotation / 90.0f);
+        config.imageTransforms[index].rotation = rotationStep * 90.0f;
+    }
+}
+
+void ConfigStorage::copyDefaultsToImageTransform(int index) {
+    if (index >= 0 && index < 10) {
+        config.imageTransforms[index].scaleX = config.defaultScaleX;
+        config.imageTransforms[index].scaleY = config.defaultScaleY;
+        config.imageTransforms[index].offsetX = config.defaultOffsetX;
+        config.imageTransforms[index].offsetY = config.defaultOffsetY;
+        config.imageTransforms[index].rotation = config.defaultRotation;
+    }
+}
+
+void ConfigStorage::copyAllDefaultsToImageTransforms() {
+    for (int i = 0; i < 10; i++) {
+        copyDefaultsToImageTransform(i);
+    }
+}
+
+// Per-image transformation getters
+float ConfigStorage::getImageScaleX(int index) {
+    if (index >= 0 && index < 10) {
+        return config.imageTransforms[index].scaleX;
+    }
+    return DEFAULT_SCALE_X;
+}
+
+float ConfigStorage::getImageScaleY(int index) {
+    if (index >= 0 && index < 10) {
+        return config.imageTransforms[index].scaleY;
+    }
+    return DEFAULT_SCALE_Y;
+}
+
+int ConfigStorage::getImageOffsetX(int index) {
+    if (index >= 0 && index < 10) {
+        return config.imageTransforms[index].offsetX;
+    }
+    return DEFAULT_OFFSET_X;
+}
+
+int ConfigStorage::getImageOffsetY(int index) {
+    if (index >= 0 && index < 10) {
+        return config.imageTransforms[index].offsetY;
+    }
+    return DEFAULT_OFFSET_Y;
+}
+
+float ConfigStorage::getImageRotation(int index) {
+    if (index >= 0 && index < 10) {
+        return config.imageTransforms[index].rotation;
+    }
+    return DEFAULT_ROTATION;
+}
+
+String ConfigStorage::getImageTransformsAsJson() {
+    String json = "[";
+    for (int i = 0; i < config.imageSourceCount; i++) {
+        if (i > 0) json += ",";
+        json += "{";
+        json += "\"scaleX\":" + String(config.imageTransforms[i].scaleX, 2) + ",";
+        json += "\"scaleY\":" + String(config.imageTransforms[i].scaleY, 2) + ",";
+        json += "\"offsetX\":" + String(config.imageTransforms[i].offsetX) + ",";
+        json += "\"offsetY\":" + String(config.imageTransforms[i].offsetY) + ",";
+        json += "\"rotation\":" + String(config.imageTransforms[i].rotation, 1);
+        json += "}";
     }
     json += "]";
     return json;

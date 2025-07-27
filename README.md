@@ -1,6 +1,6 @@
 # ESP32-P4 AllSky Display
 
-A comprehensive image display system for ESP32-P4 with advanced features including multi-image cycling, hardware acceleration, web configuration, and MQTT integration.
+An image display system for ESP32-P4-WIFI6-Touch-LCD-3.4C/ESP32-P4-WIFI6-Touch-LCD-4C with advanced features including multi-image cycling, hardware acceleration, web configuration, and MQTT brightness control.
 
 ## Features
 
