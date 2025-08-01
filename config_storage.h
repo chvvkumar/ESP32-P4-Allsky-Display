@@ -36,6 +36,7 @@ public:
     void setMQTTBrightnessStatusTopic(const String& topic);
     void setImageURL(const String& url);
     void setDefaultBrightness(int brightness);
+    void setBrightnessAutoMode(bool autoMode);
     void setUpdateInterval(unsigned long interval);
     void setMQTTReconnectInterval(unsigned long interval);
     void setDefaultScaleX(float scale);
@@ -73,6 +74,7 @@ public:
     String getMQTTBrightnessStatusTopic();
     String getImageURL();
     int getDefaultBrightness();
+    bool getBrightnessAutoMode();
     unsigned long getUpdateInterval();
     unsigned long getMQTTReconnectInterval();
     float getDefaultScaleX();
@@ -96,12 +98,38 @@ public:
     String getCurrentImageURL();
     String getAllImageSources(); // Returns JSON-formatted string of all sources
     
+    // Per-image transformation setters
+    void setImageScaleX(int index, float scale);
+    void setImageScaleY(int index, float scale);
+    void setImageOffsetX(int index, int offset);
+    void setImageOffsetY(int index, int offset);
+    void setImageRotation(int index, float rotation);
+    void copyDefaultsToImageTransform(int index);
+    void copyAllDefaultsToImageTransforms();
+    
+    // Per-image transformation getters
+    float getImageScaleX(int index);
+    float getImageScaleY(int index);
+    int getImageOffsetX(int index);
+    int getImageOffsetY(int index);
+    float getImageRotation(int index);
+    String getImageTransformsAsJson(); // Get all transforms as JSON string
+    
     // Check if configuration exists
     bool hasStoredConfig();
 
 private:
     Preferences preferences;
     static const char* NAMESPACE;
+    
+    // Image transformation settings structure
+    struct ImageTransform {
+        float scaleX;
+        float scaleY;
+        int offsetX;
+        int offsetY;
+        float rotation;
+    };
     
     // Configuration structure
     struct Config {
@@ -130,8 +158,12 @@ private:
         int imageSourceCount;
         String imageSources[10];  // Array of image source URLs (MAX_IMAGE_SOURCES)
         
+        // Per-image transformation settings
+        ImageTransform imageTransforms[10];  // Transformation settings for each image source
+        
         // Display settings
         int defaultBrightness;
+        bool brightnessAutoMode;
         float defaultScaleX;
         float defaultScaleY;
         int defaultOffsetX;

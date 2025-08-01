@@ -1,6 +1,7 @@
 #include "mqtt_manager.h"
 #include "system_monitor.h"
 #include "display_manager.h"
+#include "config_storage.h"
 
 // Global instance
 MQTTManager mqttManager;
@@ -222,6 +223,12 @@ void MQTTManager::handleRebootMessage(const String& message) {
 void MQTTManager::handleBrightnessMessage(const String& message) {
     Serial.printf("Processing brightness message: '%s'\n", message.c_str());
     
+    // Check if auto brightness mode is enabled
+    if (!configStorage.getBrightnessAutoMode()) {
+        Serial.println("MQTT brightness control disabled (auto mode is off) - ignoring");
+        return;
+    }
+    
     // Handle empty or invalid messages
     if (message.length() == 0) {
         Serial.println("Empty brightness message received - ignoring");
@@ -245,6 +252,10 @@ void MQTTManager::handleBrightnessMessage(const String& message) {
         if (brightness != currentBrightness) {
             displayManager.setBrightness(brightness);
             Serial.printf("Brightness changed from %d%% to %d%% via MQTT\n", currentBrightness, brightness);
+            
+            // Save the value to config so it persists
+            configStorage.setDefaultBrightness(brightness);
+            configStorage.saveConfig();
             
             // Show debug message if first image not loaded yet
             if (debugPrintFunc && !firstImageLoaded) {

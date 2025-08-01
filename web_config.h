@@ -42,6 +42,9 @@ private:
     void handleUpdateImageSource();
     void handleClearImageSources();
     void handleNextImage();
+    void handleUpdateImageTransform();
+    void handleCopyDefaultsToImage();
+    void handleApplyTransform();
     void handleRestart();
     void handleFactoryReset();
     void handleNotFound();

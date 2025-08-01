@@ -263,6 +263,9 @@ void setup() {
     // Load cycling configuration after all modules are initialized
     loadCyclingConfiguration();
     
+    // Load transform settings for the current image
+    updateCurrentImageTransformSettings();
+    
     // Initialize touch controller
     initializeTouchController();
     
@@ -926,6 +929,24 @@ void loadCyclingConfiguration() {
 // Update cycling variables from configuration storage
 void updateCyclingVariables() {
     loadCyclingConfiguration();
+    
+    // Also load the transform settings for the current image
+    updateCurrentImageTransformSettings();
+}
+
+// Load transform settings for the current image from configuration storage
+void updateCurrentImageTransformSettings() {
+    if (imageSourceCount > 0) {
+        int index = currentImageIndex;
+        scaleX = configStorage.getImageScaleX(index);
+        scaleY = configStorage.getImageScaleY(index);
+        offsetX = configStorage.getImageOffsetX(index);
+        offsetY = configStorage.getImageOffsetY(index);
+        rotationAngle = configStorage.getImageRotation(index);
+        
+        Serial.printf("Loaded transform settings for image %d: scale=%.1fx%.1f, offset=%d,%d, rotation=%.0f°\n",
+                     index, scaleX, scaleY, offsetX, offsetY, rotationAngle);
+    }
 }
 
 // Advance to next image in cycling sequence
@@ -949,6 +970,9 @@ void advanceToNextImage() {
     // Save the new index to persistent storage
     configStorage.setCurrentImageIndex(currentImageIndex);
     configStorage.saveConfig();
+    
+    // Update transform settings for the new image
+    updateCurrentImageTransformSettings();
     
     Serial.printf("Advanced to image %d/%d: %s\n", 
                   currentImageIndex + 1, imageSourceCount, getCurrentImageURL().c_str());

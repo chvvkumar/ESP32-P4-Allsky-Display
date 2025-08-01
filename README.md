@@ -1,6 +1,12 @@
-# ESP32-P4 AllSky Display
+# ESP32-P4-WIFI6-Touch-LCD-3.4C / ESP32-P4-WIFI6-Touch-LCD-4C AllSky Display
 
-A comprehensive image display system for ESP32-P4 with advanced features including multi-image cycling, hardware acceleration, web configuration, and MQTT integration.
+An image display system for ESP32-P4-WIFI6-Touch-LCD-3.4C/ESP32-P4-WIFI6-Touch-LCD-4C with features including multi-image cycling, hardware acceleration, web configuration, and MQTT brightness control.
+
+## Documentation
+
+🔗 [Product Page](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.4c.htm)
+
+📝 [Product documentation](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-3.4C)
 
 ## Features
 
@@ -42,10 +48,10 @@ A comprehensive image display system for ESP32-P4 with advanced features includi
 - **Secure Connection**: Support for authenticated MQTT connections
 
 ### System Monitoring & Reliability
-- **Watchdog Protection**: Comprehensive watchdog timer management
+- **Watchdog Protection**: Watchdog timer management
 - **Memory Monitoring**: Real-time heap and PSRAM usage tracking
 - **Network Health**: WiFi connection monitoring and recovery
-- **Error Handling**: Robust error detection and recovery mechanisms
+- **Error Handling**: Error detection and recovery mechanisms
 - **Performance Metrics**: Download speeds, processing times, and system health
 
 ### Touch Interface
