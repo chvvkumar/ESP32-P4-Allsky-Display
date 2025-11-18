@@ -8,6 +8,10 @@ WiFiManager::WiFiManager() :
     wifiConnected(false),
     lastConnectionAttempt(0),
     connectionAttempts(0),
+    apModeEnabled(false),
+    apStartupAttempted(false),
+    apStartTime(0),
+    failedConnectionAttempts(0),
     debugPrintFunc(nullptr),
     debugPrintfFunc(nullptr),
     firstImageLoaded(false)
@@ -15,18 +19,18 @@ WiFiManager::WiFiManager() :
 }
 
 bool WiFiManager::begin() {
-    // Validate WiFi credentials first
+    // Check WiFi credentials - if empty, we'll start AP mode
     if (strlen(WIFI_SSID) == 0) {
-        Serial.println("ERROR: WiFi SSID is empty!");
-        if (debugPrintFunc) debugPrintFunc("ERROR: WiFi SSID is empty!", COLOR_RED);
-        return false;
+        Serial.println("WARNING: WiFi SSID is empty - will start setup hotspot!");
+        if (debugPrintFunc) debugPrintFunc("WiFi SSID empty - setup hotspot starting", COLOR_YELLOW);
+        // Don't fail - we'll handle this in the main flow by starting AP mode
     }
     
     Serial.println("Setting WiFi mode to STA");
     if (debugPrintFunc) debugPrintFunc("Setting WiFi mode to STA", COLOR_WHITE);
     
     WiFi.mode(WIFI_STA);
-    return true;
+    return true;  // Always succeed on initialization
 }
 
 void WiFiManager::connectToWiFi() {
@@ -164,6 +168,11 @@ void WiFiManager::setDebugFunctions(void (*debugPrint)(const char*, uint16_t),
 void WiFiManager::update() {
     checkConnection();
     
+    // Don't attempt reconnection if we're in AP mode (initial setup)
+    if (apModeEnabled) {
+        return;
+    }
+    
     // Attempt reconnection if disconnected
     if (!isConnected()) {
         connectToWiFi();
@@ -182,4 +191,145 @@ void WiFiManager::printConnectionInfo() {
         Serial.printf("DNS: %s\n", WiFi.dnsIP().toString().c_str());
     }
     Serial.println("============================");
+}
+
+// ============================================================================
+// AP MODE (Access Point) FUNCTIONS FOR INITIAL WIFI SETUP
+// ============================================================================
+
+void WiFiManager::startWiFiSetupHotspot() {
+    // Called when WiFi connection fails multiple times
+    // Enables AP mode to allow initial WiFi configuration via web interface
+    
+    if (apStartupAttempted) {
+        Serial.println("AP mode startup already attempted, skipping...");
+        return;
+    }
+    
+    apStartupAttempted = true;
+    
+    Serial.println("\n=== STARTING WIFI SETUP HOTSPOT ===");
+    Serial.printf("SSID: %s\n", WIFI_AP_SSID);
+    Serial.println("Password: Open network (no password required)");
+    Serial.println("Access point IP: 192.168.4.1");
+    Serial.println("Web config URL: http://192.168.4.1:8080");
+    
+    if (debugPrintFunc) {
+        debugPrintFunc("=== WIFI SETUP HOTSPOT ===", COLOR_MAGENTA);
+        debugPrintfFunc(COLOR_MAGENTA, "SSID: %s", WIFI_AP_SSID);
+        debugPrintfFunc(COLOR_CYAN, "IP: 192.168.4.1:8080");
+        debugPrintfFunc(COLOR_YELLOW, "No password required!");
+    }
+    
+    enableAPMode();
+}
+
+void WiFiManager::enableAPMode() {
+    // Enable AP mode and allow clients to connect
+    
+    if (apModeEnabled) {
+        Serial.println("AP mode already enabled");
+        return;
+    }
+    
+    Serial.println("Switching WiFi to AP mode...");
+    
+    // Switch to AP mode
+    WiFi.mode(WIFI_AP);
+    
+    // Start AP with configured SSID and password
+    bool apSuccessful = false;
+    
+    if (strlen(WIFI_AP_PASSWORD) > 0) {
+        // Start AP with password
+        apSuccessful = WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASSWORD, 1, 0, WIFI_AP_MAX_CONNECTIONS);
+    } else {
+        // Start open AP (no password)
+        apSuccessful = WiFi.softAP(WIFI_AP_SSID, "", 1, 0, WIFI_AP_MAX_CONNECTIONS);
+    }
+    
+    if (apSuccessful) {
+        apModeEnabled = true;
+        apStartTime = millis();
+        
+        IPAddress apIP = WiFi.softAPIP();
+        Serial.printf("AP mode enabled successfully!\n");
+        Serial.printf("AP IP: %s\n", apIP.toString().c_str());
+        Serial.printf("AP SSID: %s\n", WIFI_AP_SSID);
+        Serial.printf("Max connections: %d\n", WIFI_AP_MAX_CONNECTIONS);
+        Serial.printf("AP timeout: %lu ms (%lu minutes)\n", WIFI_AP_TIMEOUT, WIFI_AP_TIMEOUT / 60000);
+        
+        if (debugPrintFunc) {
+            debugPrintfFunc(COLOR_GREEN, "AP mode enabled!");
+            debugPrintfFunc(COLOR_CYAN, "AP IP: %s", apIP.toString().c_str());
+        }
+    } else {
+        apModeEnabled = false;
+        Serial.println("ERROR: Failed to enable AP mode!");
+        
+        if (debugPrintFunc) {
+            debugPrintfFunc(COLOR_RED, "Failed to enable AP mode");
+        }
+    }
+}
+
+void WiFiManager::disableAPMode() {
+    // Disable AP mode and switch back to STA mode
+    
+    if (!apModeEnabled) {
+        Serial.println("AP mode not currently enabled");
+        return;
+    }
+    
+    Serial.println("Disabling AP mode and switching to STA...");
+    
+    WiFi.softAPdisconnect(true);  // Disconnect and turn off AP
+    apModeEnabled = false;
+    apStartupAttempted = false;
+    
+    // Return to STA mode
+    WiFi.mode(WIFI_STA);
+    
+    Serial.println("Switched back to WiFi STA mode");
+    
+    if (debugPrintFunc) {
+        debugPrintfFunc(COLOR_YELLOW, "Switched to STA mode");
+    }
+}
+
+bool WiFiManager::isAPModeEnabled() const {
+    return apModeEnabled;
+}
+
+void WiFiManager::updateAPMode() {
+    // Update AP mode status and check for timeouts
+    
+    if (!apModeEnabled) {
+        return;
+    }
+    
+    // Check if AP timeout has been exceeded
+    checkAPTimeout();
+}
+
+void WiFiManager::checkAPTimeout() {
+    // Check if AP mode has exceeded its timeout duration
+    // Auto-disable AP mode if timeout is reached
+    
+    if (!apModeEnabled || apStartTime == 0) {
+        return;
+    }
+    
+    unsigned long apRunTime = millis() - apStartTime;
+    
+    if (apRunTime > WIFI_AP_TIMEOUT) {
+        Serial.println("AP mode timeout reached, disabling AP mode");
+        Serial.println("Device will attempt to connect to configured WiFi");
+        
+        if (debugPrintFunc) {
+            debugPrintfFunc(COLOR_YELLOW, "AP timeout - switching to STA");
+        }
+        
+        disableAPMode();
+    }
 }

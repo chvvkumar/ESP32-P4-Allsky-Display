@@ -13,6 +13,7 @@
 #include "mqtt_manager.h"
 #include "gt911.h"
 #include "i2c.h"
+#include "task_retry_handler.h"
 
 // Additional required libraries
 #include <HTTPClient.h>
@@ -52,6 +53,12 @@ uint16_t* fullImageBuffer = nullptr;
 size_t fullImageBufferSize = 0;
 int16_t fullImageWidth = 0;
 int16_t fullImageHeight = 0;
+
+// Pending image buffer (downloaded/decoded but not yet displayed)
+uint16_t* pendingFullImageBuffer = nullptr;
+int16_t pendingImageWidth = 0;
+int16_t pendingImageHeight = 0;
+bool imageReadyToDisplay = false;  // Flag: new image fully prepared and ready to show
 
 // Scaling buffer for transformed images
 uint16_t* scaledBuffer = nullptr;
@@ -135,12 +142,12 @@ void debugPrintf(uint16_t color, const char* format, ...) {
     displayManager.debugPrint(buffer, color);
 }
 
-// JPEG callback function to collect pixels into full image buffer
+// JPEG callback function to collect pixels into PENDING image buffer (not displayed yet)
 int JPEGDraw(JPEGDRAW *pDraw) {
-    // Store pixels in the full image buffer
-    if (fullImageBuffer && pDraw->y + pDraw->iHeight <= fullImageHeight) {
+    // Store pixels in the PENDING image buffer (will be swapped to active buffer when complete)
+    if (pendingFullImageBuffer && pDraw->y + pDraw->iHeight <= pendingImageHeight) {
         for (int16_t y = 0; y < pDraw->iHeight; y++) {
-            uint16_t* destRow = fullImageBuffer + ((pDraw->y + y) * fullImageWidth + pDraw->x);
+            uint16_t* destRow = pendingFullImageBuffer + ((pDraw->y + y) * pendingImageWidth + pDraw->x);
             uint16_t* srcRow = pDraw->pPixels + (y * pDraw->iWidth);
             memcpy(destRow, srcRow, pDraw->iWidth * sizeof(uint16_t));
         }
@@ -206,6 +213,15 @@ void setup() {
         while(1) delay(1000);
     }
     
+    // Allocate pending image buffer (for seamless transitions without flicker)
+    debugPrintf(COLOR_WHITE, "Allocating pending image buffer: %d bytes", fullImageBufferSize);
+    
+    pendingFullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
+    if (!pendingFullImageBuffer) {
+        debugPrint("ERROR: Pending image buffer allocation failed!", COLOR_RED);
+        while(1) delay(1000);
+    }
+    
     // Allocate scaling buffer for transformed images
     scaledBufferSize = w * h * SCALED_BUFFER_MULTIPLIER * 2;
     debugPrintf(COLOR_WHITE, "Allocating scaling buffer: %d bytes", scaledBufferSize);
@@ -234,9 +250,33 @@ void setup() {
     if (!wifiManager.begin()) {
         debugPrint("ERROR: WiFi initialization failed!", COLOR_RED);
     } else {
-        // Connect to WiFi
-        debugPrint("Starting WiFi connection...", COLOR_YELLOW);
-        wifiManager.connectToWiFi();
+        // Check if WiFi SSID is empty - if so, start AP mode immediately
+        if (strlen(WIFI_SSID) == 0) {
+            debugPrint("No WiFi credentials configured!", COLOR_RED);
+            debugPrint("Starting WiFi setup hotspot...", COLOR_YELLOW);
+            systemMonitor.forceResetWatchdog();
+            
+            // Enable AP mode for initial WiFi setup (SSID is empty)
+            wifiManager.startWiFiSetupHotspot();
+            systemMonitor.forceResetWatchdog();
+        } else {
+            // Try to connect to WiFi with watchdog protection
+            debugPrint("Starting WiFi connection...", COLOR_YELLOW);
+            systemMonitor.forceResetWatchdog();
+            wifiManager.connectToWiFi();
+            systemMonitor.forceResetWatchdog();  // Reset after WiFi connect attempt
+            
+            // Check if WiFi connection failed - if so, start AP mode for setup
+            if (!wifiManager.isConnected()) {
+                debugPrint("WiFi connection failed!", COLOR_RED);
+                debugPrint("Starting WiFi setup hotspot...", COLOR_YELLOW);
+                systemMonitor.forceResetWatchdog();
+                
+                // Enable AP mode for initial WiFi setup
+                wifiManager.startWiFiSetupHotspot();
+                systemMonitor.forceResetWatchdog();
+            }
+        }
     }
     
     // Initialize MQTT manager
@@ -247,12 +287,19 @@ void setup() {
         // MQTT connection will be attempted after WiFi is established
     }
     
-    // Start web configuration server if WiFi is connected
-    if (wifiManager.isConnected()) {
+    // Start web configuration server if WiFi is connected OR if AP mode is enabled
+    if (wifiManager.isConnected() || wifiManager.isAPModeEnabled()) {
         debugPrint("Starting web configuration server...", COLOR_YELLOW);
-        if (webConfig.begin(8080)) {
-            debugPrintf(COLOR_GREEN, "Web config available at: http://%s:8080", WiFi.localIP().toString().c_str());
-            Serial.printf("Web configuration server started successfully at: http://%s:8080\n", WiFi.localIP().toString().c_str());
+        // Use port 80 for AP mode (standard HTTP port), 8080 for normal WiFi
+        int webPort = wifiManager.isAPModeEnabled() ? 80 : 8080;
+        if (webConfig.begin(webPort)) {
+            if (wifiManager.isAPModeEnabled()) {
+                debugPrintf(COLOR_GREEN, "Web config available at: http://192.168.4.1");
+                Serial.println("Web configuration server started (AP mode) at: http://192.168.4.1");
+            } else {
+                debugPrintf(COLOR_GREEN, "Web config available at: http://%s:8080", WiFi.localIP().toString().c_str());
+                Serial.printf("Web configuration server started successfully at: http://%s:8080\n", WiFi.localIP().toString().c_str());
+            }
         } else {
             debugPrint("ERROR: Web config server failed to start", COLOR_RED);
         }
@@ -314,63 +361,20 @@ void renderFullImage() {
     int16_t finalX = centerX - (scaledWidth / 2) + offsetX;
     int16_t finalY = centerY - (scaledHeight / 2) + offsetY;
     
-    // Smart clearing to prevent flash
+    // FLICKER FIX: Skip clearing on image updates to avoid black flash
+    // Only clear on first image load, subsequent updates render directly without clearing
     systemMonitor.forceResetWatchdog();
     
     if (!hasSeenFirstImage) {
-        // First image: clear entire screen
+        // First image ONLY: clear entire screen once
         debugPrint("DEBUG: First image - clearing entire screen", COLOR_WHITE);
         displayManager.clearScreen();
         hasSeenFirstImage = true;
         systemMonitor.forceResetWatchdog();
-    } else {
-        // Subsequent images: clear only areas not covered by new image
-        debugPrintf(COLOR_WHITE, "DEBUG: Smart clear - prev(%d,%d %dx%d) -> new(%d,%d %dx%d)", 
-                   prevImageX, prevImageY, prevImageWidth, prevImageHeight,
-                   finalX, finalY, scaledWidth, scaledHeight);
-        
-        // Reset watchdog before clearing operations
-        systemMonitor.forceResetWatchdog();
-        
-        // Clear areas that were covered by previous image but won't be covered by new image
-        if (prevImageWidth > 0 && prevImageHeight > 0) {
-            // Clear top area (above new image)
-            if (prevImageY < finalY) {
-                int16_t clearX = min(prevImageX, finalX);
-                int16_t clearWidth = max(prevImageX + prevImageWidth, finalX + scaledWidth) - clearX;
-                gfx->fillRect(clearX, prevImageY, clearWidth, finalY - prevImageY, COLOR_BLACK);
-            }
-            
-            // Clear bottom area (below new image)
-            int16_t prevBottom = prevImageY + prevImageHeight;
-            int16_t newBottom = finalY + scaledHeight;
-            if (prevBottom > newBottom) {
-                int16_t clearX = min(prevImageX, finalX);
-                int16_t clearWidth = max(prevImageX + prevImageWidth, finalX + scaledWidth) - clearX;
-                gfx->fillRect(clearX, newBottom, clearWidth, prevBottom - newBottom, COLOR_BLACK);
-            }
-            
-            // Clear left area (left of new image)
-            if (prevImageX < finalX) {
-                int16_t clearY = max(prevImageY, finalY);
-                int16_t clearHeight = min(prevImageY + prevImageHeight, finalY + scaledHeight) - clearY;
-                if (clearHeight > 0) {
-                    gfx->fillRect(prevImageX, clearY, finalX - prevImageX, clearHeight, COLOR_BLACK);
-                }
-            }
-            
-            // Clear right area (right of new image)
-            int16_t prevRight = prevImageX + prevImageWidth;
-            int16_t newRight = finalX + scaledWidth;
-            if (prevRight > newRight) {
-                int16_t clearY = max(prevImageY, finalY);
-                int16_t clearHeight = min(prevImageY + prevImageHeight, finalY + scaledHeight) - clearY;
-                if (clearHeight > 0) {
-                    gfx->fillRect(newRight, clearY, prevRight - newRight, clearHeight, COLOR_BLACK);
-                }
-            }
-        }
     }
+    // NOTE: Subsequent images skip clearing entirely - the buffer swap ensures
+    // we only update when the new image is 100% ready, so no intermediate states
+    // exist that would require clearing. This eliminates the black flash!
     
     // Reset watchdog before rendering operations
     systemMonitor.forceResetWatchdog();
@@ -397,11 +401,17 @@ void renderFullImage() {
             
             unsigned long hwStart = millis();
             
+            // Pause display during heavy PPA operations to prevent LCD underrun
+            displayManager.pauseDisplay();
+            
             if (ppaAccelerator.scaleRotateImage(fullImageBuffer, fullImageWidth, fullImageHeight,
                                               scaledBuffer, scaledWidth, scaledHeight, rotationAngle)) {
                 unsigned long hwTime = millis() - hwStart;
                 debugPrintf(COLOR_WHITE, "PPA scale+rotate: %lums (%dx%d -> %dx%d, %.0f°)", 
                            hwTime, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, rotationAngle);
+                
+                // Resume display after heavy operation
+                displayManager.resumeDisplay();
                 
                 systemMonitor.forceResetWatchdog();
                 
@@ -838,23 +848,23 @@ void downloadAndDisplayImage() {
     debugPrint("DEBUG: Attempting to open JPEG with openRAM", COLOR_CYAN);
     
     if (jpeg.openRAM(imageBuffer, bytesRead, JPEGDraw)) {
-        fullImageWidth = jpeg.getWidth();
-        fullImageHeight = jpeg.getHeight();
+        pendingImageWidth = jpeg.getWidth();
+        pendingImageHeight = jpeg.getHeight();
         
-        debugPrintf(COLOR_WHITE, "JPEG: %dx%d pixels", fullImageWidth, fullImageHeight);
+        debugPrintf(COLOR_WHITE, "JPEG: %dx%d pixels", pendingImageWidth, pendingImageHeight);
         
-        // Check if image fits in our full image buffer
-        size_t requiredSize = fullImageWidth * fullImageHeight * 2;
+        // Check if image fits in our pending buffer
+        size_t requiredSize = pendingImageWidth * pendingImageHeight * 2;
         debugPrintf(COLOR_CYAN, "DEBUG: Required buffer size: %d, available: %d", requiredSize, fullImageBufferSize);
         
         if (requiredSize <= fullImageBufferSize) {
-            debugPrint("Decoding to full buffer...", COLOR_YELLOW);
+            debugPrint("Decoding to PENDING buffer...", COLOR_YELLOW);
             
-            // Clear the full image buffer
-            memset(fullImageBuffer, 0, fullImageWidth * fullImageHeight * sizeof(uint16_t));
+            // Clear the PENDING image buffer
+            memset(pendingFullImageBuffer, 0, pendingImageWidth * pendingImageHeight * sizeof(uint16_t));
             
-            // Decode the full image into our buffer with watchdog protection
-            debugPrint("Starting JPEG decode...", COLOR_YELLOW);
+            // Decode the full image into PENDING buffer with watchdog protection
+            debugPrint("Starting JPEG decode to pending buffer...", COLOR_YELLOW);
             systemMonitor.forceResetWatchdog();
             
             unsigned long decodeStart = millis();
@@ -863,33 +873,34 @@ void downloadAndDisplayImage() {
             const unsigned long DECODE_TIMEOUT = 5000;  // 5 second timeout for decode
             unsigned long decodeStartTime = millis();
             
-            debugPrint("DEBUG: Calling jpeg.decode()", COLOR_CYAN);
+            debugPrint("DEBUG: Calling jpeg.decode() into pending buffer", COLOR_CYAN);
+            
+            // Pause display during decode to prevent LCD underrun from memory contention
+            displayManager.pauseDisplay();
             
             if (jpeg.decode(0, 0, 0)) {
                 unsigned long decodeTime = millis() - decodeStart;
                 debugPrintf(COLOR_WHITE, "JPEG decode completed in %lu ms", decodeTime);
-                debugPrint("Rendering image...", COLOR_GREEN);
                 
-                // Reset watchdog before rendering
+                // Resume display after decode completes
+                displayManager.resumeDisplay();
+                
+                // Reset watchdog after decode
                 systemMonitor.forceResetWatchdog();
                 
-                debugPrint("DEBUG: Calling renderFullImage()", COLOR_CYAN);
+                // Mark image as ready to display (but don't display yet - let loop handle it)
+                imageReadyToDisplay = true;
+                debugPrint("DEBUG: Image ready to display - pending buffer prepared", COLOR_GREEN);
+                Serial.println("Image fully decoded and ready for display");
                 
-                // Now render the full image with transformations
-                renderFullImage();
-                
-                // Reset watchdog after rendering
-                systemMonitor.forceResetWatchdog();
-                
-                // Mark first image as loaded (only once)
+                // Mark first image as loaded (only once) - happens before actual display
                 if (!firstImageLoaded) {
                     firstImageLoaded = true;
                     displayManager.setFirstImageLoaded(true);
                     Serial.println("First image loaded successfully - switching to image mode");
                     debugPrint("DEBUG: First image loaded flag set", COLOR_GREEN);
                 } else {
-                    Serial.println("Image updated successfully");
-                    debugPrint("DEBUG: Image updated successfully", COLOR_GREEN);
+                    Serial.println("Image prepared successfully - ready for seamless display");
                 }
             } else {
                 debugPrint("ERROR: JPEG decode() function failed!", COLOR_RED);
@@ -1168,6 +1179,21 @@ void loop() {
     // Force watchdog reset at start of each loop iteration
     systemMonitor.forceResetWatchdog();
     
+    // VERY IMPORTANT: If AP mode is active, handle web requests IMMEDIATELY and FREQUENTLY
+    // This prevents the browser from hanging waiting for responses
+    if (wifiManager.isAPModeEnabled() && webConfig.isRunning()) {
+        // In AP mode setup, web server handling is the PRIORITY
+        // Call handleClient multiple times to process pending requests
+        for (int i = 0; i < 3; i++) {
+            webConfig.handleClient();
+            systemMonitor.forceResetWatchdog();
+        }
+    }
+    
+    // Process background retry tasks (handles network, MQTT, and image download failures)
+    taskRetryHandler.process();
+    systemMonitor.forceResetWatchdog();
+    
     // Handle web server first for maximum responsiveness
     if (wifiManager.isConnected() && webConfig.isRunning()) {
         // Add debugging for web server activity
@@ -1190,13 +1216,30 @@ void loop() {
     wifiManager.update();
     systemMonitor.forceResetWatchdog();
     
+    // Update AP mode (check for timeouts)
+    if (wifiManager.isAPModeEnabled()) {
+        wifiManager.updateAPMode();
+        systemMonitor.forceResetWatchdog();
+        
+        // Try to start web server if AP mode is active but web server isn't running
+        if (!webConfig.isRunning()) {
+            // Use port 80 for AP mode, 8080 for STA mode
+            int webPort = wifiManager.isAPModeEnabled() ? 80 : 8080;
+            if (webConfig.begin(webPort)) {
+                Serial.printf("Web config server started for AP mode on port %d\n", webPort);
+            }
+        }
+    }
+    
     // Handle web configuration server with better error handling
     if (wifiManager.isConnected()) {
+        systemMonitor.forceResetWatchdog();  // Reset before web operations
         if (webConfig.isRunning()) {
             unsigned long webStartTime = millis();
             
             // Handle web requests without timeout restrictions that might interrupt connections
             webConfig.handleClient();
+            systemMonitor.forceResetWatchdog();  // Reset after web handling
             
             unsigned long webHandleTime = millis() - webStartTime;
             
@@ -1204,17 +1247,16 @@ void loop() {
             if (webHandleTime > 5000) {
                 Serial.printf("WARNING: Web client handling took %lu ms\n", webHandleTime);
             }
-            
-            // Don't reset watchdog immediately after web handling to prevent connection interruption
-            // systemMonitor.forceResetWatchdog();
         } else {
             // Try to start web server if not running
             Serial.println("DEBUG: Web server not running, attempting to restart...");
+            systemMonitor.forceResetWatchdog();  // Reset before webConfig.begin
             if (webConfig.begin(8080)) {
                 Serial.printf("Web configuration server restarted at: http://%s:8080\n", WiFi.localIP().toString().c_str());
             } else {
                 Serial.println("ERROR: Failed to restart web configuration server");
             }
+            systemMonitor.forceResetWatchdog();  // Reset after attempt
         }
         systemMonitor.forceResetWatchdog();
     }
@@ -1385,6 +1427,37 @@ void loop() {
             imageProcessing = false;
             systemMonitor.forceResetWatchdog();
         }
+    }
+    
+    // Check if new image is ready to display - swap buffers for seamless transition (NO FLICKER!)
+    if (imageReadyToDisplay) {
+        imageReadyToDisplay = false;  // Clear the flag immediately
+        
+        Serial.println("=== SWAPPING IMAGE BUFFERS FOR SEAMLESS DISPLAY ===");
+        systemMonitor.forceResetWatchdog();
+        
+        // Swap the buffers: move pending->active
+        uint16_t* tempBuffer = fullImageBuffer;
+        fullImageBuffer = pendingFullImageBuffer;
+        pendingFullImageBuffer = tempBuffer;
+        
+        int16_t tempWidth = fullImageWidth;
+        fullImageWidth = pendingImageWidth;
+        pendingImageWidth = tempWidth;
+        
+        int16_t tempHeight = fullImageHeight;
+        fullImageHeight = pendingImageHeight;
+        pendingImageHeight = tempHeight;
+        
+        Serial.printf("Buffer swap complete: %dx%d image now active\n", fullImageWidth, fullImageHeight);
+        systemMonitor.forceResetWatchdog();
+        
+        // Now render the new image to display (single seamless update, no clearing artifacts)
+        debugPrint("Rendering swapped image...", COLOR_GREEN);
+        renderFullImage();
+        systemMonitor.forceResetWatchdog();
+        
+        Serial.println("Image display completed - no flicker!");
     }
     
     // Check total loop time for performance monitoring

@@ -12,6 +12,12 @@ private:
     unsigned long lastConnectionAttempt;
     int connectionAttempts;
     
+    // AP mode variables
+    bool apModeEnabled;
+    bool apStartupAttempted;
+    unsigned long apStartTime;
+    int failedConnectionAttempts;
+    
     // Debug display function pointer
     void (*debugPrintFunc)(const char* message, uint16_t color);
     void (*debugPrintfFunc)(uint16_t color, const char* format, ...);
@@ -43,7 +49,16 @@ public:
     
     // Print connection info
     void printConnectionInfo();
+    
+    // AP Mode (Access Point) functions for initial WiFi setup
+    void enableAPMode();
+    void disableAPMode();
+    bool isAPModeEnabled() const;
+    void updateAPMode();
+    void checkAPTimeout();
+    void startWiFiSetupHotspot();
 };
+
 
 // Global instance
 extern WiFiManager wifiManager;
