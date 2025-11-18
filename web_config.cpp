@@ -150,6 +150,7 @@ void WebConfig::handleStatus() {
 
 void WebConfig::handleSaveConfig() {
     bool needsRestart = false;
+    bool wifiSettingsChanged = false;  // Track WiFi changes separately
     bool brightnessChanged = false;
     bool imageSettingsChanged = false;
     int newBrightness = -1;
@@ -161,11 +162,17 @@ void WebConfig::handleSaveConfig() {
         
         // Network settings
         if (name == "wifi_ssid") {
-            if (configStorage.getWiFiSSID() != value) needsRestart = true;
+            if (configStorage.getWiFiSSID() != value) {
+                needsRestart = true;
+                wifiSettingsChanged = true;
+            }
             configStorage.setWiFiSSID(value);
         }
         else if (name == "wifi_password") {
-            if (configStorage.getWiFiPassword() != value) needsRestart = true;
+            if (configStorage.getWiFiPassword() != value) {
+                needsRestart = true;
+                wifiSettingsChanged = true;
+            }
             configStorage.setWiFiPassword(value);
         }
         
@@ -302,10 +309,28 @@ void WebConfig::handleSaveConfig() {
         applyImageSettings();
     }
     
-    // Prepare response message
+    // If WiFi settings changed, auto-restart for the changes to take effect
+    if (wifiSettingsChanged) {
+        String response = "{\"status\":\"success\",\"message\":\"WiFi settings saved. Device will restart in 3 seconds...\",\"willRestart\":true}";
+        sendResponse(200, "application/json", response);
+        
+        // Display message on screen
+        displayManager.debugPrint("WiFi settings changed!", COLOR_YELLOW);
+        displayManager.debugPrint("Restarting device...", COLOR_CYAN);
+        displayManager.debugPrint("Please wait...", COLOR_YELLOW);
+        
+        // Wait briefly to ensure response is sent to browser
+        delay(1000);
+        
+        Serial.println("WiFi settings changed - executing automatic restart");
+        ESP.restart();
+        return;  // Should not reach here, but just in case
+    }
+    
+    // Prepare response message for non-WiFi changes
     String message = "Configuration saved successfully";
-    if (needsRestart) {
-        message += " (restart required for network/MQTT changes)";
+    if (needsRestart && !wifiSettingsChanged) {
+        message += " (restart required for MQTT changes)";
     }
     if (brightnessChanged) {
         message += " - brightness applied immediately";
