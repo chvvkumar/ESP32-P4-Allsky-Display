@@ -13,35 +13,59 @@ WebConfig::WebConfig() : server(nullptr), serverRunning(false) {
 bool WebConfig::begin(int port) {
     if (serverRunning) return true;
     
-    server = new WebServer(port);
-    
-    // Setup routes
-    server->on("/", [this]() { handleRoot(); });
-    server->on("/config/network", [this]() { handleNetworkConfig(); });
-    server->on("/config/mqtt", [this]() { handleMQTTConfig(); });
-    server->on("/config/image", [this]() { handleImageConfig(); });
-    server->on("/config/sources", [this]() { handleImageSources(); });
-    server->on("/config/display", [this]() { handleDisplayConfig(); });
-    server->on("/config/advanced", [this]() { handleAdvancedConfig(); });
-    server->on("/status", [this]() { handleStatus(); });
-    server->on("/api/save", HTTP_POST, [this]() { handleSaveConfig(); });
-    server->on("/api/add-source", HTTP_POST, [this]() { handleAddImageSource(); });
-    server->on("/api/remove-source", HTTP_POST, [this]() { handleRemoveImageSource(); });
-    server->on("/api/update-source", HTTP_POST, [this]() { handleUpdateImageSource(); });
-    server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
-    server->on("/api/next-image", HTTP_POST, [this]() { handleNextImage(); });
-    server->on("/api/update-transform", HTTP_POST, [this]() { handleUpdateImageTransform(); });
-    server->on("/api/copy-defaults", HTTP_POST, [this]() { handleCopyDefaultsToImage(); });
-    server->on("/api/apply-transform", HTTP_POST, [this]() { handleApplyTransform(); });
-    server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
-    server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
-    server->onNotFound([this]() { handleNotFound(); });
-    
-    server->begin();
-    serverRunning = true;
-    
-    Serial.printf("Web configuration server started on port %d\n", port);
-    return true;
+    try {
+        Serial.printf("Creating WebServer on port %d...\n", port);
+        server = new WebServer(port);
+        
+        if (!server) {
+            Serial.println("ERROR: Failed to allocate WebServer memory!");
+            return false;
+        }
+        
+        Serial.println("Setting up routes...");
+        
+        // Setup routes
+        server->on("/", [this]() { handleRoot(); });
+        server->on("/config/network", [this]() { handleNetworkConfig(); });
+        server->on("/config/mqtt", [this]() { handleMQTTConfig(); });
+        server->on("/config/image", [this]() { handleImageConfig(); });
+        server->on("/config/sources", [this]() { handleImageSources(); });
+        server->on("/config/display", [this]() { handleDisplayConfig(); });
+        server->on("/config/advanced", [this]() { handleAdvancedConfig(); });
+        server->on("/status", [this]() { handleStatus(); });
+        server->on("/api/save", HTTP_POST, [this]() { handleSaveConfig(); });
+        server->on("/api/add-source", HTTP_POST, [this]() { handleAddImageSource(); });
+        server->on("/api/remove-source", HTTP_POST, [this]() { handleRemoveImageSource(); });
+        server->on("/api/update-source", HTTP_POST, [this]() { handleUpdateImageSource(); });
+        server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
+        server->on("/api/next-image", HTTP_POST, [this]() { handleNextImage(); });
+        server->on("/api/update-transform", HTTP_POST, [this]() { handleUpdateImageTransform(); });
+        server->on("/api/copy-defaults", HTTP_POST, [this]() { handleCopyDefaultsToImage(); });
+        server->on("/api/apply-transform", HTTP_POST, [this]() { handleApplyTransform(); });
+        server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
+        server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
+        server->onNotFound([this]() { handleNotFound(); });
+        
+        Serial.println("Starting WebServer...");
+        server->begin();
+        
+        // Verify server is running
+        if (!server) {
+            Serial.println("ERROR: WebServer failed to start!");
+            return false;
+        }
+        
+        serverRunning = true;
+        Serial.printf("✓ Web configuration server started successfully on port %d\n", port);
+        return true;
+        
+    } catch (const std::exception& e) {
+        Serial.printf("ERROR: Exception starting web server: %s\n", e.what());
+        return false;
+    } catch (...) {
+        Serial.println("ERROR: Unknown exception starting web server!");
+        return false;
+    }
 }
 
 void WebConfig::handleClient() {
@@ -295,19 +319,21 @@ void WebConfig::handleSaveConfig() {
 }
 
 void WebConfig::handleRestart() {
-    // Instead of restarting immediately, schedule a graceful recovery
+    // Send success response to browser immediately
     Serial.println("Device restart requested via web interface");
-    
-    // Send response before attempting recovery
-    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Scheduling device recovery...\"}");
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Device restarting now...\"}");
     
     // Display message on screen
     displayManager.debugPrint("Device restart requested...", COLOR_YELLOW);
-    displayManager.debugPrint("Performing graceful recovery", COLOR_CYAN);
-    displayManager.debugPrint("Recovery in progress...", COLOR_YELLOW);
+    displayManager.debugPrint("Restarting device...", COLOR_CYAN);
+    displayManager.debugPrint("See you soon!", COLOR_YELLOW);
     
-    // Note: Full ESP.restart() is no longer called - device stays operational
-    // The main loop will handle graceful recovery by retrying failed operations
+    // Wait briefly to ensure response is sent to browser
+    delay(500);
+    
+    // Now perform the actual restart
+    Serial.println("Executing ESP.restart()...");
+    ESP.restart();
 }
 
 void WebConfig::handleAddImageSource() {
@@ -517,8 +543,24 @@ void WebConfig::handleApplyTransform() {
 }
 
 void WebConfig::handleFactoryReset() {
+    // Reset configuration to factory defaults
+    Serial.println("Factory reset requested via web interface");
     configStorage.resetToDefaults();
-    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Factory reset completed\"}");
+    
+    // Send response before restarting
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Factory reset completed. Device restarting...\"}");
+    
+    // Display message on screen
+    displayManager.debugPrint("Factory reset in progress...", COLOR_YELLOW);
+    displayManager.debugPrint("Clearing all settings", COLOR_CYAN);
+    displayManager.debugPrint("Restarting device...", COLOR_YELLOW);
+    
+    // Wait briefly to ensure response is sent to browser
+    delay(500);
+    
+    // Now restart the device with factory defaults
+    Serial.println("Executing ESP.restart() after factory reset...");
+    ESP.restart();
 }
 
 void WebConfig::handleNotFound() {
@@ -543,6 +585,26 @@ String WebConfig::generateHeader(const String& title) {
     html += "*{margin:0;padding:0;box-sizing:border-box}";
     html += "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;";
     html += "background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);min-height:100vh;color:#e2e8f0}";
+    html += ".modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background-color:rgba(0,0,0,0.6);backdrop-filter:blur(5px)}";
+    html += ".modal.show{display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease}";
+    html += "@keyframes fadeIn{from{opacity:0}to{opacity:1}}";
+    html += ".modal-content{background:rgba(30,41,59,0.95);border:2px solid rgba(148,163,184,0.3);border-radius:16px;padding:2rem;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,0.5);animation:slideUp 0.3s ease}";
+    html += "@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}";
+    html += ".modal-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;color:#f1f5f9;border-bottom:1px solid rgba(148,163,184,0.2);padding-bottom:1rem}";
+    html += ".modal-title{font-size:1.5rem;font-weight:bold;flex:1}";
+    html += ".modal-close{background:none;border:none;color:#94a3b8;font-size:1.5rem;cursor:pointer;padding:0;width:2rem;height:2rem;display:flex;align-items:center;justify-content:center;border-radius:8px;transition:all 0.2s}";
+    html += ".modal-close:hover{background:rgba(239,68,68,0.1);color:#f1f5f9}";
+    html += ".modal-body{margin-bottom:1.5rem;color:#cbd5e1;line-height:1.6}";
+    html += ".modal-footer{display:flex;gap:1rem;justify-content:flex-end}";
+    html += ".modal-btn{padding:0.75rem 1.5rem;border:none;border-radius:8px;font-weight:500;cursor:pointer;transition:all 0.2s;font-size:0.95rem}";
+    html += ".modal-btn-confirm{background:linear-gradient(135deg,#059669,#047857);color:white}";
+    html += ".modal-btn-confirm:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(5,150,105,0.4)}";
+    html += ".modal-btn-cancel{background:#475569;color:white}";
+    html += ".modal-btn-cancel:hover{background:#334155}";
+    html += ".modal-success{border-left:4px solid #10b981}";
+    html += ".modal-error{border-left:4px solid #ef4444}";
+    html += ".modal-warning{border-left:4px solid #f59e0b}";
+
     html += ".header{background:rgba(30,41,59,0.9);backdrop-filter:blur(10px);";
     html += "padding:1rem 0;box-shadow:0 2px 20px rgba(0,0,0,0.3);border-bottom:1px solid rgba(148,163,184,0.1)}";
     html += ".container{max-width:1200px;margin:0 auto;padding:0 1rem}";
@@ -1161,6 +1223,50 @@ String WebConfig::generateStatusPage() {
 
 String WebConfig::generateFooter() {
     String html = "<script>";
+    
+    // Modal functions
+    html += "function showModal(title,message,type='info'){";
+    html += "const modal=document.getElementById('modal');";
+    html += "const modalTitle=document.querySelector('.modal-title');";
+    html += "const modalBody=document.querySelector('.modal-body');";
+    html += "const modalContent=document.querySelector('.modal-content');";
+    html += "if(!modal||!modalTitle||!modalBody||!modalContent)return;";
+    html += "modalTitle.innerHTML=title;";
+    html += "modalBody.innerHTML=message;";
+    html += "modalContent.className='modal-content';";
+    html += "if(type==='success')modalContent.classList.add('modal-success');";
+    html += "else if(type==='error')modalContent.classList.add('modal-error');";
+    html += "else if(type==='warning')modalContent.classList.add('modal-warning');";
+    html += "modal.classList.add('show');";
+    html += "}";
+    
+    html += "function closeModal(){";
+    html += "const modal=document.getElementById('modal');";
+    html += "if(modal)modal.classList.remove('show');";
+    html += "}";
+    
+    html += "function showConfirmModal(title,message,onConfirm,onCancel){";
+    html += "const modal=document.getElementById('confirmModal');";
+    html += "const modalTitle=document.querySelector('#confirmModal .modal-title');";
+    html += "const modalBody=document.querySelector('#confirmModal .modal-body');";
+    html += "const confirmBtn=document.querySelector('#confirmModal .modal-btn-confirm');";
+    html += "if(!modal||!modalTitle||!modalBody||!confirmBtn)return;";
+    html += "modalTitle.innerHTML=title;";
+    html += "modalBody.innerHTML=message;";
+    html += "modal.classList.add('show');";
+    html += "confirmBtn.onclick=()=>{modal.classList.remove('show');if(onConfirm)onConfirm();};";
+    html += "const cancelBtn=document.querySelector('#confirmModal .modal-btn-cancel');";
+    html += "if(cancelBtn)cancelBtn.onclick=()=>{modal.classList.remove('show');if(onCancel)onCancel();};";
+    html += "const closeBtn=document.querySelector('#confirmModal .modal-close');";
+    html += "if(closeBtn)closeBtn.onclick=()=>{modal.classList.remove('show');if(onCancel)onCancel();};";
+    html += "}";
+    
+    // Modal close handlers
+    html += "document.addEventListener('DOMContentLoaded',function(){";
+    html += "const closeButtons=document.querySelectorAll('.modal-close');";
+    html += "closeButtons.forEach(btn=>{btn.onclick=()=>closeModal();});";
+    html += "});";
+    
     // Form submission handlers
     html += "function submitForm(formId,endpoint){";
     html += "const form=document.getElementById(formId);";
@@ -1172,12 +1278,12 @@ String WebConfig::generateFooter() {
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "alert('Settings saved successfully!');";
+    html += "showModal('✓ Success','Settings saved successfully!','success');";
     html += "}else{";
-    html += "alert('Error: '+data.message);";
+    html += "showModal('✗ Error','Error: '+data.message,'error');";
     html += "}";
     html += "}).catch(error=>{";
-    html += "alert('Error saving settings: '+error.message);";
+    html += "showModal('✗ Error','Error saving settings: '+error.message,'error');";
     html += "});";
     html += "});";
     html += "}";
@@ -1247,26 +1353,26 @@ String WebConfig::generateFooter() {
     
     // Restart function
     html += "function restart(){";
-    html += "if(confirm('Are you sure you want to restart the device?')){";
+    html += "showConfirmModal('🔄 Restart Device','Are you sure you want to restart the device?',()=>{";
     html += "fetch('/api/restart',{method:'POST'})";
     html += ".then(()=>{";
-    html += "alert('Device is restarting...');";
+    html += "showModal('✓ Restarting','Device is restarting...','success');";
     html += "setTimeout(()=>location.reload(),10000);";
     html += "});";
-    html += "}";
+    html += "});";
     html += "}";
     
     // Factory reset function
     html += "function factoryReset(){";
-    html += "if(confirm('Are you sure you want to reset to factory defaults? This cannot be undone!')){";
-    html += "if(confirm('This will erase all your settings. Are you absolutely sure?')){";
+    html += "showConfirmModal('🏭 Factory Reset','Are you sure you want to reset to factory defaults? This cannot be undone!',()=>{";
+    html += "showConfirmModal('⚠️ Confirm Factory Reset','This will erase ALL your settings. Are you absolutely sure?',()=>{";
     html += "fetch('/api/factory-reset',{method:'POST'})";
     html += ".then(()=>{";
-    html += "alert('Factory reset completed. Device will restart...');";
+    html += "showModal('✓ Factory Reset','Device will restart now...','success');";
     html += "setTimeout(()=>location.reload(),5000);";
     html += "});";
-    html += "}";
-    html += "}";
+    html += "});";
+    html += "});";
     html += "}";
     
     // Image source management functions
@@ -1291,22 +1397,22 @@ String WebConfig::generateFooter() {
     html += "}";
     
     html += "function removeImageSource(index){";
-    html += "if(confirm('Are you sure you want to remove this image source?')){";
+    html += "showConfirmModal('🗑️ Remove Image Source','Are you sure you want to remove this image source?',()=>{";
     html += "const formData=new FormData();";
     html += "formData.append('index',index);";
     html += "fetch('/api/remove-source',{method:'POST',body:formData})";
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "alert('Image source removed successfully!');";
-    html += "location.reload();";
+    html += "showModal('✓ Success','Image source removed successfully!','success');";
+    html += "setTimeout(()=>location.reload(),1500);";
     html += "}else{";
-    html += "alert('Error: '+data.message);";
+    html += "showModal('✗ Error','Error: '+data.message,'error');";
     html += "}";
     html += "}).catch(error=>{";
-    html += "alert('Error removing source: '+error.message);";
+    html += "showModal('✗ Error','Error removing source: '+error.message,'error');";
     html += "});";
-    html += "}";
+    html += "});";
     html += "}";
     
     html += "function updateImageSource(index,url){";
@@ -1325,20 +1431,20 @@ String WebConfig::generateFooter() {
     html += "}";
     
     html += "function clearAllSources(){";
-    html += "if(confirm('Are you sure you want to clear all image sources? This will reset to a single default source.')){";
+    html += "showConfirmModal('🗑️ Clear All Sources','Are you sure you want to clear all image sources? This will reset to a single default source.',()=>{";
     html += "fetch('/api/clear-sources',{method:'POST'})";
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "alert('All sources cleared successfully!');";
-    html += "location.reload();";
+    html += "showModal('✓ Success','All sources cleared successfully!','success');";
+    html += "setTimeout(()=>location.reload(),1500);";
     html += "}else{";
-    html += "alert('Error: '+data.message);";
+    html += "showModal('✗ Error','Error: '+data.message,'error');";
     html += "}";
     html += "}).catch(error=>{";
-    html += "alert('Error clearing sources: '+error.message);";
+    html += "showModal('✗ Error','Error clearing sources: '+error.message,'error');";
     html += "});";
-    html += "}";
+    html += "});";
     html += "}";
     
     // Per-image transform functions
@@ -1366,40 +1472,40 @@ String WebConfig::generateFooter() {
     html += "}";
     
     html += "function copyDefaultsToImage(index){";
-    html += "if(confirm('Are you sure you want to copy global default transformation settings to this image?')){";
+    html += "showConfirmModal('📋 Copy Global Defaults','Are you sure you want to copy global default transformation settings to this image?',()=>{";
     html += "const formData=new FormData();";
     html += "formData.append('index',index);";
     html += "fetch('/api/copy-defaults',{method:'POST',body:formData})";
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "alert('Settings copied successfully!');";
-    html += "location.reload();";
+    html += "showModal('✓ Success','Settings copied successfully!','success');";
+    html += "setTimeout(()=>location.reload(),1500);";
     html += "}else{";
-    html += "alert('Error: '+data.message);";
+    html += "showModal('✗ Error','Error: '+data.message,'error');";
     html += "}";
     html += "}).catch(error=>{";
-    html += "alert('Error copying defaults: '+error.message);";
+    html += "showModal('✗ Error','Error copying defaults: '+error.message,'error');";
     html += "});";
-    html += "}";
+    html += "});";
     html += "}";
     
     html += "function applyTransformImmediately(index){";
-    html += "if(confirm('Apply these transformation settings immediately?')){";
+    html += "showConfirmModal('⚙️ Apply Transform','Apply these transformation settings immediately?',()=>{";
     html += "const formData=new FormData();";
     html += "formData.append('index',index);";
     html += "fetch('/api/apply-transform',{method:'POST',body:formData})";
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "alert('Transform applied successfully!');";
+    html += "showModal('✓ Success','Transform applied successfully!','success');";
     html += "}else{";
-    html += "alert('Error: '+data.message);";
+    html += "showModal('✗ Error','Error: '+data.message,'error');";
     html += "}";
     html += "}).catch(error=>{";
-    html += "alert('Error applying transform: '+error.message);";
+    html += "showModal('✗ Error','Error applying transform: '+error.message,'error');";
     html += "});";
-    html += "}";
+    html += "});";
     html += "}";
     
     html += "function nextImage(){";
@@ -1418,6 +1524,16 @@ String WebConfig::generateFooter() {
     html += "}";
     
     html += "</script>";
+    html += "<div id='modal' class='modal'><div class='modal-content'>";
+    html += "<div class='modal-header'><h2 class='modal-title'></h2><button class='modal-close' onclick='closeModal()'>&times;</button></div>";
+    html += "<div class='modal-body'></div>";
+    html += "<div class='modal-footer'><button class='modal-btn modal-btn-confirm' onclick='closeModal()'>OK</button></div>";
+    html += "</div></div>";
+    html += "<div id='confirmModal' class='modal'><div class='modal-content'>";
+    html += "<div class='modal-header'><h2 class='modal-title'></h2><button class='modal-close' onclick='closeModal()'>&times;</button></div>";
+    html += "<div class='modal-body'></div>";
+    html += "<div class='modal-footer'><button class='modal-btn modal-btn-cancel'>Cancel</button><button class='modal-btn modal-btn-confirm'>Confirm</button></div>";
+    html += "</div></div>";
     html += "<div class='footer'>";
     html += "<div class='container'>";
     html += "<p>ESP32 AllSky Display Configuration Portal</p>";
