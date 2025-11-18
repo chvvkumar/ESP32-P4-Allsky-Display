@@ -1,4 +1,5 @@
 #include "system_monitor.h"
+#include "config.h"
 
 // Global instance
 SystemMonitor systemMonitor;
