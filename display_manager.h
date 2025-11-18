@@ -54,6 +54,11 @@ public:
     void clearScreen(uint16_t color = COLOR_BLACK);
     void drawBitmap(int16_t x, int16_t y, uint16_t* bitmap, int16_t w, int16_t h);
     
+    // Overlay status messages (drawn on top of current image)
+    void drawStatusOverlay(const char* message, uint16_t color = COLOR_CYAN, int yOffset = 20);
+    void clearStatusOverlay();
+    void drawOverlayMessage(const char* message, int x, int y, uint16_t color, int backgroundColor = COLOR_BLACK);
+    
     // Status display
     void showSystemStatus();
 };

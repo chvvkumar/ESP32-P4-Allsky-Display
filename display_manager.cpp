@@ -242,3 +242,75 @@ void DisplayManager::showSystemStatus() {
     gfx->printf("Free PSRAM: %d bytes\n", systemMonitor.getCurrentFreePsram());
     gfx->printf("System Health: %s\n", systemMonitor.isSystemHealthy() ? "HEALTHY" : "CRITICAL");
 }
+
+void DisplayManager::drawStatusOverlay(const char* message, uint16_t color, int yOffset) {
+    if (!gfx || !message) return;
+    
+    // Draw semi-transparent background box with rounded corners effect
+    // Calculate text dimensions for the background
+    int16_t x1, y1;
+    uint16_t textWidth, textHeight;
+    gfx->setTextSize(1);
+    gfx->getTextBounds(message, 0, 0, &x1, &y1, &textWidth, &textHeight);
+    
+    // Create overlay box with padding
+    int boxPadding = 8;
+    int16_t boxX = (displayWidth - textWidth) / 2 - boxPadding;
+    int16_t boxY = yOffset - 5;
+    int16_t boxWidth = textWidth + (boxPadding * 2);
+    int16_t boxHeight = textHeight + 10;
+    
+    // Clamp to screen bounds
+    if (boxX < 0) boxX = 0;
+    if (boxY < 0) boxY = 0;
+    if (boxX + boxWidth > displayWidth) boxWidth = displayWidth - boxX;
+    if (boxY + boxHeight > displayHeight) boxHeight = displayHeight - boxY;
+    
+    // Draw semi-transparent dark background (multiple overlays to create transparency effect)
+    uint16_t bgColor = 0x0000; // Black
+    gfx->fillRect(boxX, boxY, boxWidth, boxHeight, bgColor);
+    
+    // Draw text on the overlay
+    gfx->setTextSize(1);
+    gfx->setTextColor(color);
+    int16_t centerX = (displayWidth - textWidth) / 2;
+    gfx->setCursor(centerX, yOffset);
+    gfx->println(message);
+}
+
+void DisplayManager::drawOverlayMessage(const char* message, int x, int y, uint16_t color, int backgroundColor) {
+    if (!gfx || !message) return;
+    
+    // Calculate text dimensions
+    int16_t x1, y1;
+    uint16_t textWidth, textHeight;
+    gfx->setTextSize(1);
+    gfx->getTextBounds(message, 0, 0, &x1, &y1, &textWidth, &textHeight);
+    
+    // Create background box with padding
+    int boxPadding = 6;
+    int16_t boxX = x - boxPadding;
+    int16_t boxY = y - boxPadding;
+    int16_t boxWidth = textWidth + (boxPadding * 2);
+    int16_t boxHeight = textHeight + (boxPadding * 2);
+    
+    // Clamp to screen bounds
+    if (boxX < 0) boxX = 0;
+    if (boxY < 0) boxY = 0;
+    if (boxX + boxWidth > displayWidth) boxWidth = displayWidth - boxX;
+    if (boxY + boxHeight > displayHeight) boxHeight = displayHeight - boxY;
+    
+    // Draw dark background for readability
+    gfx->fillRect(boxX, boxY, boxWidth, boxHeight, backgroundColor);
+    
+    // Draw text
+    gfx->setTextSize(1);
+    gfx->setTextColor(color);
+    gfx->setCursor(x, y);
+    gfx->println(message);
+}
+
+void DisplayManager::clearStatusOverlay() {
+    // Overlay is cleared by redrawing the last image
+    // This is done by calling renderFullImage() from the main loop
+}

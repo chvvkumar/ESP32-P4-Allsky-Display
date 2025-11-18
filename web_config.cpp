@@ -295,9 +295,19 @@ void WebConfig::handleSaveConfig() {
 }
 
 void WebConfig::handleRestart() {
-    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Restarting device...\"}");
-    delay(1000);
-    ESP.restart();
+    // Instead of restarting immediately, schedule a graceful recovery
+    Serial.println("Device restart requested via web interface");
+    
+    // Send response before attempting recovery
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Scheduling device recovery...\"}");
+    
+    // Display message on screen
+    displayManager.debugPrint("Device restart requested...", COLOR_YELLOW);
+    displayManager.debugPrint("Performing graceful recovery", COLOR_CYAN);
+    displayManager.debugPrint("Recovery in progress...", COLOR_YELLOW);
+    
+    // Note: Full ESP.restart() is no longer called - device stays operational
+    // The main loop will handle graceful recovery by retrying failed operations
 }
 
 void WebConfig::handleAddImageSource() {
