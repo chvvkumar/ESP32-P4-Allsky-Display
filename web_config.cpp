@@ -604,96 +604,127 @@ String WebConfig::generateHeader(const String& title) {
     html += "<meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
     html += "<title>" + title + "</title>";
     
-    // Inline CSS for fast loading - Dark Theme
+    // Inline CSS for fast loading - Dark Slate Material Design Theme
     html += "<style>";
+    // Load FontAwesome and Roboto
     html += "@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css');";
+    html += "@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');";
+    
+    // Reset & Base Styles
     html += "*{margin:0;padding:0;box-sizing:border-box}";
-    html += "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;";
-    html += "background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);min-height:100vh;color:#e2e8f0}";
-    html += ".modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background-color:rgba(0,0,0,0.6);backdrop-filter:blur(5px)}";
+    html += "body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;";
+    html += "background-color:#0f172a;color:#f8fafc;min-height:100vh;line-height:1.6;display:flex;flex-direction:column}"; // Slate 900 background
+    
+    // Modal Styles
+    html += ".modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background-color:rgba(15,23,42,0.8);backdrop-filter:blur(4px)}";
     html += ".modal.show{display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease}";
     html += "@keyframes fadeIn{from{opacity:0}to{opacity:1}}";
-    html += ".modal-content{background:rgba(30,41,59,0.95);border:2px solid rgba(148,163,184,0.3);border-radius:16px;padding:2rem;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,0.5);animation:slideUp 0.3s ease}";
+    html += ".modal-content{background:#1e293b;border:1px solid #334155;border-radius:16px;padding:2rem;max-width:500px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);animation:slideUp 0.3s ease}"; // Slate 800 card
     html += "@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}";
-    html += ".modal-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;color:#f1f5f9;border-bottom:1px solid rgba(148,163,184,0.2);padding-bottom:1rem}";
+    html += ".modal-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;color:#f1f5f9;border-bottom:1px solid #334155;padding-bottom:1rem}";
     html += ".modal-title{font-size:1.5rem;font-weight:bold;flex:1}";
     html += ".modal-close{background:none;border:none;color:#94a3b8;font-size:1.5rem;cursor:pointer;padding:0;width:2rem;height:2rem;display:flex;align-items:center;justify-content:center;border-radius:8px;transition:all 0.2s}";
-    html += ".modal-close:hover{background:rgba(239,68,68,0.1);color:#f1f5f9}";
+    html += ".modal-close:hover{background:rgba(239,68,68,0.1);color:#f8fafc}";
     html += ".modal-body{margin-bottom:1.5rem;color:#cbd5e1;line-height:1.6}";
     html += ".modal-footer{display:flex;gap:1rem;justify-content:flex-end}";
-    html += ".modal-btn{padding:0.75rem 1.5rem;border:none;border-radius:8px;font-weight:500;cursor:pointer;transition:all 0.2s;font-size:0.95rem}";
-    html += ".modal-btn-confirm{background:linear-gradient(135deg,#059669,#047857);color:white}";
-    html += ".modal-btn-confirm:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(5,150,105,0.4)}";
-    html += ".modal-btn-cancel{background:#475569;color:white}";
+    
+    // Modal Buttons
+    html += ".modal-btn{padding:0.75rem 1.5rem;border:none;border-radius:8px;font-weight:500;cursor:pointer;transition:all 0.2s;font-size:0.95rem;letter-spacing:0.5px}";
+    html += ".modal-btn-confirm{background:#0ea5e9;color:white}"; // Sky 500
+    html += ".modal-btn-confirm:hover{background:#0284c7;transform:translateY(-1px);box-shadow:0 4px 12px rgba(14,165,233,0.4)}";
+    html += ".modal-btn-cancel{background:#475569;color:white}"; // Slate 600
     html += ".modal-btn-cancel:hover{background:#334155}";
     html += ".modal-success{border-left:4px solid #10b981}";
     html += ".modal-error{border-left:4px solid #ef4444}";
     html += ".modal-warning{border-left:4px solid #f59e0b}";
 
-    html += ".header{background:rgba(30,41,59,0.9);backdrop-filter:blur(10px);";
-    html += "padding:1rem 0;box-shadow:0 2px 20px rgba(0,0,0,0.3);border-bottom:1px solid rgba(148,163,184,0.1)}";
+    // Header Styles
+    html += ".header{background:#1e293b;padding:1rem 0;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3);border-bottom:1px solid #334155}";
     html += ".container{max-width:1200px;margin:0 auto;padding:0 1rem}";
-    html += ".header-content{display:flex;justify-content:space-between;align-items:center;color:#f1f5f9}";
-    html += ".logo{font-size:1.5rem;font-weight:bold;color:#60a5fa}";
+    html += ".header-content{display:flex;justify-content:space-between;align-items:center;color:#f8fafc}";
+    html += ".logo{font-size:1.5rem;font-weight:bold;color:#38bdf8;letter-spacing:-0.5px}"; // Sky 400
     html += ".status-badges{display:flex;gap:0.5rem}";
-    html += ".badge{padding:0.25rem 0.75rem;border-radius:15px;font-size:0.75rem;font-weight:500}";
-    html += ".badge.success{background:#059669;color:white}";
-    html += ".badge.error{background:#dc2626;color:white}";
-    html += ".badge.warning{background:#d97706;color:white}";
-    html += ".github-link{display:flex;align-items:center;margin-right:1rem;padding:0.4rem 0.8rem;background:rgba(15,23,42,0.8);color:#f1f5f9;border-radius:8px;text-decoration:none;font-size:0.9rem;border:1px solid rgba(148,163,184,0.3);transition:all 0.2s ease}";
-    html += ".github-link:hover{background:rgba(30,41,59,0.9);border-color:rgba(148,163,184,0.6);transform:translateY(-2px)}";
+    html += ".badge{padding:0.35rem 0.85rem;border-radius:9999px;font-size:0.75rem;font-weight:600;letter-spacing:0.5px;text-transform:uppercase}";
+    html += ".badge.success{background:#059669;color:#ecfdf5}";
+    html += ".badge.error{background:#dc2626;color:#fef2f2}";
+    html += ".badge.warning{background:#d97706;color:#fffbeb}";
+    
+    // Github Link
+    html += ".github-link{display:flex;align-items:center;margin-right:1rem;padding:0.4rem 0.8rem;background:#334155;color:#e2e8f0;border-radius:8px;text-decoration:none;font-size:0.9rem;border:1px solid #475569;transition:all 0.2s ease}";
+    html += ".github-link:hover{background:#475569;border-color:#64748b;transform:translateY(-1px)}";
     html += ".github-link .github-icon{font-family:'Font Awesome 6 Brands';margin-right:0.4rem}";
-    html += ".nav{background:rgba(15,23,42,0.8);padding:0.5rem 0;border-bottom:1px solid rgba(148,163,184,0.1)}";
-    html += ".nav-content{display:flex;gap:1rem;overflow-x:auto}";
-    html += ".nav-item{padding:0.5rem 1rem;border-radius:8px;text-decoration:none;color:#94a3b8;";
-    html += "white-space:nowrap;transition:all 0.2s ease;border:1px solid transparent}";
-    html += ".nav-item:hover{background:rgba(59,130,246,0.1);color:#60a5fa;border-color:rgba(59,130,246,0.3)}";
-    html += ".nav-item.active{background:rgba(59,130,246,0.2);color:#60a5fa;border-color:rgba(59,130,246,0.5)}";
-    html += ".main{padding:2rem 0}";
-    html += ".card{background:rgba(30,41,59,0.9);border:1px solid rgba(148,163,184,0.2);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;";
-    html += "box-shadow:0 4px 6px rgba(0,0,0,0.3);transition:transform 0.2s ease,box-shadow 0.2s ease}";
-    html += ".card:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(0,0,0,0.4)}";
-    html += ".card h2{margin-bottom:1rem;color:#f1f5f9;display:flex;align-items:center;gap:0.5rem}";
+    
+    // Navigation
+    html += ".nav{background:#0f172a;padding:0;border-bottom:1px solid #334155;position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);background:rgba(15,23,42,0.95)}";
+    html += ".nav-content{display:flex;gap:0.5rem;overflow-x:auto;padding:0.5rem 0}";
+    html += ".nav-item{padding:0.75rem 1.25rem;border-radius:8px;text-decoration:none;color:#94a3b8;white-space:nowrap;transition:all 0.2s ease;font-weight:500;font-size:0.95rem}";
+    html += ".nav-item:hover{background:#1e293b;color:#38bdf8}";
+    html += ".nav-item.active{background:#1e293b;color:#38bdf8;box-shadow:inset 0 -2px 0 #38bdf8}";
+    
+    // Main Layout
+    html += ".main{padding:2rem 0;flex:1}";
+    html += ".card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;";
+    html += "box-shadow:0 4px 6px -1px rgba(0,0,0,0.3);transition:transform 0.2s ease,box-shadow 0.2s ease;display:flex;flex-direction:column;height:100%}";
+    html += ".card:hover{transform:translateY(-2px);box-shadow:0 10px 15px -3px rgba(0,0,0,0.4);border-color:#475569}";
+    html += ".card h2{margin-bottom:1.25rem;color:#f8fafc;display:flex;align-items:center;gap:0.75rem;font-weight:600;font-size:1.25rem;border-bottom:1px solid #334155;padding-bottom:0.75rem}";
     html += ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem}";
-    html += ".form-group{margin-bottom:1rem}";
-    html += ".form-group label{display:block;margin-bottom:0.5rem;font-weight:500;color:#cbd5e1}";
-    html += ".form-control{width:100%;padding:0.75rem;border:2px solid rgba(148,163,184,0.3);border-radius:8px;";
-    html += "font-size:1rem;background:rgba(15,23,42,0.8);color:#f1f5f9;transition:border-color 0.2s ease,background-color 0.2s ease}";
-    html += ".form-control:focus{outline:none;border-color:#3b82f6;background:rgba(15,23,42,1)}";
+    
+    // Forms
+    html += ".form-group{margin-bottom:1.25rem}";
+    html += ".form-group label{display:block;margin-bottom:0.5rem;font-weight:500;color:#cbd5e1;font-size:0.9rem}";
+    html += ".form-control{width:100%;padding:0.75rem;border:1px solid #475569;border-radius:8px;";
+    html += "font-size:1rem;background:#334155;color:#f8fafc;transition:border-color 0.2s ease,box-shadow 0.2s ease}";
+    html += ".form-control:focus{outline:none;border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,0.2);background:#1e293b}";
     html += ".form-control::placeholder{color:#64748b}";
-    html += ".btn{display:inline-block;padding:0.75rem 1.5rem;border:none;border-radius:8px;";
-    html += "text-decoration:none;font-weight:500;cursor:pointer;transition:all 0.2s ease}";
-    html += ".btn-primary{background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:white;border:1px solid #1d4ed8}";
-    html += ".btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(59,130,246,0.4);background:linear-gradient(135deg,#2563eb,#1e40af)}";
-    html += ".btn-success{background:linear-gradient(135deg,#059669,#047857);color:white}";
-    html += ".btn-success:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(5,150,105,0.4)}";
-    html += ".btn-danger{background:linear-gradient(135deg,#dc2626,#b91c1c);color:white}";
-    html += ".btn-danger:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(220,38,38,0.4)}";
-    html += ".btn-secondary{background:#475569;color:white}";
-    html += ".btn-secondary:hover{background:#334155}";
-    html += ".status-indicator{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:0.5rem}";
-    html += ".status-online{background:#10b981;box-shadow:0 0 8px rgba(16,185,129,0.5)}";
-    html += ".status-offline{background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,0.5)}";
-    html += ".status-warning{background:#f59e0b;box-shadow:0 0 8px rgba(245,158,11,0.5)}";
-    html += ".progress{background:rgba(15,23,42,0.8);border-radius:10px;height:20px;overflow:hidden;border:1px solid rgba(148,163,184,0.2)}";
-    html += ".progress-bar{background:linear-gradient(90deg,#3b82f6,#1d4ed8);height:100%;transition:width 0.3s ease}";
+    
+    // Buttons
+    html += ".btn{display:inline-flex;align-items:center;justify-content:center;padding:0.75rem 1.5rem;border:none;border-radius:8px;";
+    html += "text-decoration:none;font-weight:500;cursor:pointer;transition:all 0.2s ease;font-size:0.95rem;letter-spacing:0.3px}";
+    html += ".btn-primary{background:#0ea5e9;color:white}"; // Sky 500
+    html += ".btn-primary:hover{background:#0284c7;transform:translateY(-1px);box-shadow:0 4px 12px rgba(14,165,233,0.3)}";
+    html += ".btn-success{background:#10b981;color:white}"; // Emerald 500
+    html += ".btn-success:hover{background:#059669;transform:translateY(-1px);box-shadow:0 4px 12px rgba(16,185,129,0.3)}";
+    html += ".btn-danger{background:#ef4444;color:white}"; // Red 500
+    html += ".btn-danger:hover{background:#dc2626;transform:translateY(-1px);box-shadow:0 4px 12px rgba(239,68,68,0.3)}";
+    html += ".btn-secondary{background:#475569;color:white}"; // Slate 600
+    html += ".btn-secondary:hover{background:#334155;transform:translateY(-1px)}";
+    
+    // Status Indicators - Pulsing
+    html += ".status-indicator{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:0.75rem}";
+    html += "@keyframes pulse-green{0%{box-shadow:0 0 0 0 rgba(16,185,129,0.7)}70%{box-shadow:0 0 0 6px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}";
+    html += ".status-online{background:#10b981;animation:pulse-green 2s infinite}";
+    html += ".status-offline{background:#ef4444;box-shadow:0 0 10px rgba(239,68,68,0.5)}";
+    html += ".status-warning{background:#f59e0b;box-shadow:0 0 10px rgba(245,158,11,0.5)}";
+    
+    // Progress Bars
+    html += ".progress{background:#334155;border-radius:9999px;height:12px;overflow:hidden;border:none}";
+    html += ".progress-bar{background:linear-gradient(90deg,#38bdf8,#0ea5e9);height:100%;transition:width 0.3s ease}";
+    
+    // Stats Grid
     html += ".stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:2rem}";
-    html += ".stat-card{background:rgba(15,23,42,0.8);backdrop-filter:blur(10px);";
-    html += "padding:1.5rem;border-radius:12px;text-align:center;color:#f1f5f9;border:1px solid rgba(148,163,184,0.2);transition:transform 0.2s ease}";
-    html += ".stat-card:hover{transform:translateY(-2px);border-color:rgba(59,130,246,0.4)}";
-    html += ".stat-value{font-size:2rem;font-weight:bold;margin-bottom:0.5rem;color:#60a5fa}";
-    html += ".stat-label{font-size:0.875rem;opacity:0.8;color:#cbd5e1}";
-    html += ".footer{text-align:center;padding:2rem;color:rgba(203,213,225,0.7);border-top:1px solid rgba(148,163,184,0.1)}";
-    html += "@media(max-width:768px){.header-content{flex-direction:column;gap:1rem}";
-    html += ".nav-content{justify-content:center}.grid{grid-template-columns:1fr}}";
+    html += ".stat-card{background:#1e293b;padding:1.5rem;border-radius:12px;text-align:center;color:#f8fafc;border:1px solid #334155;transition:transform 0.2s ease;position:relative;overflow:hidden}";
+    html += ".stat-card:hover{transform:translateY(-2px);border-color:#475569;box-shadow:0 10px 15px -3px rgba(0,0,0,0.3)}";
+    html += ".stat-value{font-size:2.25rem;font-weight:700;margin-bottom:0.25rem;color:#38bdf8;letter-spacing:-1px;position:relative;z-index:2}";
+    html += ".stat-label{font-size:0.875rem;font-weight:500;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;position:relative;z-index:2}";
+    html += ".stat-icon{position:absolute;right:10px;bottom:0px;font-size:4rem;opacity:0.05;color:#f8fafc;z-index:1;transform:rotate(-15deg)}";
+    
+    // Misc
+    html += ".footer{text-align:center;padding:2rem 1rem;color:#64748b;border-top:1px solid #334155;margin-top:auto;font-size:0.9rem}";
+    html += "@media(max-width:768px){.header-content{flex-direction:column;gap:1rem;text-align:center}";
+    html += ".nav-content{justify-content:flex-start}.grid{grid-template-columns:1fr}}";
     html += ".error{border-left:4px solid #ef4444}.warning{border-left:4px solid #f59e0b}";
     html += ".success{border-left:4px solid #10b981}";
+    
+    // Image Sources specific
+    html += ".image-source-item{background:#0f172a !important; border:1px solid #334155 !important; padding:1.25rem !important;}";
+    html += ".transform-section{background:#1e293b !important; border:1px dashed #475569 !important;}";
+
     html += "</style></head><body>";
     
     // Header
     html += "<div class='header'><div class='container'>";
     html += "<div class='header-content'>";
-    html += "<div class='logo'>🛰️ ESP32 AllSky Display</div>";
+    html += "<div class='logo'><i class='fas fa-satellite'></i> ESP32 AllSky Display</div>";
     html += "<div class='status-badges'>";
     html += "<a href='https://github.com/chvvkumar/ESP32-P4-Allsky-Display' target='_blank' class='github-link'><i class='github-icon fa-github'></i> GitHub</a>";
     html += getConnectionStatus();
@@ -725,18 +756,22 @@ String WebConfig::generateMainPage() {
     // System status cards
     html += "<div class='stats'>";
     html += "<div class='stat-card'>";
+    html += "<i class='fas fa-clock stat-icon'></i>";
     html += "<div class='stat-value'>" + formatUptime(millis()) + "</div>";
     html += "<div class='stat-label'>Uptime</div></div>";
     
     html += "<div class='stat-card'>";
+    html += "<i class='fas fa-microchip stat-icon'></i>";
     html += "<div class='stat-value'>" + formatBytes(systemMonitor.getCurrentFreeHeap()) + "</div>";
     html += "<div class='stat-label'>Free Heap</div></div>";
     
     html += "<div class='stat-card'>";
+    html += "<i class='fas fa-memory stat-icon'></i>";
     html += "<div class='stat-value'>" + formatBytes(systemMonitor.getCurrentFreePsram()) + "</div>";
     html += "<div class='stat-label'>Free PSRAM</div></div>";
     
     html += "<div class='stat-card'>";
+    html += "<i class='fas fa-sun stat-icon'></i>";
     html += "<div class='stat-value'>" + String(displayManager.getBrightness()) + "%</div>";
     html += "<div class='stat-label'>Brightness</div></div>";
     html += "</div>";
@@ -748,13 +783,13 @@ String WebConfig::generateMainPage() {
     // Auto/Manual toggle
     html += "<div class='form-group'>";
     html += "<label>Control Mode</label>";
-    html += "<div style='margin-top:0.5rem;'>";
-    html += "<input type='checkbox' id='brightness_auto_mode' name='brightness_auto_mode'";
+    html += "<div style='margin-top:0.5rem;display:flex;align-items:center'>";
+    html += "<input type='checkbox' id='brightness_auto_mode' name='brightness_auto_mode' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'";
     if (configStorage.getBrightnessAutoMode()) {
         html += " checked";
     }
     html += " onchange='updateBrightnessMode(this.checked)'> ";
-    html += "<label for='brightness_auto_mode' style='display:inline;margin-left:0.5rem;'>Auto (MQTT controlled)</label>";
+    html += "<label for='brightness_auto_mode' style='margin-bottom:0;cursor:pointer'>Auto (MQTT controlled)</label>";
     html += "</div>";
     html += "</div>";
     
@@ -765,17 +800,17 @@ String WebConfig::generateMainPage() {
     }
     html += "'>";
     html += "<label for='main_brightness'>Brightness (%)</label>";
-    html += "<input type='range' id='main_brightness' name='default_brightness' class='form-control' value='" + 
+    html += "<input type='range' id='main_brightness' name='default_brightness' class='form-control' style='height:6px;padding:0' value='" + 
             String(displayManager.getBrightness()) + "' min='0' max='100' oninput='updateMainBrightnessValue(this.value)'";
     if (configStorage.getBrightnessAutoMode()) {
         html += " disabled";
     }
     html += ">";
-    html += "<div style='text-align:center;margin-top:0.5rem'><span id='mainBrightnessValue'>" + 
+    html += "<div style='text-align:center;margin-top:0.5rem;color:#38bdf8;font-weight:bold'><span id='mainBrightnessValue'>" + 
             String(displayManager.getBrightness()) + "</span>%</div>";
     html += "</div>";
     
-    html += "<button type='button' class='btn btn-primary' onclick='saveMainBrightness()'";
+    html += "<button type='button' class='btn btn-primary' onclick='saveMainBrightness(this)'";
     if (configStorage.getBrightnessAutoMode()) {
         html += " disabled";
     }
@@ -789,11 +824,13 @@ String WebConfig::generateMainPage() {
     html += "<div class='card'>";
     html += "<h2>📡 Network Status</h2>";
     if (wifiManager.isConnected()) {
-        html += "<p><span class='status-indicator status-online'></span>Connected to " + String(WiFi.SSID()) + "</p>";
-        html += "<p>IP Address: " + WiFi.localIP().toString() + "</p>";
-        html += "<p>Signal: " + String(WiFi.RSSI()) + " dBm</p>";
+        html += "<div style='flex:1'>";
+        html += "<p><span class='status-indicator status-online'></span>Connected to <strong style='color:#38bdf8'>" + String(WiFi.SSID()) + "</strong></p>";
+        html += "<p style='margin-top:0.5rem;font-size:0.9rem;color:#94a3b8'>IP Address: " + WiFi.localIP().toString() + "</p>";
+        html += "<p style='font-size:0.9rem;color:#94a3b8'>Signal: " + String(WiFi.RSSI()) + " dBm</p>";
+        html += "</div>";
     } else {
-        html += "<p><span class='status-indicator status-offline'></span>Not connected</p>";
+        html += "<div style='flex:1'><p><span class='status-indicator status-offline'></span>Not connected</p></div>";
     }
     html += "</div>";
     
@@ -801,16 +838,19 @@ String WebConfig::generateMainPage() {
     html += "<div class='card'>";
     html += "<h2>🔗 MQTT Status</h2>";
     if (mqttManager.isConnected()) {
+        html += "<div style='flex:1'>";
         html += "<p><span class='status-indicator status-online'></span>Connected to broker</p>";
-        html += "<p>Server: " + configStorage.getMQTTServer() + ":" + String(configStorage.getMQTTPort()) + "</p>";
+        html += "<p style='margin-top:0.5rem;font-size:0.9rem;color:#94a3b8'>Server: " + configStorage.getMQTTServer() + ":" + String(configStorage.getMQTTPort()) + "</p>";
+        html += "</div>";
     } else {
-        html += "<p><span class='status-indicator status-offline'></span>Not connected</p>";
+        html += "<div style='flex:1'><p><span class='status-indicator status-offline'></span>Not connected</p></div>";
     }
     html += "</div>";
     
     // Image Status with "Switch to Next Image" button
     html += "<div class='card'>";
     html += "<h2>🖼️ Image Status</h2>";
+    html += "<div style='flex:1'>";
     
     // Check if cycling is enabled and display appropriate information
     if (configStorage.getCyclingEnabled()) {
@@ -818,33 +858,31 @@ String WebConfig::generateMainPage() {
         int currentIndex = configStorage.getCurrentImageIndex();
         
         html += "<p><strong>Mode:</strong> Cycling (" + String(sourceCount) + " sources)</p>";
-        html += "<p><strong>Current Source:</strong> [" + String(currentIndex + 1) + "/" + String(sourceCount) + "] " + escapeHtml(configStorage.getCurrentImageURL()) + "</p>";
-        html += "<p><strong>Cycle Interval:</strong> " + String(configStorage.getCycleInterval() / 1000) + " seconds</p>";
-        html += "<p><strong>Order:</strong> " + String(configStorage.getRandomOrder() ? "Random" : "Sequential") + "</p>";
+        html += "<p style='word-break:break-all;margin-top:0.5rem;font-size:0.9rem;color:#94a3b8'><strong>Current Source:</strong> [" + String(currentIndex + 1) + "/" + String(sourceCount) + "] " + escapeHtml(configStorage.getCurrentImageURL()) + "</p>";
+        html += "<p style='font-size:0.9rem;color:#94a3b8'><strong>Cycle Interval:</strong> " + String(configStorage.getCycleInterval() / 1000) + " seconds</p>";
     } else {
         html += "<p><strong>Mode:</strong> Single Image</p>";
-        html += "<p><strong>Source:</strong> " + escapeHtml(configStorage.getImageURL()) + "</p>";
+        html += "<p style='word-break:break-all;margin-top:0.5rem;font-size:0.9rem;color:#94a3b8'><strong>Source:</strong> " + escapeHtml(configStorage.getImageURL()) + "</p>";
     }
-    
-    html += "<p><strong>Update Interval:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p>";
     html += "</div>";
     
-    // Add switch to next image button on the dashboard (outside the card)
-    if (configStorage.getImageSourceCount() > 1) {
-        html += "<div class='card'>";
-        html += "<h2>⏭️ Image Control</h2>";
-        html += "<button type='button' class='btn btn-primary' onclick='nextImage()'>Switch to Next Image</button>";
-        html += "</div>";
-    }
-    
+    html += "<p style='font-size:0.8rem;color:#64748b;margin-top:1rem'><strong>Update Interval:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p>";
     html += "</div>";
     
-    // Quick actions
-    html += "<div class='card'>";
+    html += "</div>"; // End status grid
+    
+    // Quick actions (Full width now)
+    html += "<div class='card' style='margin-top:1.5rem'>";
     html += "<h2>⚡ Quick Actions</h2>";
-    html += "<div style='display:flex;gap:1rem;flex-wrap:wrap'>";
-    html += "<button class='btn btn-primary' onclick='restart()'>🔄 Restart Device</button>";
-    html += "<button class='btn btn-danger' onclick='factoryReset()'>🏭 Factory Reset</button>";
+    html += "<div style='display:flex;gap:1rem;flex-wrap:wrap;align-items:center'>";
+    
+    // Image Control Button (if multiple sources)
+    if (configStorage.getImageSourceCount() > 1) {
+         html += "<button type='button' class='btn btn-primary' onclick='nextImage(this)'><i class='fas fa-forward' style='margin-right:8px'></i> Next Image</button>";
+    }
+    
+    html += "<button class='btn btn-primary' style='background:#3b82f6' onclick='restart()'><i class='fas fa-sync-alt' style='margin-right:8px'></i> Restart Device</button>";
+    html += "<button class='btn btn-danger' onclick='factoryReset()'><i class='fas fa-trash-alt' style='margin-right:8px'></i> Factory Reset</button>";
     html += "</div></div>";
     
     html += "</div></div>";
@@ -938,7 +976,7 @@ String WebConfig::generateMQTTPage() {
     html += "</div>";
     
     html += "</div>";
-    html += "<div class='card'>";
+    html += "<div class='card' style='margin-top:1.5rem'>";
     html += "<button type='submit' class='btn btn-primary'>💾 Save MQTT Settings</button>";
     html += "</div></form></div></div>";
     
@@ -953,11 +991,14 @@ String WebConfig::generateImageSourcesPage() {
     html += "<h2>🔄 Image Cycling Configuration</h2>";
     
     html += "<div class='form-group'>";
-    html += "<label for='cycling_enabled'>Enable Cycling</label>";
-    html += "<input type='checkbox' id='cycling_enabled' name='cycling_enabled' " + 
-            String(configStorage.getCyclingEnabled() ? "checked" : "") + "> Enable automatic cycling through multiple image sources";
+    html += "<div style='display:flex;align-items:center;margin-bottom:1rem'>";
+    html += "<input type='checkbox' id='cycling_enabled' name='cycling_enabled' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px' " + 
+            String(configStorage.getCyclingEnabled() ? "checked" : "") + ">";
+    html += "<label for='cycling_enabled' style='margin-bottom:0;cursor:pointer;font-size:1rem'>Enable automatic cycling through multiple image sources</label>";
+    html += "</div>";
     html += "</div>";
     
+    html += "<div class='grid' style='margin-bottom:1rem'>";
     html += "<div class='form-group'>";
     html += "<label for='cycle_interval'>Cycle Interval (seconds)</label>";
     html += "<input type='number' id='cycle_interval' name='cycle_interval' class='form-control' value='" + 
@@ -965,11 +1006,15 @@ String WebConfig::generateImageSourcesPage() {
     html += "</div>";
     
     html += "<div class='form-group'>";
-    html += "<label for='random_order'>Random Order</label>";
-    html += "<input type='checkbox' id='random_order' name='random_order' " + 
-            String(configStorage.getRandomOrder() ? "checked" : "") + "> Randomize image order instead of sequential";
+    html += "<div style='display:flex;align-items:center;height:100%'>";
+    html += "<input type='checkbox' id='random_order' name='random_order' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px' " + 
+            String(configStorage.getRandomOrder() ? "checked" : "") + ">";
+    html += "<label for='random_order' style='margin-bottom:0;cursor:pointer'>Randomize image order</label>";
+    html += "</div></div>";
     html += "</div>";
-    html += "</div>";
+    
+    html += "<button type='submit' class='btn btn-primary'>💾 Save Cycling Settings</button>";
+    html += "</div></form>";
     
     // Image Sources List with Transformation Settings
     html += "<div class='card'>";
@@ -981,57 +1026,57 @@ String WebConfig::generateImageSourcesPage() {
         String url = configStorage.getImageSource(i);
         
         // Start image source item
-        html += "<div class='image-source-item' style='margin-bottom:1.5rem;padding:1rem;border:1px solid rgba(148,163,184,0.2);border-radius:8px;background:rgba(15,23,42,0.8);'>";
+        html += "<div class='image-source-item' style='margin-bottom:1.5rem;padding:1rem;border:1px solid #334155;border-radius:8px;background:#0f172a;'>";
         
         // URL input and controls
-        html += "<div style='display:flex;align-items:center;gap:1rem;margin-bottom:1rem;'>";
-        html += "<span style='font-weight:bold;color:#60a5fa;'>" + String(i + 1) + ".</span>";
-        html += "<input type='url' class='form-control' style='flex:1;' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this.value)'>";
-        html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(" + String(i) + ")'>⚙️ Transform</button>";
+        html += "<div style='display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap'>";
+        html += "<span style='font-weight:bold;color:#38bdf8;font-size:1.1rem'>" + String(i + 1) + ".</span>";
+        html += "<input type='url' class='form-control' style='flex:1;min-width:200px' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this)'>";
+        html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(" + String(i) + ")'><i class='fas fa-cog'></i> Options</button>";
         if (sourceCount > 1) {
-            html += "<button type='button' class='btn btn-danger' onclick='removeImageSource(" + String(i) + ")'>Remove</button>";
+            html += "<button type='button' class='btn btn-danger' onclick='removeImageSource(" + String(i) + ", this)'><i class='fas fa-trash'></i></button>";
         }
         html += "</div>";
         
         // Transformation settings section (initially hidden)
-        html += "<div id='transformSection_" + String(i) + "' class='transform-section' style='display:none;margin-top:1rem;padding:1rem;background:rgba(30,41,59,0.6);border-radius:8px;border:1px dashed rgba(148,163,184,0.3);'>";
-        html += "<h3 style='margin-top:0;font-size:1rem;color:#cbd5e1;'>Transform Settings for Image " + String(i + 1) + "</h3>";
+        html += "<div id='transformSection_" + String(i) + "' class='transform-section' style='display:none;margin-top:1rem;padding:1.5rem;background:#1e293b;border-radius:8px;border:1px solid #475569;'>";
+        html += "<h3 style='margin-top:0;font-size:1rem;color:#cbd5e1;margin-bottom:1rem;border-bottom:1px solid #334155;padding-bottom:0.5rem'>Transform Settings</h3>";
         
         // Transformation controls
-        html += "<div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:1rem;'>";
+        html += "<div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:1rem;'>";
         
         // Scale X
         html += "<div class='form-group'>";
-        html += "<label for='img_scale_x_" + String(i) + "'>Scale X</label>";
-        html += "<input type='number' id='img_scale_x_" + String(i) + "' class='form-control' value='" + 
-                String(configStorage.getImageScaleX(i)) + "' step='0.1' min='0.1' max='5.0' onchange='updateImageTransform(" + String(i) + ", \"scaleX\", this.value)'>";
+        html += "<label>Scale X</label>";
+        html += "<input type='number' class='form-control' value='" + 
+                String(configStorage.getImageScaleX(i)) + "' step='0.1' min='0.1' max='5.0' onchange='updateImageTransform(" + String(i) + ", \"scaleX\", this)'>";
         html += "</div>";
         
         // Scale Y
         html += "<div class='form-group'>";
-        html += "<label for='img_scale_y_" + String(i) + "'>Scale Y</label>";
-        html += "<input type='number' id='img_scale_y_" + String(i) + "' class='form-control' value='" + 
-                String(configStorage.getImageScaleY(i)) + "' step='0.1' min='0.1' max='5.0' onchange='updateImageTransform(" + String(i) + ", \"scaleY\", this.value)'>";
+        html += "<label>Scale Y</label>";
+        html += "<input type='number' class='form-control' value='" + 
+                String(configStorage.getImageScaleY(i)) + "' step='0.1' min='0.1' max='5.0' onchange='updateImageTransform(" + String(i) + ", \"scaleY\", this)'>";
         html += "</div>";
         
         // Offset X
         html += "<div class='form-group'>";
-        html += "<label for='img_offset_x_" + String(i) + "'>Offset X (px)</label>";
-        html += "<input type='number' id='img_offset_x_" + String(i) + "' class='form-control' value='" + 
-                String(configStorage.getImageOffsetX(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetX\", this.value)'>";
+        html += "<label>Offset X</label>";
+        html += "<input type='number' class='form-control' value='" + 
+                String(configStorage.getImageOffsetX(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetX\", this)'>";
         html += "</div>";
         
         // Offset Y
         html += "<div class='form-group'>";
-        html += "<label for='img_offset_y_" + String(i) + "'>Offset Y (px)</label>";
-        html += "<input type='number' id='img_offset_y_" + String(i) + "' class='form-control' value='" + 
-                String(configStorage.getImageOffsetY(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetY\", this.value)'>";
+        html += "<label>Offset Y</label>";
+        html += "<input type='number' class='form-control' value='" + 
+                String(configStorage.getImageOffsetY(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetY\", this)'>";
         html += "</div>";
         
         // Rotation
         html += "<div class='form-group'>";
-        html += "<label for='img_rotation_" + String(i) + "'>Rotation (°)</label>";
-        html += "<select id='img_rotation_" + String(i) + "' class='form-control' onchange='updateImageTransform(" + String(i) + ", \"rotation\", this.value)'>";
+        html += "<label>Rotation</label>";
+        html += "<select class='form-control' onchange='updateImageTransform(" + String(i) + ", \"rotation\", this)'>";
         int rotation = (int)configStorage.getImageRotation(i);
         html += String("<option value='0'") + (rotation == 0 ? " selected" : "") + ">0°</option>";
         html += String("<option value='90'") + (rotation == 90 ? " selected" : "") + ">90°</option>";
@@ -1044,8 +1089,8 @@ String WebConfig::generateImageSourcesPage() {
         
         // Action buttons for transformations
         html += "<div style='margin-top:1rem;display:flex;gap:0.5rem;'>";
-        html += "<button type='button' class='btn btn-secondary' onclick='copyDefaultsToImage(" + String(i) + ")'>Copy from Global Defaults</button>";
-        html += "<button type='button' class='btn btn-secondary' onclick='applyTransformImmediately(" + String(i) + ")'>Apply Now</button>";
+        html += "<button type='button' class='btn btn-secondary' onclick='copyDefaultsToImage(" + String(i) + ", this)'>Copy Defaults</button>";
+        html += "<button type='button' class='btn btn-secondary' onclick='applyTransformImmediately(" + String(i) + ", this)'>Apply Now</button>";
         html += "</div>";
         
         html += "</div>"; // End transform section
@@ -1056,26 +1101,14 @@ String WebConfig::generateImageSourcesPage() {
     
     // Image source action buttons
     html += "<div style='margin-top:1rem;'>";
-    html += "<button type='button' class='btn btn-success' onclick='addImageSource()'>➕ Add Image Source</button>";
+    html += "<button type='button' class='btn btn-success' onclick='addImageSource(this)'>➕ Add Image Source</button>";
     if (sourceCount > 1) {
-        html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources()' style='margin-left:1rem;'>🗑️ Clear All</button>";
+        html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources(this)' style='margin-left:1rem;'>🗑️ Clear All</button>";
     }
     html += "</div>";
     html += "</div>";
     
-    // Current Status
-    html += "<div class='card'>";
-    html += "<h2>📊 Current Status</h2>";
-    html += "<p><strong>Current Image:</strong> " + String(configStorage.getCurrentImageIndex() + 1) + " of " + String(sourceCount) + "</p>";
-    html += "<p><strong>Current URL:</strong> " + escapeHtml(configStorage.getCurrentImageURL()) + "</p>";
-    html += "<button type='button' class='btn btn-primary' onclick='nextImage()'>⏭️ Switch to Next Image</button>";
     html += "</div>";
-    
-    html += "<div class='card'>";
-    html += "<button type='submit' class='btn btn-primary'>💾 Save Cycling Settings</button>";
-    html += "</div></form></div></div>";
-    
-    return html;
 }
 
 String WebConfig::generateImagePage() {
@@ -1085,13 +1118,21 @@ String WebConfig::generateImagePage() {
     // Image source
     html += "<div class='card'>";
     html += "<h2>🖼️ Image Source</h2>";
-    html += "<p style='color:#f59e0b;margin-bottom:1rem;'>⚠️ For multiple image sources, use the <a href='/config/sources' style='color:#60a5fa;'>Image Sources</a> page.</p>";
+    html += "<p style='color:#f59e0b;margin-bottom:1rem;background:rgba(245,158,11,0.1);padding:0.75rem;border-radius:6px;border-left:4px solid #f59e0b'>⚠️ For multiple image sources, use the <a href='/config/sources' style='color:#38bdf8;font-weight:bold'>Image Sources</a> page.</p>";
     
     html += "<div class='form-group'>";
     html += "<label for='image_url'>Image URL</label>";
     html += "<input type='url' id='image_url' name='image_url' class='form-control' value='" + 
             escapeHtml(configStorage.getImageURL()) + "' required>";
     html += "</div>";
+    
+    // Add update interval control (moved from Advanced page)
+    html += "<div class='form-group'>";
+    html += "<label for='update_interval'>Image Update Interval (minutes)</label>";
+    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + 
+            String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
+    html += "</div>";
+    
     html += "</div>";
     
     // Transform defaults
@@ -1129,19 +1170,8 @@ String WebConfig::generateImagePage() {
     html += "</div>";
     html += "</div>";
     
-    // Add update interval control (moved from Advanced page)
-    html += "<div class='card'>";
-    html += "<h2>⏱️ Image Update Settings</h2>";
-    
-    html += "<div class='form-group'>";
-    html += "<label for='update_interval'>Image Update Interval (minutes)</label>";
-    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + 
-            String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
     html += "</div>";
-    html += "</div>";
-    
-    html += "</div>";
-    html += "<div class='card'>";
+    html += "<div class='card' style='margin-top:1.5rem'>";
     html += "<button type='submit' class='btn btn-primary'>💾 Save Image Settings</button>";
     html += "</div></form></div></div>";
     
@@ -1160,7 +1190,7 @@ String WebConfig::generateDisplayPage() {
     html += "<label for='default_brightness'>Default Brightness (%)</label>";
     html += "<input type='range' id='default_brightness' name='default_brightness' class='form-control' value='" + 
             String(configStorage.getDefaultBrightness()) + "' min='0' max='100' oninput='updateBrightnessValue(this.value)'>";
-    html += "<div style='text-align:center;margin-top:0.5rem'><span id='brightnessValue'>" + 
+    html += "<div style='text-align:center;margin-top:0.5rem;color:#38bdf8;font-weight:bold'><span id='brightnessValue'>" + 
             String(configStorage.getDefaultBrightness()) + "</span>%</div>";
     html += "</div>";
     html += "</div>";
@@ -1183,7 +1213,7 @@ String WebConfig::generateDisplayPage() {
     html += "</div>";
     
     html += "</div>";
-    html += "<div class='card'>";
+    html += "<div class='card' style='margin-top:1.5rem'>";
     html += "<button type='submit' class='btn btn-primary'>💾 Save Display Settings</button>";
     html += "</div></form></div></div>";
     
@@ -1229,7 +1259,7 @@ String WebConfig::generateAdvancedPage() {
     html += "</div>";
     
     html += "</div>";
-    html += "<div class='card'>";
+    html += "<div class='card' style='margin-top:1.5rem'>";
     html += "<button type='submit' class='btn btn-primary'>💾 Save Advanced Settings</button>";
     html += "</div></form></div></div>";
     
@@ -1248,6 +1278,52 @@ String WebConfig::generateStatusPage() {
 
 String WebConfig::generateFooter() {
     String html = "<script>";
+    
+    // New feedback functions
+    html += "function showButtonFeedback(btn, type, message) {";
+    html += "if(!btn) return;";
+    html += "const originalContent = btn.getAttribute('data-original-content') || btn.innerHTML;";
+    html += "if (!btn.getAttribute('data-original-content')) {";
+    html += "btn.setAttribute('data-original-content', originalContent);";
+    html += "}";
+    html += "const originalClass = btn.getAttribute('data-original-class') || btn.className;";
+    html += "if (!btn.getAttribute('data-original-class')) {";
+    html += "btn.setAttribute('data-original-class', originalClass);";
+    html += "}";
+    html += "if (type === 'loading') {";
+    html += "btn.disabled = true;";
+    html += "btn.innerHTML = '<i class=\"fas fa-circle-notch fa-spin\"></i> ' + (message || 'Working...');";
+    html += "return;";
+    html += "}";
+    html += "btn.disabled = false;";
+    html += "if (type === 'success') {";
+    html += "btn.className = 'btn btn-success';";
+    html += "btn.innerHTML = '<i class=\"fas fa-check\"></i> ' + (message || 'Saved');";
+    html += "} else {";
+    html += "btn.className = 'btn btn-danger';";
+    html += "btn.innerHTML = '<i class=\"fas fa-exclamation-triangle\"></i> ' + (message || 'Error');";
+    html += "}";
+    html += "setTimeout(() => {";
+    html += "btn.innerHTML = originalContent;";
+    html += "btn.className = originalClass;";
+    html += "btn.disabled = false;";
+    html += "}, 2000);";
+    html += "}";
+
+    html += "function showInputFeedback(input, type) {";
+    html += "const originalBorder = input.style.borderColor;";
+    html += "if (type === 'success') {";
+    html += "input.style.borderColor = '#10b981';";
+    html += "input.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.2)';";
+    html += "} else {";
+    html += "input.style.borderColor = '#ef4444';";
+    html += "input.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.2)';";
+    html += "}";
+    html += "setTimeout(() => {";
+    html += "input.style.borderColor = '';";
+    html += "input.style.boxShadow = '';";
+    html += "}, 2000);";
+    html += "}";
     
     // Modal functions
     html += "function showModal(title,message,type='info'){";
@@ -1292,23 +1368,31 @@ String WebConfig::generateFooter() {
     html += "closeButtons.forEach(btn=>{btn.onclick=()=>closeModal();});";
     html += "});";
     
-    // Form submission handlers
+    // Form submission handlers with button feedback
     html += "function submitForm(formId,endpoint){";
     html += "const form=document.getElementById(formId);";
     html += "if(!form)return;";
     html += "form.addEventListener('submit',function(e){";
     html += "e.preventDefault();";
+    html += "const btn = form.querySelector('button[type=\"submit\"]');";
+    html += "if(btn) showButtonFeedback(btn, 'loading', 'Saving...');";
     html += "const formData=new FormData(form);";
     html += "fetch(endpoint,{method:'POST',body:formData})";
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "showModal('✓ Success','Settings saved successfully!','success');";
+    html += "if(btn) showButtonFeedback(btn, 'success', 'Saved!');";
+    html += "if(data.willRestart){";
+    html += "showModal('✓ Restarting', data.message, 'success');";
+    html += "setTimeout(()=>location.reload(), 10000);"; // Reload for restart
+    html += "}";
     html += "}else{";
-    html += "showModal('✗ Error','Error: '+data.message,'error');";
+    html += "if(btn) showButtonFeedback(btn, 'error', 'Error: ' + data.message);";
+    // html += "showModal('✗ Error','Error: '+data.message,'error');"; // REMOVED MODAL
     html += "}";
     html += "}).catch(error=>{";
-    html += "showModal('✗ Error','Error saving settings: '+error.message,'error');";
+    html += "if(btn) showButtonFeedback(btn, 'error', 'Failed');";
+    // html += "showModal('✗ Error','Error saving settings: '+error.message,'error');"; // REMOVED MODAL
     html += "});";
     html += "});";
     html += "}";
@@ -1338,6 +1422,7 @@ String WebConfig::generateFooter() {
     html += "const slider=document.getElementById('main_brightness');";
     html += "const container=document.getElementById('brightness_slider_container');";
     html += "const saveButton=document.getElementById('save_brightness_btn');";
+    html += "const checkbox=document.getElementById('brightness_auto_mode');";
     html += "if(isAuto){";
     html += "slider.disabled=true;";
     html += "saveButton.disabled=true;";
@@ -1355,13 +1440,14 @@ String WebConfig::generateFooter() {
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status!=='success'){";
-    html += "alert('Error: '+data.message);";
+    html += "showInputFeedback(checkbox, 'error');"; // REPLACED ALERT
     html += "}";
     html += "});";
     html += "}";
     
     // Save main brightness
-    html += "function saveMainBrightness(){";
+    html += "function saveMainBrightness(btn){";
+    html += "showButtonFeedback(btn, 'loading', 'Applying...');";
     html += "const value=document.getElementById('main_brightness').value;";
     html += "const formData=new FormData();";
     html += "formData.append('default_brightness',value);";
@@ -1369,11 +1455,11 @@ String WebConfig::generateFooter() {
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "alert('Brightness updated successfully!');";
+    html += "showButtonFeedback(btn, 'success', 'Applied!');";
     html += "}else{";
-    html += "alert('Error: '+data.message);";
+    html += "showButtonFeedback(btn, 'error', 'Error');";
     html += "}";
-    html += "});";
+    html += "}).catch(e=>{ showButtonFeedback(btn, 'error', 'Failed'); });";
     html += "}";
     
     // Restart function
@@ -1401,46 +1487,50 @@ String WebConfig::generateFooter() {
     html += "}";
     
     // Image source management functions
-    html += "function addImageSource(){";
+    html += "function addImageSource(btn){";
     html += "const url=prompt('Enter image URL:');";
     html += "if(url&&url.trim()){";
+    html += "showButtonFeedback(btn, 'loading', 'Adding...');";
     html += "const formData=new FormData();";
     html += "formData.append('url',url.trim());";
     html += "fetch('/api/add-source',{method:'POST',body:formData})";
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "alert('Image source added successfully!');";
-    html += "location.reload();";
+    html += "showButtonFeedback(btn, 'success', 'Added!');";
+    html += "setTimeout(()=>location.reload(), 1000);";
     html += "}else{";
-    html += "alert('Error: '+data.message);";
+    html += "showButtonFeedback(btn, 'error', 'Error: ' + data.message);";
+    // html += "alert('Error: '+data.message);"; // REMOVED ALERT
     html += "}";
     html += "}).catch(error=>{";
-    html += "alert('Error adding source: '+error.message);";
+    html += "showButtonFeedback(btn, 'error', 'Failed');";
     html += "});";
     html += "}";
     html += "}";
     
-    html += "function removeImageSource(index){";
+    html += "function removeImageSource(index, btn){";
     html += "showConfirmModal('🗑️ Remove Image Source','Are you sure you want to remove this image source?',()=>{";
+    html += "showButtonFeedback(btn, 'loading', 'Removing...');";
     html += "const formData=new FormData();";
     html += "formData.append('index',index);";
     html += "fetch('/api/remove-source',{method:'POST',body:formData})";
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "showModal('✓ Success','Image source removed successfully!','success');";
-    html += "setTimeout(()=>location.reload(),1500);";
+    html += "showButtonFeedback(btn, 'success', 'Removed!');";
+    html += "setTimeout(()=>location.reload(),1000);";
     html += "}else{";
-    html += "showModal('✗ Error','Error: '+data.message,'error');";
+    html += "showButtonFeedback(btn, 'error', 'Error');";
     html += "}";
     html += "}).catch(error=>{";
-    html += "showModal('✗ Error','Error removing source: '+error.message,'error');";
+    html += "showButtonFeedback(btn, 'error', 'Failed');";
     html += "});";
     html += "});";
     html += "}";
     
-    html += "function updateImageSource(index,url){";
+    html += "function updateImageSource(index, input){";
+    html += "const url = input.value;";
     html += "const formData=new FormData();";
     html += "formData.append('index',index);";
     html += "formData.append('url',url);";
@@ -1448,26 +1538,27 @@ String WebConfig::generateFooter() {
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status!=='success'){";
-    html += "alert('Error: '+data.message);";
-    html += "}";
+    html += "showInputFeedback(input, 'error');";
+    html += "}else{ showInputFeedback(input, 'success'); }";
     html += "}).catch(error=>{";
-    html += "alert('Error updating source: '+error.message);";
+    html += "showInputFeedback(input, 'error');";
     html += "});";
     html += "}";
     
-    html += "function clearAllSources(){";
+    html += "function clearAllSources(btn){";
     html += "showConfirmModal('🗑️ Clear All Sources','Are you sure you want to clear all image sources? This will reset to a single default source.',()=>{";
+    html += "showButtonFeedback(btn, 'loading', 'Clearing...');";
     html += "fetch('/api/clear-sources',{method:'POST'})";
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "showModal('✓ Success','All sources cleared successfully!','success');";
-    html += "setTimeout(()=>location.reload(),1500);";
+    html += "showButtonFeedback(btn, 'success', 'Cleared!');";
+    html += "setTimeout(()=>location.reload(),1000);";
     html += "}else{";
-    html += "showModal('✗ Error','Error: '+data.message,'error');";
+    html += "showButtonFeedback(btn, 'error', 'Error');";
     html += "}";
     html += "}).catch(error=>{";
-    html += "showModal('✗ Error','Error clearing sources: '+error.message,'error');";
+    html += "showButtonFeedback(btn, 'error', 'Failed');";
     html += "});";
     html += "});";
     html += "}";
@@ -1480,7 +1571,8 @@ String WebConfig::generateFooter() {
     html += "}";
     html += "}";
     
-    html += "function updateImageTransform(index,property,value){";
+    html += "function updateImageTransform(index, property, input){";
+    html += "const value = input.value;";
     html += "const formData=new FormData();";
     html += "formData.append('index',index);";
     html += "formData.append('property',property);";
@@ -1489,62 +1581,65 @@ String WebConfig::generateFooter() {
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status!=='success'){";
-    html += "alert('Error: '+data.message);";
-    html += "}";
+    html += "showInputFeedback(input, 'error');";
+    html += "}else{ showInputFeedback(input, 'success'); }";
     html += "}).catch(error=>{";
-    html += "alert('Error updating transform: '+error.message);";
+    html += "showInputFeedback(input, 'error');";
     html += "});";
     html += "}";
     
-    html += "function copyDefaultsToImage(index){";
+    html += "function copyDefaultsToImage(index, btn){";
     html += "showConfirmModal('📋 Copy Global Defaults','Are you sure you want to copy global default transformation settings to this image?',()=>{";
+    html += "showButtonFeedback(btn, 'loading', 'Copying...');";
     html += "const formData=new FormData();";
     html += "formData.append('index',index);";
     html += "fetch('/api/copy-defaults',{method:'POST',body:formData})";
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "showModal('✓ Success','Settings copied successfully!','success');";
-    html += "setTimeout(()=>location.reload(),1500);";
+    html += "showButtonFeedback(btn, 'success', 'Copied!');";
+    html += "setTimeout(()=>location.reload(),1000);";
     html += "}else{";
-    html += "showModal('✗ Error','Error: '+data.message,'error');";
+    html += "showButtonFeedback(btn, 'error', 'Error');";
     html += "}";
     html += "}).catch(error=>{";
-    html += "showModal('✗ Error','Error copying defaults: '+error.message,'error');";
+    html += "showButtonFeedback(btn, 'error', 'Failed');";
     html += "});";
     html += "});";
     html += "}";
     
-    html += "function applyTransformImmediately(index){";
+    html += "function applyTransformImmediately(index, btn){";
     html += "showConfirmModal('⚙️ Apply Transform','Apply these transformation settings immediately?',()=>{";
+    html += "showButtonFeedback(btn, 'loading', 'Applying...');";
     html += "const formData=new FormData();";
     html += "formData.append('index',index);";
     html += "fetch('/api/apply-transform',{method:'POST',body:formData})";
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "showModal('✓ Success','Transform applied successfully!','success');";
+    html += "showButtonFeedback(btn, 'success', 'Applied!');";
     html += "}else{";
-    html += "showModal('✗ Error','Error: '+data.message,'error');";
+    html += "showButtonFeedback(btn, 'error', 'Error');";
     html += "}";
     html += "}).catch(error=>{";
-    html += "showModal('✗ Error','Error applying transform: '+error.message,'error');";
+    html += "showButtonFeedback(btn, 'error', 'Failed');";
     html += "});";
     html += "});";
     html += "}";
     
-    html += "function nextImage(){";
+    html += "function nextImage(btn){";
+    html += "showButtonFeedback(btn, 'loading', 'Switching...');";
     html += "fetch('/api/next-image',{method:'POST'})";
     html += ".then(response=>response.json())";
     html += ".then(data=>{";
     html += "if(data.status==='success'){";
-    html += "alert('Switched to next image successfully!');";
+    html += "showButtonFeedback(btn, 'success', 'Switched!');";
     html += "setTimeout(()=>location.reload(),2000);";
     html += "}else{";
-    html += "alert('Error: '+data.message);";
+    html += "showButtonFeedback(btn, 'error', 'Error');";
     html += "}";
     html += "}).catch(error=>{";
-    html += "alert('Error switching image: '+error.message);";
+    html += "showButtonFeedback(btn, 'error', 'Failed');";
     html += "});";
     html += "}";
     
