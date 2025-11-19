@@ -1,6 +1,6 @@
 # ESP32-P4-WIFI6-Touch-LCD-3.4C / ESP32-P4-WIFI6-Touch-LCD-4C AllSky Display
 
-An image display system for ESP32-P4-WIFI6-Touch-LCD-3.4C/ESP32-P4-WIFI6-Touch-LCD-4C with features including multi-image cycling, hardware acceleration, web configuration, and MQTT brightness control.
+An image display system for ESP32-P4 with multi-image cycling, hardware acceleration, web configuration, and MQTT control.
 
 ## Documentation
 
@@ -11,68 +11,33 @@ An image display system for ESP32-P4-WIFI6-Touch-LCD-3.4C/ESP32-P4-WIFI6-Touch-L
 ## Features
 
 ### Image Display & Processing
-- **Multi-Image Cycling**: Automatically cycle through multiple image sources
-- **Hardware Acceleration**: PPA (Pixel Processing Accelerator) for fast scaling and rotation
-- **Real-time Transformations**: Scale, rotate, and position images dynamically
-- **Smart Screen Clearing**: Optimized rendering to prevent flickering
-- **JPEG Support**: Efficient JPEG decoding with format validation
-- **Memory Management**: PSRAM-optimized buffering for smooth performance
-
-### Image Cycling System
-- **Multiple Image Sources**: Support for up to 10 different image URLs
-- **Cycling Modes**: Sequential or random order
-- **Configurable Intervals**: Set custom cycling and update intervals
-- **Persistent State**: Remembers current image across reboots
-- **Real-time Control**: Change cycling settings through web interface
+- **Multi-Image Cycling**: Cycle through up to 10 image sources
+- **Hardware Acceleration**: PPA for fast scaling and rotation
+- **Real-time Transformations**: Scale, rotate, and position images
+- **JPEG Support**: Efficient decoding with format validation
+- **Memory Management**: PSRAM-optimized buffering
 
 ### Web Configuration Interface
 - **Modern UI**: Clean, responsive web interface
-- **Real-time Status**: Live system and image status monitoring
-- **Network Configuration**: WiFi and MQTT settings
-- **Image Source Management**: Add, remove, and configure image sources
-- **Display Settings**: Brightness, update intervals, and cycling options
-- **System Monitoring**: Memory usage, uptime, and health status
+- **Real-time Status**: Live system monitoring
+- **Image Source Management**: Add/remove/configure sources
+- **Display Settings**: Brightness and update intervals
 
 ### Interactive Controls
-- **Touch Interface**: Intuitive touch gestures for image control
-- **Serial Commands**: Real-time image manipulation via serial interface
+- **Touch Interface**: Single tap (next image), double tap (toggle mode)
+- **Serial Commands**: Real-time manipulation via serial
 - **Transform Controls**: Scale (+/-), Move (WASD), Rotate (QE)
-- **Brightness Control**: Adjust display brightness (L/K)
-- **System Commands**: Memory info (M), Network info (I), PPA status (P)
-- **Reset Functions**: Transform reset (R), System reboot (B)
 
-### MQTT Integration
-- **Remote Control**: Control brightness and system functions via MQTT
-- **Status Publishing**: Publish brightness and system status
-- **Configurable Topics**: Customizable MQTT topic structure
-- **Secure Connection**: Support for authenticated MQTT connections
-
-### System Monitoring & Reliability
-- **Watchdog Protection**: Watchdog timer management
-- **Memory Monitoring**: Real-time heap and PSRAM usage tracking
-- **Network Health**: WiFi connection monitoring and recovery
-- **Error Handling**: Error detection and recovery mechanisms
-- **Performance Metrics**: Download speeds, processing times, and system health
-
-### Touch Interface
-- **GT911 Touch Controller**: Capacitive touch support via I2C interface
-- **Gesture Recognition**: Single and double-tap gesture detection
-- **Smart Debouncing**: Advanced timing controls to prevent false triggers
-- **Touch Actions**: 
-  - Single tap: Advance to next image in cycling sequence
-  - Double tap: Toggle between cycling and single refresh modes
-- **Mode Control**: Switch between automatic cycling and manual refresh modes
-- **Visual Feedback**: Touch actions confirmed via debug output
-
-### Hardware Acceleration
-- **PPA Integration**: Hardware-accelerated image scaling and rotation
-- **Optimized Rendering**: Direct bitmap drawing for maximum performance
-- **Memory Efficiency**: Smart buffer management for large images
-- **Fallback Support**: Software processing when hardware acceleration unavailable
+### System Features
+- **Simple WiFi setup**: With hotspot
+- **MQTT Integration**: Remote brightness control
+- **Watchdog Protection**: Prevents system freezes
+- **Memory Monitoring**: Real-time usage tracking
+- **Error Recovery**: Automatic reconnection and retry
 
 ## Demo
 
-![Stand](images/3dprintedcase.jpg)
+![Display System](images/display.jpg)
 
 **Watch the ESP32-P4 AllSky Display in action:**
 
@@ -80,205 +45,85 @@ An image display system for ESP32-P4-WIFI6-Touch-LCD-3.4C/ESP32-P4-WIFI6-Touch-L
 
 [View on YouTube](https://www.youtube.com/watch?v=pPAgbkPNvvY)
 
-
-## 3D Printed case
+## 3D Printed Case
 
 [Printables link for 3D printed case](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
 
 ## Screenshots
 
-Here are some screenshots showcasing the ESP32-P4 AllSky Display system in operation:
-
-### System Display Screenshots
-
-![Screenshot 2](images/2025-07-13_15-09-10.jpg)
-
-![Screenshot 3](images/2025-07-13_15-09-15.jpg)
-
-![Screenshot 4](images/2025-07-13_15-09-19.jpg)
-
-![Screenshot 5](images/2025-07-13_15-09-23.jpg)
-
-![Screenshot 6](images/2025-07-13_15-09-31.jpg)
-
-![Screenshot 7](images/2025-07-13_15-09-38.jpg)
-
-![Screenshot 8](images/2025-07-13_15-09-43.jpg)
-
-### Hardware Setup
-![Display Hardware](images/display.jpg)
-*ESP32-P4 with DSI Display setup*
+### Web Interface
+![Screenshot](images/2025-11-19_9-01-02.jpg)
 
 ## Hardware Requirements
 
-- **ESP32-P4** microcontroller
-- **DSI Display** compatible with ESP32-P4 (with touch interface)
-- **GT911 Touch Controller** (integrated with compatible displays)
-- **PSRAM** enabled (required for image buffering)
-- **WiFi Connection** for image downloading
+- ESP32-P4 microcontroller with PSRAM
+- DSI Display with GT911 touch controller
+- WiFi connection for image downloading
 
 ## Installation
 
 1. **Arduino IDE Setup**:
-   - Install ESP32 board support (version 3.2.1 or later)
+   - Install ESP32 core (3.2.1+)
    - Enable PSRAM in Tools menu
-   - Install required libraries (see Dependencies section)
+   - Install required libraries
 
-2. **Upload Code**:
-   - Flash the main sketch to your ESP32-P4
-   - Configure WiFi credentials through web interface or serial
-
-3. **Initial Wi-Fi setup**:
-   - Edit `config_storage.cpp` file
-   - change the following piece of code to set wifi credentials
-      ```cpp
-      void ConfigStorage::setDefaults() {
-         // Set hardcoded defaults from original config.cpp
-         config.wifiSSID = "";
-         config.wifiPassword = "";
-      ```
-
-4. **Configuration**:
-   - Access web interface at device IP address
-   - Configure image sources and cycling settings
-   - Set update intervals and display preferences
+2. **Configuration**:
+   - Access web interface at device IP
+   - Configure image sources and settings
 
 ## Dependencies
 
-- **ESP32 Core** (3.2.1+)
-- **GFX Library for Arduino** (1.6.0+)
-- **JPEGDEC** (1.8.2+)
-- **PubSubClient** (2.8+)
-- **Built-in Libraries**: HTTPClient, WebServer, WiFi, Preferences
+- ESP32 Core (3.2.1+)
+- GFX Library for Arduino (1.6.0)
+- JPEGDEC (1.8.2+)
+- PubSubClient (2.8+)
 
 ## Configuration
 
-### Web Interface Configuration
-- **Access**: `http://[device-ip]:8080/`
-- **Image Sources**: Add/remove URLs in cycling configuration
-- **Display Settings**: Brightness, update intervals
-- **Network Settings**: WiFi and MQTT configuration
-- **System Monitor**: Real-time status and diagnostics
+### Web Interface
+- Access: `http://[device-ip]:8080/`
+- Configure image sources, display settings, network, and MQTT
 
 ### Touch Controls
 ```
-Single Tap    : Advance to next image (cycling mode)
-Double Tap    : Toggle cycling/single refresh modes
+Single Tap  : Next image (cycling mode)
+Double Tap  : Toggle cycling/refresh modes
 ```
-
-**Touch Modes:**
-- **Cycling Mode**: Automatically cycles through multiple image sources
-- **Single Refresh Mode**: Stays on current image, refreshes periodically
 
 ### Serial Commands
 ```
-+/-   : Scale image up/down
-W/S   : Move image up/down
-A/D   : Move image left/right
-Q/E   : Rotate image 90° CCW/CW
-R     : Reset all transformations
-L/K   : Brightness up/down
-B     : Reboot device
-M     : Memory information
-I     : Network information
-P     : PPA acceleration status
-T     : MQTT status
-H/?   : Show help
++/-   : Scale image        R     : Reset transforms
+W/S   : Move up/down       L/K   : Brightness
+A/D   : Move left/right    B     : Reboot
+Q/E   : Rotate CCW/CW      M/I/P : System info
 ```
-
-## System Architecture
-
-### Modular Design
-- **Config Management**: Persistent storage with web interface
-- **Display Manager**: Hardware abstraction and rendering
-- **Touch Manager**: GT911 touch controller interface and gesture recognition
-- **Network Manager**: WiFi connectivity and monitoring
-- **MQTT Manager**: Message broker integration
-- **System Monitor**: Health monitoring and watchdog
-- **PPA Accelerator**: Hardware acceleration interface
-
-### Memory Management
-- **PSRAM Utilization**: Large image buffers stored in PSRAM
-- **Smart Buffering**: Multiple buffers for smooth transitions
-- **Memory Monitoring**: Real-time usage tracking and alerts
-
-### Error Handling
-- **Watchdog Protection**: Prevents system freezes
-- **Network Recovery**: Automatic WiFi reconnection
-- **Download Timeouts**: Configurable timeout protection
-- **Format Validation**: JPEG header verification
-
-## Performance Features
-
-### Download Optimization
-- **Chunked Downloads**: Efficient streaming with progress monitoring
-- **Timeout Protection**: Multiple timeout layers prevent hanging
-- **Connection Management**: Automatic cleanup and retry logic
-- **Progress Feedback**: Real-time download status
-
-### Rendering Optimization
-- **Hardware Acceleration**: PPA for scaling and rotation
-- **Smart Clearing**: Minimal screen updates to prevent flickering
-- **Buffer Management**: Optimized memory usage
-- **Transform Caching**: Efficient transformation pipeline
-
-### System Monitoring
-- **Performance Metrics**: Download speeds, processing times
-- **Memory Tracking**: Heap and PSRAM usage monitoring
-- **Health Checks**: System stability monitoring
-- **Debug Information**: Comprehensive logging system
 
 ## Troubleshooting
 
 ### Common Issues
-
-1. **Compilation Errors**:
-   - Ensure PSRAM is enabled in Arduino IDE
-   - Check ESP32 core version (3.2.1+)
-   - Verify all dependencies are installed
-
-2. **Memory Issues**:
-   - Monitor PSRAM usage through serial output
-   - Reduce image buffer sizes if needed
-   - Check for memory leaks in debug output
-
-3. **Network Problems**:
-   - Verify WiFi credentials
-   - Check image URL accessibility
-   - Monitor network status through web interface
-
-4. **Display Issues**:
-   - Verify DSI display compatibility
-   - Check display initialization in serial output
-   - Ensure proper wiring and power supply
-
-5. **Touch Issues**:
-   - Verify GT911 touch controller is properly connected
-   - Check I2C connection and address configuration
-   - Monitor touch debug output in serial console
-   - Ensure touch controller reset pin is properly configured
+1. **Compilation**: Enable PSRAM, check ESP32 core version
+2. **Memory**: Monitor PSRAM usage in serial output
+3. **Network**: Verify WiFi credentials and image URL access
+4. **Touch**: Check GT911 I2C connections and debug output
 
 ### Debug Information
-- **Serial Output**: Comprehensive debugging information
-- **Web Interface**: Real-time system status
-- **Memory Monitor**: Heap and PSRAM usage tracking
-- **Network Status**: Connection monitoring and diagnostics
+- Serial output for comprehensive debugging
+- Web interface for real-time system status
+- Memory and network monitoring
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+3. Test thoroughly
+4. Submit a pull request
 
 ## License
 
-This project is open source. Please check the license file for details.
+Open source project. Check license file for details.
 
 ## Support
 
-For issues, feature requests, or questions:
-- Create an issue in the GitHub repository
-- Check the troubleshooting section above
-- Monitor serial output for debugging information
+- Create GitHub issues for bugs/features
+- Check troubleshooting section
+- Monitor serial output for debugging
