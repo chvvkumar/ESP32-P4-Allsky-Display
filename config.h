@@ -5,31 +5,6 @@
 #include <Arduino.h>
 
 // =============================================================================
-// DEBUG CONFIGURATION
-// =============================================================================
-
-// Uncomment to enable verbose debug output (increases code/memory size)
-// #define DEBUG_VERBOSE
-
-// Uncomment to disable web debug messages
-// #define DEBUG_NO_WEB
-
-// Uncomment to disable serial debug output
-// #define DEBUG_NO_SERIAL
-
-// Uncomment to disable watchdog debug messages
-// #define DEBUG_NO_WATCHDOG
-
-// Conditional debug macros - use these instead of Serial.println for size optimization
-#ifdef DEBUG_VERBOSE
-  #define DEBUG_PRINT(x) Serial.println(x)
-  #define DEBUG_PRINTF(fmt, ...) Serial.printf(fmt, ##__VA_ARGS__)
-#else
-  #define DEBUG_PRINT(x)
-  #define DEBUG_PRINTF(fmt, ...)
-#endif
-
-// =============================================================================
 // SYSTEM CONFIGURATION
 // =============================================================================
 

@@ -321,20 +321,25 @@ void setup() {
 }
 
 void renderFullImage() {
-    // Reset watchdog once at function start
+    // Reset watchdog at function start
     systemMonitor.forceResetWatchdog();
     
     if (!fullImageBuffer || fullImageWidth == 0 || fullImageHeight == 0) {
+        systemMonitor.forceResetWatchdog();
         return;
     }
     
     Arduino_DSI_Display* gfx = displayManager.getGFX();
     if (!gfx) {
+        systemMonitor.forceResetWatchdog();
         return;
     }
     
     int16_t w = displayManager.getWidth();
     int16_t h = displayManager.getHeight();
+    
+    // Reset watchdog before calculations
+    systemMonitor.forceResetWatchdog();
     
     // Calculate final scaled dimensions (accounting for rotation)
     int16_t scaledWidth, scaledHeight;
@@ -358,15 +363,28 @@ void renderFullImage() {
     
     // FLICKER FIX: Skip clearing on image updates to avoid black flash
     // Only clear on first image load, subsequent updates render directly without clearing
+    systemMonitor.forceResetWatchdog();
+    
     if (!hasSeenFirstImage) {
         // First image ONLY: clear entire screen once
+        debugPrint("DEBUG: First image - clearing entire screen", COLOR_WHITE);
         displayManager.clearScreen();
         hasSeenFirstImage = true;
+        systemMonitor.forceResetWatchdog();
     }
+    // NOTE: Subsequent images skip clearing entirely - the buffer swap ensures
+    // we only update when the new image is 100% ready, so no intermediate states
+    // exist that would require clearing. This eliminates the black flash!
+    
+    // Reset watchdog before rendering operations
+    systemMonitor.forceResetWatchdog();
     
     if (scaleX == 1.0 && scaleY == 1.0 && rotationAngle == 0.0) {
         // No scaling or rotation needed, direct copy
+        debugPrint("DEBUG: Using direct copy (no scaling or rotation)", COLOR_WHITE);
         displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+        
+        systemMonitor.forceResetWatchdog();
         
         // Update tracking variables for next transition
         prevImageX = finalX;
@@ -378,6 +396,9 @@ void renderFullImage() {
         size_t scaledImageSize = scaledWidth * scaledHeight * 2;
         
         if (ppaAccelerator.isAvailable() && scaledImageSize <= scaledBufferSize) {
+            debugPrint("DEBUG: Attempting PPA hardware scale+rotate", COLOR_WHITE);
+            systemMonitor.forceResetWatchdog();
+            
             unsigned long hwStart = millis();
             
             // Pause display during heavy PPA operations to prevent LCD underrun
@@ -386,33 +407,58 @@ void renderFullImage() {
             if (ppaAccelerator.scaleRotateImage(fullImageBuffer, fullImageWidth, fullImageHeight,
                                               scaledBuffer, scaledWidth, scaledHeight, rotationAngle)) {
                 unsigned long hwTime = millis() - hwStart;
+                debugPrintf(COLOR_WHITE, "PPA scale+rotate: %lums (%dx%d -> %dx%d, %.0f°)", 
+                           hwTime, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, rotationAngle);
                 
                 // Resume display after heavy operation
                 displayManager.resumeDisplay();
                 
+                systemMonitor.forceResetWatchdog();
+                
                 // Draw the hardware-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
+                
+                systemMonitor.forceResetWatchdog();
                 
                 // Update tracking variables for next transition
                 prevImageX = finalX;
                 prevImageY = finalY;
                 prevImageWidth = scaledWidth;
                 prevImageHeight = scaledHeight;
-                
-                // Reset watchdog after heavy PPA operation
-                systemMonitor.forceResetWatchdog();
                 return;
+            } else {
+                debugPrint("DEBUG: PPA scale+rotate failed, falling back to software", COLOR_YELLOW);
+                systemMonitor.forceResetWatchdog();
             }
         }
         
-        // Software fallback - direct draw without transformation
-        displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+        // Software fallback - for now, just do basic scaling without rotation
+        debugPrint("DEBUG: Software fallback - basic scaling only", COLOR_YELLOW);
+        systemMonitor.forceResetWatchdog();
         
-        // Update tracking variables for next transition
-        prevImageX = finalX;
-        prevImageY = finalY;
-        prevImageWidth = fullImageWidth;
-        prevImageHeight = fullImageHeight;
+        if (rotationAngle == 0.0 && scaledImageSize <= scaledBufferSize) {
+            // Simple software scaling (simplified version)
+            displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+            
+            systemMonitor.forceResetWatchdog();
+            
+            // Update tracking variables for next transition
+            prevImageX = finalX;
+            prevImageY = finalY;
+            prevImageWidth = fullImageWidth;
+            prevImageHeight = fullImageHeight;
+        } else {
+            // Just draw original image as fallback
+            displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+            
+            systemMonitor.forceResetWatchdog();
+            
+            // Update tracking variables for next transition
+            prevImageX = finalX;
+            prevImageY = finalY;
+            prevImageWidth = fullImageWidth;
+            prevImageHeight = fullImageHeight;
+        }
     }
     
     // Final watchdog reset before function exit
@@ -420,8 +466,15 @@ void renderFullImage() {
 }
 
 void downloadAndDisplayImage() {
+    // Immediate debug output with Serial.println to ensure it shows up
+    Serial.println("=== DOWNLOADANDDISPLAYIMAGE FUNCTION START ===");
+    Serial.flush();
+    
     // Reset watchdog at function start
     systemMonitor.forceResetWatchdog();
+    
+    Serial.println("DEBUG: Watchdog reset complete");
+    Serial.flush();
     
     // Enhanced network connectivity check
     if (!wifiManager.isConnected()) {
@@ -1126,17 +1179,9 @@ void loop() {
     // Force watchdog reset at start of each loop iteration
     systemMonitor.forceResetWatchdog();
     
-    // Track loop performance
-    unsigned long loopStartTime = millis();
-    
-    // Cache connection states to avoid multiple calls
-    bool isAPMode = wifiManager.isAPModeEnabled();
-    bool isWiFiConnected = wifiManager.isConnected();
-    bool isWebRunning = webConfig.isRunning();
-    
     // VERY IMPORTANT: If AP mode is active, handle web requests IMMEDIATELY and FREQUENTLY
     // This prevents the browser from hanging waiting for responses
-    if (isAPMode && isWebRunning) {
+    if (wifiManager.isAPModeEnabled() && webConfig.isRunning()) {
         // In AP mode setup, web server handling is the PRIORITY
         // Call handleClient multiple times to process pending requests
         for (int i = 0; i < 3; i++) {
@@ -1149,10 +1194,20 @@ void loop() {
     taskRetryHandler.process();
     systemMonitor.forceResetWatchdog();
     
-    // Single web server call for connected mode - eliminated duplicate calls
-    if (isWiFiConnected && isWebRunning) {
+    // Handle web server first for maximum responsiveness
+    if (wifiManager.isConnected() && webConfig.isRunning()) {
+        // Add debugging for web server activity
+        unsigned long webHandleStart = millis();
         webConfig.handleClient();
+        unsigned long webHandleTime = millis() - webHandleStart;
+        
+        // Log if web server handling takes significant time (may indicate activity)
+        if (webHandleTime > 10) {
+            Serial.printf("DEBUG: Web server handling took %lu ms (potential request processed)\n", webHandleTime);
+        }
     }
+    
+    unsigned long loopStartTime = millis();
     
     // Update all system modules with watchdog protection
     systemMonitor.update();
@@ -1162,29 +1217,65 @@ void loop() {
     systemMonitor.forceResetWatchdog();
     
     // Update AP mode (check for timeouts)
-    if (isAPMode) {
+    if (wifiManager.isAPModeEnabled()) {
         wifiManager.updateAPMode();
         systemMonitor.forceResetWatchdog();
         
         // Try to start web server if AP mode is active but web server isn't running
-        if (!isWebRunning) {
+        if (!webConfig.isRunning()) {
             // Use port 80 for AP mode, 8080 for STA mode
-            int webPort = 80;
+            int webPort = wifiManager.isAPModeEnabled() ? 80 : 8080;
             if (webConfig.begin(webPort)) {
                 Serial.printf("Web config server started for AP mode on port %d\n", webPort);
             }
         }
     }
     
-    // Handle web configuration server - simplified
-    if (isWiFiConnected && isWebRunning) {
-        webConfig.handleClient();
+    // Handle web configuration server with better error handling
+    if (wifiManager.isConnected()) {
+        systemMonitor.forceResetWatchdog();  // Reset before web operations
+        if (webConfig.isRunning()) {
+            unsigned long webStartTime = millis();
+            
+            // Handle web requests without timeout restrictions that might interrupt connections
+            webConfig.handleClient();
+            systemMonitor.forceResetWatchdog();  // Reset after web handling
+            
+            unsigned long webHandleTime = millis() - webStartTime;
+            
+            // Only warn if it takes excessively long (increased threshold)
+            if (webHandleTime > 5000) {
+                Serial.printf("WARNING: Web client handling took %lu ms\n", webHandleTime);
+            }
+        } else {
+            // Try to start web server if not running
+            Serial.println("DEBUG: Web server not running, attempting to restart...");
+            systemMonitor.forceResetWatchdog();  // Reset before webConfig.begin
+            if (webConfig.begin(8080)) {
+                Serial.printf("Web configuration server restarted at: http://%s:8080\n", WiFi.localIP().toString().c_str());
+            } else {
+                Serial.println("ERROR: Failed to restart web configuration server");
+            }
+            systemMonitor.forceResetWatchdog();  // Reset after attempt
+        }
+        systemMonitor.forceResetWatchdog();
     }
     
     // Update MQTT manager (connect to MQTT after WiFi is established) with protection
-    if (isWiFiConnected) {
+    if (wifiManager.isConnected()) {
+        unsigned long mqttStartTime = millis();
         mqttManager.update();
+        
+        // Check if MQTT update took too long
+        if (millis() - mqttStartTime > 2000) {
+            Serial.printf("WARNING: MQTT update took %lu ms\n", millis() - mqttStartTime);
+        }
         systemMonitor.forceResetWatchdog();
+    }
+    
+    // Additional web server handling to prevent empty responses
+    if (wifiManager.isConnected() && webConfig.isRunning()) {
+        webConfig.handleClient();
     }
     
     // Check for critical system health issues
@@ -1217,6 +1308,11 @@ void loop() {
                      millis() - lastImageProcessTime);
         imageProcessing = false;
         systemMonitor.forceResetWatchdog();
+        
+        // Log system state for debugging
+        Serial.printf("DEBUG: Loop has been running for %lu ms\n", millis() - loopStartTime);
+        Serial.printf("DEBUG: Free heap: %d, Free PSRAM: %d\n", 
+                     systemMonitor.getCurrentFreeHeap(), systemMonitor.getCurrentFreePsram());
     }
     
     // Update dynamic configuration
