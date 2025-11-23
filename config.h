@@ -5,31 +5,6 @@
 #include <Arduino.h>
 
 // =============================================================================
-// DEBUG CONFIGURATION
-// =============================================================================
-
-// Uncomment to enable verbose debug output (increases code/memory size)
-// #define DEBUG_VERBOSE
-
-// Uncomment to disable web debug messages
-// #define DEBUG_NO_WEB
-
-// Uncomment to disable serial debug output
-// #define DEBUG_NO_SERIAL
-
-// Uncomment to disable watchdog debug messages
-// #define DEBUG_NO_WATCHDOG
-
-// Conditional debug macros - use these instead of Serial.println for size optimization
-#ifdef DEBUG_VERBOSE
-  #define DEBUG_PRINT(x) Serial.println(x)
-  #define DEBUG_PRINTF(fmt, ...) Serial.printf(fmt, ##__VA_ARGS__)
-#else
-  #define DEBUG_PRINT(x)
-  #define DEBUG_PRINTF(fmt, ...)
-#endif
-
-// =============================================================================
 // SYSTEM CONFIGURATION
 // =============================================================================
 
@@ -63,13 +38,6 @@ extern const char* WIFI_PASSWORD;
 #define WIFI_MAX_ATTEMPTS 15             // Maximum connection attempts
 #define WIFI_MAX_WAIT_TIME 12000         // 12 seconds maximum wait time
 #define WIFI_RETRY_DELAY 400             // Delay between connection attempts
-
-// WiFi hotspot (AP) configuration for initial setup
-#define WIFI_AP_SSID "ESP32-AllSky-Setup"  // Default hotspot name
-#define WIFI_AP_PASSWORD ""                // Empty = open network (no password)
-#define WIFI_AP_MAX_CONNECTIONS 4          // Maximum simultaneous AP connections
-#define WIFI_AP_TIMEOUT 600000             // Auto-disable AP after 10 minutes (600000ms)
-#define WIFI_AP_ENABLE_THRESHOLD 3         // Enable AP after 3 failed connection attempts
 
 // =============================================================================
 // MQTT CONFIGURATION
