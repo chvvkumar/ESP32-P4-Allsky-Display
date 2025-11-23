@@ -249,33 +249,19 @@ void setup() {
     // Initialize WiFi manager
     if (!wifiManager.begin()) {
         debugPrint("ERROR: WiFi initialization failed!", COLOR_RED);
+        debugPrint("Please configure WiFi in config.cpp", COLOR_YELLOW);
     } else {
-        // Check if WiFi SSID is empty - if so, start AP mode immediately
-        if (strlen(WIFI_SSID) == 0) {
-            debugPrint("No WiFi credentials configured!", COLOR_RED);
-            debugPrint("Starting WiFi setup hotspot...", COLOR_YELLOW);
+        // Try to connect to WiFi with watchdog protection
+        debugPrint("Starting WiFi connection...", COLOR_YELLOW);
+        systemMonitor.forceResetWatchdog();
+        wifiManager.connectToWiFi();
+        systemMonitor.forceResetWatchdog();  // Reset after WiFi connect attempt
+        
+        // Check if WiFi connection failed
+        if (!wifiManager.isConnected()) {
+            debugPrint("WiFi connection failed!", COLOR_RED);
+            debugPrint("Will retry in main loop...", COLOR_YELLOW);
             systemMonitor.forceResetWatchdog();
-            
-            // Enable AP mode for initial WiFi setup (SSID is empty)
-            wifiManager.startWiFiSetupHotspot();
-            systemMonitor.forceResetWatchdog();
-        } else {
-            // Try to connect to WiFi with watchdog protection
-            debugPrint("Starting WiFi connection...", COLOR_YELLOW);
-            systemMonitor.forceResetWatchdog();
-            wifiManager.connectToWiFi();
-            systemMonitor.forceResetWatchdog();  // Reset after WiFi connect attempt
-            
-            // Check if WiFi connection failed - if so, start AP mode for setup
-            if (!wifiManager.isConnected()) {
-                debugPrint("WiFi connection failed!", COLOR_RED);
-                debugPrint("Starting WiFi setup hotspot...", COLOR_YELLOW);
-                systemMonitor.forceResetWatchdog();
-                
-                // Enable AP mode for initial WiFi setup
-                wifiManager.startWiFiSetupHotspot();
-                systemMonitor.forceResetWatchdog();
-            }
         }
     }
     
@@ -287,19 +273,12 @@ void setup() {
         // MQTT connection will be attempted after WiFi is established
     }
     
-    // Start web configuration server if WiFi is connected OR if AP mode is enabled
-    if (wifiManager.isConnected() || wifiManager.isAPModeEnabled()) {
+    // Start web configuration server if WiFi is connected
+    if (wifiManager.isConnected()) {
         debugPrint("Starting web configuration server...", COLOR_YELLOW);
-        // Use port 80 for AP mode (standard HTTP port), 8080 for normal WiFi
-        int webPort = wifiManager.isAPModeEnabled() ? 80 : 8080;
-        if (webConfig.begin(webPort)) {
-            if (wifiManager.isAPModeEnabled()) {
-                debugPrintf(COLOR_GREEN, "Web config available at: http://192.168.4.1");
-                Serial.println("Web configuration server started (AP mode) at: http://192.168.4.1");
-            } else {
-                debugPrintf(COLOR_GREEN, "Web config available at: http://%s:8080", WiFi.localIP().toString().c_str());
-                Serial.printf("Web configuration server started successfully at: http://%s:8080\n", WiFi.localIP().toString().c_str());
-            }
+        if (webConfig.begin(8080)) {
+            debugPrintf(COLOR_GREEN, "Web config available at: http://%s:8080", WiFi.localIP().toString().c_str());
+            Serial.printf("Web configuration server started successfully at: http://%s:8080\n", WiFi.localIP().toString().c_str());
         } else {
             debugPrint("ERROR: Web config server failed to start", COLOR_RED);
         }
@@ -1179,17 +1158,6 @@ void loop() {
     // Force watchdog reset at start of each loop iteration
     systemMonitor.forceResetWatchdog();
     
-    // VERY IMPORTANT: If AP mode is active, handle web requests IMMEDIATELY and FREQUENTLY
-    // This prevents the browser from hanging waiting for responses
-    if (wifiManager.isAPModeEnabled() && webConfig.isRunning()) {
-        // In AP mode setup, web server handling is the PRIORITY
-        // Call handleClient multiple times to process pending requests
-        for (int i = 0; i < 3; i++) {
-            webConfig.handleClient();
-            systemMonitor.forceResetWatchdog();
-        }
-    }
-    
     // Process background retry tasks (handles network, MQTT, and image download failures)
     taskRetryHandler.process();
     systemMonitor.forceResetWatchdog();
@@ -1215,21 +1183,6 @@ void loop() {
     
     wifiManager.update();
     systemMonitor.forceResetWatchdog();
-    
-    // Update AP mode (check for timeouts)
-    if (wifiManager.isAPModeEnabled()) {
-        wifiManager.updateAPMode();
-        systemMonitor.forceResetWatchdog();
-        
-        // Try to start web server if AP mode is active but web server isn't running
-        if (!webConfig.isRunning()) {
-            // Use port 80 for AP mode, 8080 for STA mode
-            int webPort = wifiManager.isAPModeEnabled() ? 80 : 8080;
-            if (webConfig.begin(webPort)) {
-                Serial.printf("Web config server started for AP mode on port %d\n", webPort);
-            }
-        }
-    }
     
     // Handle web configuration server with better error handling
     if (wifiManager.isConnected()) {
