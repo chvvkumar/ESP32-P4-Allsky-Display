@@ -1083,7 +1083,8 @@ String WebConfig::generateImageSourcesPage() {
     html += "</div>";
     html += "</div>";
     
-    html += "</div>";
+    html += "</div></div>";
+    return html;
 }
 
 String WebConfig::generateImagePage() {
@@ -1093,7 +1094,7 @@ String WebConfig::generateImagePage() {
     // Image source
     html += "<div class='card'>";
     html += "<h2>🖼️ Image Source</h2>";
-    html += "<p style='color:#f59e0b;margin-bottom:1rem;background:rgba(245,158,11,0.1);padding:0.75rem;border-radius:6px;border-left:4px solid #f59e0b'>⚠️ For multiple image sources, use the <a href='/config/sources' style='color:#38bdf8;font-weight:bold'>Image Sources</a> page.</p>";
+    html += "<p style='color:#f59e0b;margin-bottom:1rem;background:rgba(245,158,11,0.1);padding:0.75rem;border-radius:6px;border-left:4px solid #f59e0b'>⚠️ For multiple image sources, use the <a href='/config/sources' style='color:#38bdf8;font-weight:bold'>Multi-Image</a> page.</p>";
     
     html += "<div class='form-group'>";
     html += "<label for='image_url'>Image URL</label>";
