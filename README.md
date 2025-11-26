@@ -23,6 +23,13 @@ An image display system for ESP32-P4 with multi-image cycling, hardware accelera
 - **Image Source Management**: Add/remove/configure sources
 - **Display Settings**: Brightness and update intervals
 
+### Home Assistant Integration
+- **MQTT Discovery**: Automatic entity creation in Home Assistant
+- **Full Device Control**: All settings controllable from HA
+- **Per-Image Transforms**: Control scale, offset, rotation for each image
+- **Live Sensors**: Heap, PSRAM, WiFi signal, uptime monitoring
+- **Buttons & Switches**: Reboot, next image, cycling controls
+
 ### Interactive Controls
 - **Touch Interface**: Single tap (next image), double tap (toggle mode)
 - **Serial Commands**: Real-time manipulation via serial
@@ -30,7 +37,7 @@ An image display system for ESP32-P4 with multi-image cycling, hardware accelera
 
 ### System Features
 - **Simple WiFi setup**: With hotspot
-- **MQTT Integration**: Remote brightness control
+- **MQTT Integration**: Home Assistant auto-discovery
 - **Watchdog Protection**: Prevents system freezes
 - **Memory Monitoring**: Real-time usage tracking
 - **Error Recovery**: Automatic reconnection and retry
@@ -52,7 +59,15 @@ An image display system for ESP32-P4 with multi-image cycling, hardware accelera
 ## Screenshots
 
 ### Web Interface
-![Screenshot](images/2025-11-19_9-01-02.jpg)
+
+Home Page
+![Home Page](images/2025-11-19_9-01-02.jpg)
+
+MQTT Settings
+![MQTT Settings](images/2025-11-26_8-55-15.jpg)
+
+Home Assistant MQTT Device
+![Home Assistant MQTT Device](images/2025-11-26_9-00-46.jpg)
 
 ## Hardware Requirements
 
@@ -83,6 +98,26 @@ An image display system for ESP32-P4 with multi-image cycling, hardware accelera
 ### Web Interface
 - Access: `http://[device-ip]:8080/`
 - Configure image sources, display settings, network, and MQTT
+
+### Home Assistant MQTT Discovery
+The device automatically integrates with Home Assistant when MQTT discovery is enabled:
+
+**Entities Created:**
+- **Light**: Brightness control (0-100%)
+- **Switches**: Cycling enabled, Random order, Auto brightness
+- **Numbers**: Cycle interval, Update interval, Per-image transforms (scale, offset, rotation)
+- **Select**: Current image source selector
+- **Buttons**: Reboot device, Next image, Reset transforms
+- **Sensors**: Current image URL, Free heap, Free PSRAM, WiFi signal, Uptime, Image count
+
+**Setup:**
+1. Configure MQTT broker settings in web interface
+2. Enable "Home Assistant Discovery" in MQTT settings
+3. Set device name and topic preferences (optional)
+4. Save and reconnect MQTT
+5. Device appears automatically in Home Assistant
+
+All device controls and sensors will be available in Home Assistant for dashboards, automations, and scripts.
 
 ### Touch Controls
 ```
