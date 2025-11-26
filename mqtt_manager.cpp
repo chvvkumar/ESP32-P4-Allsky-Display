@@ -12,6 +12,11 @@ MQTTManager::MQTTManager() :
     lastReconnectAttempt(0),
     reconnectBackoff(5000),
     reconnectFailures(0),
+    discoveryPublished(false),
+    lastAvailabilityPublish(0),
+    lastSensorPublish(0),
+    lastStatusLog(0),
+    lastConnectionState(false),
     debugPrintFunc(nullptr),
     debugPrintfFunc(nullptr),
     firstImageLoaded(false)
@@ -22,6 +27,10 @@ bool MQTTManager::begin() {
     // Configure MQTT client
     mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
     mqttClient.setCallback(messageCallback);
+    mqttClient.setBufferSize(2048); // Increase buffer size for Home Assistant discovery messages
+    
+    // Initialize Home Assistant discovery
+    haDiscovery.begin(&mqttClient);
     
     Serial.println("MQTT Manager initialized");
     return true;
@@ -39,7 +48,7 @@ void MQTTManager::connect() {
     }
     
     // Generate unique client ID
-    String clientId = String(MQTT_CLIENT_ID) + "_" + String(random(0xffff), HEX);
+    String clientId = String(configStorage.getMQTTClientID().c_str()) + "_" + String(random(0xffff), HEX);
     
     // Set connection timeout to prevent blocking
     mqttClient.setSocketTimeout(2);  // 2 second timeout
@@ -47,11 +56,19 @@ void MQTTManager::connect() {
     // Reset watchdog before connection attempt
     esp_task_wdt_reset();
     
+    // Set up Last Will and Testament (LWT) for Home Assistant availability
+    String availabilityTopic = haDiscovery.getAvailabilityTopic();
+    
     bool connected = false;
-    if (strlen(MQTT_USER) > 0) {
-        connected = mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD);
+    String mqttUser = configStorage.getMQTTUser();
+    String mqttPassword = configStorage.getMQTTPassword();
+    
+    if (mqttUser.length() > 0) {
+        connected = mqttClient.connect(clientId.c_str(), mqttUser.c_str(), mqttPassword.c_str(),
+                                      availabilityTopic.c_str(), 0, true, "offline");
     } else {
-        connected = mqttClient.connect(clientId.c_str());
+        connected = mqttClient.connect(clientId.c_str(), nullptr, nullptr,
+                                      availabilityTopic.c_str(), 0, true, "offline");
     }
     
     // Reset watchdog after connection attempt
@@ -61,39 +78,46 @@ void MQTTManager::connect() {
         mqttConnected = true;
         reconnectFailures = 0;  // Reset failure counter
         reconnectBackoff = 5000;  // Reset backoff
+        discoveryPublished = false; // Reset discovery flag
         
         Serial.printf("MQTT connected as: %s\n", clientId.c_str());
         
-        // Subscribe to reboot topic with watchdog reset
-        esp_task_wdt_reset();
-        if (mqttClient.subscribe(MQTT_REBOOT_TOPIC)) {
-            Serial.printf("Subscribed to reboot topic: %s\n", MQTT_REBOOT_TOPIC);
-            if (debugPrintFunc && !firstImageLoaded) {
-                debugPrintFunc("MQTT connected!", COLOR_GREEN);
-                debugPrintfFunc(COLOR_WHITE, "Subscribed to: %s", MQTT_REBOOT_TOPIC);
-            }
-        } else {
-            Serial.println("Failed to subscribe to reboot topic!");
-            if (debugPrintFunc && !firstImageLoaded) {
-                debugPrintFunc("MQTT subscription failed!", COLOR_RED);
-            }
+        if (debugPrintFunc && !firstImageLoaded) {
+            debugPrintFunc("MQTT connected!", COLOR_GREEN);
         }
         
-        // Subscribe to brightness topic with watchdog reset
+        // Publish availability as online
         esp_task_wdt_reset();
-        if (mqttClient.subscribe(MQTT_BRIGHTNESS_TOPIC)) {
-            Serial.printf("Subscribed to brightness topic: %s\n", MQTT_BRIGHTNESS_TOPIC);
+        haDiscovery.publishAvailability(true);
+        
+        // Publish Home Assistant discovery if enabled
+        if (configStorage.getHADiscoveryEnabled()) {
+            esp_task_wdt_reset();
             if (debugPrintFunc && !firstImageLoaded) {
-                debugPrintfFunc(COLOR_WHITE, "Brightness MQTT ready");
+                debugPrintFunc("Publishing HA discovery...", COLOR_CYAN);
             }
             
-            // Publish current brightness status on connect to establish proper state
-            int currentBrightness = displayManager.getBrightness();
-            Serial.printf("Publishing initial brightness status: %d%%\n", currentBrightness);
-            publishBrightnessStatus(currentBrightness);
-            
-        } else {
-            Serial.println("Failed to subscribe to brightness topic!");
+            if (haDiscovery.publishDiscovery()) {
+                discoveryPublished = true;
+                Serial.println("Home Assistant discovery published");
+                
+                // Subscribe to command topic filter
+                String commandFilter = haDiscovery.getCommandTopicFilter();
+                if (mqttClient.subscribe(commandFilter.c_str())) {
+                    Serial.printf("Subscribed to HA commands: %s\n", commandFilter.c_str());
+                    if (debugPrintFunc && !firstImageLoaded) {
+                        debugPrintFunc("HA discovery complete!", COLOR_GREEN);
+                    }
+                } else {
+                    Serial.println("Failed to subscribe to HA command topics!");
+                }
+                
+                // Publish initial state
+                esp_task_wdt_reset();
+                haDiscovery.publishState();
+            } else {
+                Serial.println("Failed to publish HA discovery");
+            }
         }
         
     } else {
@@ -153,28 +177,11 @@ void MQTTManager::messageCallback(char* topic, byte* payload, unsigned int lengt
     
     Serial.printf("MQTT message received on topic '%s': %s\n", topic, message.c_str());
     
-    // Handle different topics
+    // Handle Home Assistant commands
     String topicStr = String(topic);
-    
-    if (topicStr == MQTT_REBOOT_TOPIC) {
-        mqttManager.handleRebootMessage(message);
-    } else if (topicStr == MQTT_BRIGHTNESS_TOPIC) {
-        mqttManager.handleBrightnessMessage(message);
-    }
+    haDiscovery.handleCommand(topicStr, message);
 }
 
-bool MQTTManager::publishBrightnessStatus(int brightness) {
-    if (!isConnected()) return false;
-    
-    String status = String(brightness);
-    bool result = mqttClient.publish(MQTT_BRIGHTNESS_STATUS_TOPIC, status.c_str());
-    if (result) {
-        Serial.printf("Published brightness status: %d%%\n", brightness);
-    } else {
-        Serial.println("Failed to publish brightness status");
-    }
-    return result;
-}
 
 void MQTTManager::setDebugFunctions(void (*debugPrint)(const char*, uint16_t), 
                                    void (*debugPrintf)(uint16_t, const char*, ...),
@@ -187,104 +194,107 @@ void MQTTManager::setDebugFunctions(void (*debugPrint)(const char*, uint16_t),
 }
 
 void MQTTManager::update() {
-    if (!isConnected()) {
+    bool currentConnectionState = isConnected();
+    
+    // Log connection state changes immediately
+    if (currentConnectionState != lastConnectionState) {
+        lastConnectionState = currentConnectionState;
+        if (currentConnectionState) {
+            Serial.println("MQTT: Connection established");
+        } else {
+            Serial.println("MQTT: Connection lost");
+        }
+    }
+    
+    if (!currentConnectionState) {
         if (mqttConnected) {
             mqttConnected = false;
-            Serial.println("MQTT disconnected");
+            Serial.println("MQTT: Disconnected - attempting reconnect");
         }
         reconnect();
     } else {
         loop();
+        
+        // Publish availability heartbeat every 30 seconds
+        publishAvailabilityHeartbeat();
+        
+        // Update Home Assistant discovery (publishes sensor updates)
+        haDiscovery.update();
     }
+    
+    // Log connection status every 30 seconds
+    logConnectionStatus();
 }
 
 void MQTTManager::printConnectionInfo() {
     Serial.println("=== MQTT Connection Info ===");
     Serial.printf("Status: %s\n", isConnected() ? "Connected" : "Disconnected");
-    Serial.printf("Server: %s:%d\n", MQTT_SERVER, MQTT_PORT);
-    Serial.printf("Client ID: %s\n", MQTT_CLIENT_ID);
+    Serial.printf("Server: %s:%d\n", configStorage.getMQTTServer().c_str(), configStorage.getMQTTPort());
+    Serial.printf("Client ID: %s\n", configStorage.getMQTTClientID().c_str());
     if (isConnected()) {
-        Serial.printf("Subscribed topics:\n");
-        Serial.printf("  - %s (reboot)\n", MQTT_REBOOT_TOPIC);
-        Serial.printf("  - %s (brightness)\n", MQTT_BRIGHTNESS_TOPIC);
-        Serial.printf("Publishing to: %s\n", MQTT_BRIGHTNESS_STATUS_TOPIC);
+        if (configStorage.getHADiscoveryEnabled()) {
+            Serial.println("Home Assistant Discovery: Enabled");
+            Serial.printf("Device Name: %s\n", configStorage.getHADeviceName().c_str());
+            Serial.printf("Base Topic: %s\n", haDiscovery.getCommandTopicFilter().c_str());
+        } else {
+            Serial.println("Home Assistant Discovery: Disabled");
+        }
     }
     Serial.println("============================");
 }
 
-void MQTTManager::handleRebootMessage(const String& message) {
-    if (message == "reboot") {
-        Serial.println("Reboot command received via MQTT - scheduling graceful recovery instead of hard restart");
+void MQTTManager::logConnectionStatus() {
+    unsigned long now = millis();
+    
+    // Log status every 30 seconds
+    if (now - lastStatusLog >= 30000) {
+        lastStatusLog = now;
         
-        // Display message on screen
-        if (debugPrintFunc) {
-            debugPrintFunc("MQTT Reboot command received", COLOR_YELLOW);
-            if (debugPrintfFunc) {
-                debugPrintfFunc(COLOR_CYAN, "Performing graceful recovery...");
-            }
+        Serial.println("=== MQTT Status ===");
+        Serial.printf("Connected: %s\n", isConnected() ? "YES" : "NO");
+        
+        if (isConnected()) {
+            Serial.printf("Broker: %s:%d\n", configStorage.getMQTTServer().c_str(), configStorage.getMQTTPort());
+            Serial.printf("Discovery Published: %s\n", discoveryPublished ? "YES" : "NO");
+            
+            unsigned long timeSinceAvailability = (lastAvailabilityPublish > 0) ? (now - lastAvailabilityPublish) : 0;
+            
+            // Get sensor publish time from HA discovery
+            unsigned long haSensorPublish = haDiscovery.getLastSensorPublish();
+            unsigned long timeSinceSensor = (haSensorPublish > 0) ? (now - haSensorPublish) : 0;
+            
+            Serial.printf("Last Availability: %lu s ago\n", timeSinceAvailability / 1000);
+            Serial.printf("Last Sensor Update: %lu s ago\n", timeSinceSensor / 1000);
+        } else {
+            Serial.printf("Failed Attempts: %d\n", reconnectFailures);
+            unsigned long nextRetryTime = (lastReconnectAttempt + reconnectBackoff > now) ? 
+                                          (lastReconnectAttempt + reconnectBackoff - now) / 1000 : 0;
+            Serial.printf("Next Retry: %lu s\n", nextRetryTime);
+            Serial.printf("MQTT State: %d\n", mqttClient.state());
         }
-        
-        // Instead of immediately restarting, schedule a graceful recovery
-        // Reset network and MQTT connections to restart them
-        // This keeps the device running and retrying in background
-        
-        // Trigger a reconnection sequence: disconnect then reconnect
-        // The main loop will handle reconnection attempts
-        Serial.println("Network recovery initiated - device will attempt to reconnect");
-        
-        // Note: Full ESP.restart() is no longer called - device stays operational
-        // with background recovery attempts instead
+        Serial.println("==================");
     }
 }
 
-void MQTTManager::handleBrightnessMessage(const String& message) {
-    Serial.printf("Processing brightness message: '%s'\n", message.c_str());
-    
-    // Check if auto brightness mode is enabled
-    if (!configStorage.getBrightnessAutoMode()) {
-        Serial.println("MQTT brightness control disabled (auto mode is off) - ignoring");
+void MQTTManager::publishAvailabilityHeartbeat() {
+    if (!isConnected()) {
         return;
     }
     
-    // Handle empty or invalid messages
-    if (message.length() == 0) {
-        Serial.println("Empty brightness message received - ignoring");
-        return;
-    }
+    unsigned long now = millis();
     
-    int brightness = message.toInt();
-    
-    // Additional validation for edge cases
-    if (message == "0") {
-        brightness = 0; // Explicitly handle "0" string
-    } else if (brightness == 0 && message != "0") {
-        Serial.printf("Invalid brightness value (non-numeric): '%s' - ignoring\n", message.c_str());
-        return;
-    }
-    
-    if (brightness >= 0 && brightness <= 100) {
-        // Get current brightness to compare
-        int currentBrightness = displayManager.getBrightness();
+    // Publish availability heartbeat every 30 seconds
+    if (now - lastAvailabilityPublish >= 30000) {
+        lastAvailabilityPublish = now;
         
-        if (brightness != currentBrightness) {
-            displayManager.setBrightness(brightness);
-            Serial.printf("Brightness changed from %d%% to %d%% via MQTT\n", currentBrightness, brightness);
-            
-            // Save the value to config so it persists
-            configStorage.setDefaultBrightness(brightness);
-            configStorage.saveConfig();
-            
-            // Show debug message if first image not loaded yet
-            if (debugPrintFunc && !firstImageLoaded) {
-                debugPrintfFunc(COLOR_CYAN, "Brightness: %d%% -> %d%% via MQTT", currentBrightness, brightness);
-            }
+        if (haDiscovery.publishAvailability(true)) {
+            Serial.println("MQTT: Availability heartbeat sent");
         } else {
-            Serial.printf("Brightness already at %d%% - no change needed\n", brightness);
+            Serial.println("MQTT: WARNING - Failed to send availability heartbeat");
         }
-        
-        // Always publish status confirmation for valid values
-        publishBrightnessStatus(brightness);
-    } else {
-        Serial.printf("Invalid brightness value (out of range): %d - ignoring\n", brightness);
     }
+}
+
+PubSubClient* MQTTManager::getClient() {
+    return &mqttClient;
 }

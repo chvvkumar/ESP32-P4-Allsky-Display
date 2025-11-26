@@ -41,9 +41,12 @@ void WebConfig::handleSaveConfig() {
         else if (name == "mqtt_user") configStorage.setMQTTUser(value);
         else if (name == "mqtt_password") configStorage.setMQTTPassword(value);
         else if (name == "mqtt_client_id") configStorage.setMQTTClientID(value);
-        else if (name == "mqtt_reboot_topic") configStorage.setMQTTRebootTopic(value);
-        else if (name == "mqtt_brightness_topic") configStorage.setMQTTBrightnessTopic(value);
-        else if (name == "mqtt_brightness_status_topic") configStorage.setMQTTBrightnessStatusTopic(value);
+        
+        // Home Assistant Discovery settings
+        else if (name == "ha_device_name") configStorage.setHADeviceName(value);
+        else if (name == "ha_discovery_prefix") configStorage.setHADiscoveryPrefix(value);
+        else if (name == "ha_state_topic") configStorage.setHAStateTopic(value);
+        else if (name == "ha_sensor_update_interval") configStorage.setHASensorUpdateInterval(value.toInt());
         
         // Image settings
         else if (name == "image_url") {
@@ -104,17 +107,20 @@ void WebConfig::handleSaveConfig() {
     bool cyclingEnabledFound = false;
     bool randomOrderFound = false;
     bool brightnessAutoModeFound = false;
+    bool haDiscoveryEnabledFound = false;
     
     for (int i = 0; i < server->args(); i++) {
         String name = server->argName(i);
         if (name == "cycling_enabled") cyclingEnabledFound = true;
         else if (name == "random_order") randomOrderFound = true;
         else if (name == "brightness_auto_mode") brightnessAutoModeFound = true;
+        else if (name == "ha_discovery_enabled") haDiscoveryEnabledFound = true;
     }
     
     configStorage.setCyclingEnabled(cyclingEnabledFound);
     configStorage.setRandomOrder(randomOrderFound);
     configStorage.setBrightnessAutoMode(brightnessAutoModeFound);
+    configStorage.setHADiscoveryEnabled(haDiscoveryEnabledFound);
     
     // Save configuration to persistent storage
     configStorage.saveConfig();
@@ -126,10 +132,6 @@ void WebConfig::handleSaveConfig() {
     if (brightnessChanged && newBrightness >= 0) {
         displayManager.setBrightness(newBrightness);
         Serial.printf("Applied brightness change immediately: %d%%\n", newBrightness);
-        
-        if (mqttManager.isConnected()) {
-            mqttManager.publishBrightnessStatus(newBrightness);
-        }
     }
     
     if (imageSettingsChanged) {

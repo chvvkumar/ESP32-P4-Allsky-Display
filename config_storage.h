@@ -31,10 +31,14 @@ public:
     void setMQTTUser(const String& user);
     void setMQTTPassword(const String& password);
     void setMQTTClientID(const String& clientId);
-    void setMQTTRebootTopic(const String& topic);
-    void setMQTTBrightnessTopic(const String& topic);
-    void setMQTTBrightnessStatusTopic(const String& topic);
     void setImageURL(const String& url);
+    
+    // Home Assistant Discovery setters
+    void setHADiscoveryEnabled(bool enabled);
+    void setHADeviceName(const String& name);
+    void setHADiscoveryPrefix(const String& prefix);
+    void setHAStateTopic(const String& topic);
+    void setHASensorUpdateInterval(unsigned long interval);
     void setDefaultBrightness(int brightness);
     void setBrightnessAutoMode(bool autoMode);
     void setUpdateInterval(unsigned long interval);
@@ -69,10 +73,14 @@ public:
     String getMQTTUser();
     String getMQTTPassword();
     String getMQTTClientID();
-    String getMQTTRebootTopic();
-    String getMQTTBrightnessTopic();
-    String getMQTTBrightnessStatusTopic();
     String getImageURL();
+    
+    // Home Assistant Discovery getters
+    bool getHADiscoveryEnabled();
+    String getHADeviceName();
+    String getHADiscoveryPrefix();
+    String getHAStateTopic();
+    unsigned long getHASensorUpdateInterval();
     int getDefaultBrightness();
     bool getBrightnessAutoMode();
     unsigned long getUpdateInterval();
@@ -143,9 +151,13 @@ private:
         String mqttUser;
         String mqttPassword;
         String mqttClientID;
-        String mqttRebootTopic;
-        String mqttBrightnessTopic;
-        String mqttBrightnessStatusTopic;
+        
+        // Home Assistant Discovery settings
+        bool haDiscoveryEnabled;
+        String haDeviceName;
+        String haDiscoveryPrefix;
+        String haStateTopic;
+        unsigned long haSensorUpdateInterval;
         
         // Image settings
         String imageURL;  // Legacy single image URL

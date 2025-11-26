@@ -131,13 +131,33 @@ String WebConfig::generateMQTTPage() {
     html += "<input type='text' id='mqtt_user' name='mqtt_user' class='form-control' value='" + escapeHtml(configStorage.getMQTTUser()) + "'></div>";
     html += "<div class='form-group'><label for='mqtt_password'>Password (optional)</label>";
     html += "<input type='password' id='mqtt_password' name='mqtt_password' class='form-control' value='" + escapeHtml(configStorage.getMQTTPassword()) + "'></div></div>";
-    html += "<div class='card'><h2>📝 MQTT Topics</h2>";
-    html += "<div class='form-group'><label for='mqtt_reboot_topic'>Reboot Topic</label>";
-    html += "<input type='text' id='mqtt_reboot_topic' name='mqtt_reboot_topic' class='form-control' value='" + escapeHtml(configStorage.getMQTTRebootTopic()) + "' required></div>";
-    html += "<div class='form-group'><label for='mqtt_brightness_topic'>Brightness Control Topic</label>";
-    html += "<input type='text' id='mqtt_brightness_topic' name='mqtt_brightness_topic' class='form-control' value='" + escapeHtml(configStorage.getMQTTBrightnessTopic()) + "' required></div>";
-    html += "<div class='form-group'><label for='mqtt_brightness_status_topic'>Brightness Status Topic</label>";
-    html += "<input type='text' id='mqtt_brightness_status_topic' name='mqtt_brightness_status_topic' class='form-control' value='" + escapeHtml(configStorage.getMQTTBrightnessStatusTopic()) + "' required></div></div>";
+    
+    html += "<div class='card'><h2>🏠 Home Assistant Discovery</h2>";
+    html += "<div class='form-group'><div style='display:flex;align-items:center;margin-bottom:1rem'>";
+    html += "<input type='checkbox' id='ha_discovery_enabled' name='ha_discovery_enabled' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'";
+    if (configStorage.getHADiscoveryEnabled()) html += " checked";
+    html += "><label for='ha_discovery_enabled' style='margin-bottom:0;cursor:pointer;font-size:1rem'>Enable Home Assistant MQTT Discovery</label></div>";
+    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-top:-0.5rem;margin-bottom:1rem'>Automatically creates entities in Home Assistant for all device controls and sensors</p></div>";
+    
+    html += "<div class='form-group'><label for='ha_device_name'>Device Name</label>";
+    html += "<input type='text' id='ha_device_name' name='ha_device_name' class='form-control' value='" + escapeHtml(configStorage.getHADeviceName()) + "' placeholder='ESP32 AllSky Display'></div>";
+    
+    html += "<div class='form-group'><label for='ha_discovery_prefix'>Discovery Prefix</label>";
+    html += "<input type='text' id='ha_discovery_prefix' name='ha_discovery_prefix' class='form-control' value='" + escapeHtml(configStorage.getHADiscoveryPrefix()) + "' placeholder='homeassistant'>";
+    html += "<p style='color:#94a3b8;font-size:0.85rem;margin-top:0.5rem'>Default is 'homeassistant'. Change only if you've customized your HA MQTT discovery prefix.</p></div>";
+    
+    html += "<div class='form-group'><label for='ha_state_topic'>State Topic Prefix</label>";
+    html += "<input type='text' id='ha_state_topic' name='ha_state_topic' class='form-control' value='" + escapeHtml(configStorage.getHAStateTopic()) + "' placeholder='allsky_display'>";
+    html += "<p style='color:#94a3b8;font-size:0.85rem;margin-top:0.5rem'>Base MQTT topic for all device state and command messages.</p></div>";
+    
+    html += "<div class='form-group'><label for='ha_sensor_update_interval'>Sensor Update Interval (seconds)</label>";
+    html += "<input type='number' id='ha_sensor_update_interval' name='ha_sensor_update_interval' class='form-control' value='" + String(configStorage.getHASensorUpdateInterval()) + "' min='10' max='300'>";
+    html += "<p style='color:#94a3b8;font-size:0.85rem;margin-top:0.5rem'>How often to publish sensor data (heap, PSRAM, WiFi signal, uptime) to Home Assistant.</p></div>";
+    
+    html += "<div style='background:rgba(14,165,233,0.1);border:1px solid #0ea5e9;border-radius:8px;padding:1rem;margin-top:1rem'>";
+    html += "<p style='color:#38bdf8;margin:0;font-size:0.9rem'><i class='fas fa-info-circle' style='margin-right:8px'></i><strong>Note:</strong> After saving, reconnect MQTT to trigger discovery. All device controls will appear in Home Assistant automatically.</p>";
+    html += "</div></div>";
+    
     html += "</div><div class='card' style='margin-top:1.5rem'>";
     html += "<button type='submit' class='btn btn-primary'>💾 Save MQTT Settings</button></div></form></div></div>";
     return html;
