@@ -66,6 +66,9 @@ Home Page
 MQTT Settings
 ![MQTT Settings](images/2025-11-26_8-55-15.jpg)
 
+Home Assistant MQTT Device
+![Home Assistant MQTT Device](images/2025-11-26_9-00-46.jpg)
+
 ## Hardware Requirements
 
 - ESP32-P4 microcontroller with PSRAM
