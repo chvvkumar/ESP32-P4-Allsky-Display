@@ -59,8 +59,11 @@ An image display system for ESP32-P4 with multi-image cycling, hardware accelera
 ## Screenshots
 
 ### Web Interface
+
+Home Page
 ![Home Page](images/2025-11-19_9-01-02.jpg)
 
+MQTT Settings
 ![MQTT Settings](images/2025-11-26_8-55-15.jpg)
 
 ## Hardware Requirements
