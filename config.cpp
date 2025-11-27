@@ -18,11 +18,6 @@ const char* MQTT_USER = nullptr;
 const char* MQTT_PASSWORD = nullptr;
 const char* MQTT_CLIENT_ID = nullptr;
 
-// MQTT Topics - Will be loaded from storage
-const char* MQTT_REBOOT_TOPIC = nullptr;
-const char* MQTT_BRIGHTNESS_TOPIC = nullptr;
-const char* MQTT_BRIGHTNESS_STATUS_TOPIC = nullptr;
-
 // Image Configuration - Will be loaded from storage
 const char* IMAGE_URL = nullptr;
 
@@ -46,7 +41,6 @@ const bool DEFAULT_RANDOM_ORDER = false;       // Use sequential order by defaul
 // Internal string storage for dynamic configuration
 String wifiSSIDStr, wifiPasswordStr;
 String mqttServerStr, mqttUserStr, mqttPasswordStr, mqttClientIDStr;
-String mqttRebootTopicStr, mqttBrightnessTopicStr, mqttBrightnessStatusTopicStr;
 String imageURLStr;
 
 // =============================================================================
@@ -91,9 +85,6 @@ void initializeConfiguration() {
     mqttUserStr = configStorage.getMQTTUser();
     mqttPasswordStr = configStorage.getMQTTPassword();
     mqttClientIDStr = configStorage.getMQTTClientID();
-    mqttRebootTopicStr = configStorage.getMQTTRebootTopic();
-    mqttBrightnessTopicStr = configStorage.getMQTTBrightnessTopic();
-    mqttBrightnessStatusTopicStr = configStorage.getMQTTBrightnessStatusTopic();
     imageURLStr = configStorage.getImageURL();
     
     // Update const char* pointers to point to string data
@@ -103,9 +94,6 @@ void initializeConfiguration() {
     MQTT_USER = mqttUserStr.c_str();
     MQTT_PASSWORD = mqttPasswordStr.c_str();
     MQTT_CLIENT_ID = mqttClientIDStr.c_str();
-    MQTT_REBOOT_TOPIC = mqttRebootTopicStr.c_str();
-    MQTT_BRIGHTNESS_TOPIC = mqttBrightnessTopicStr.c_str();
-    MQTT_BRIGHTNESS_STATUS_TOPIC = mqttBrightnessStatusTopicStr.c_str();
     IMAGE_URL = imageURLStr.c_str();
     
     Serial.println("Configuration loaded from persistent storage");

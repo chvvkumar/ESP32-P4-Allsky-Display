@@ -50,11 +50,6 @@ extern const char* MQTT_USER;           // Leave empty if no authentication
 extern const char* MQTT_PASSWORD;       // Leave empty if no authentication
 extern const char* MQTT_CLIENT_ID;
 
-// MQTT topics
-extern const char* MQTT_REBOOT_TOPIC;
-extern const char* MQTT_BRIGHTNESS_TOPIC;
-extern const char* MQTT_BRIGHTNESS_STATUS_TOPIC;
-
 // =============================================================================
 // IMAGE CONFIGURATION
 // =============================================================================

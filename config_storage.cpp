@@ -27,9 +27,13 @@ void ConfigStorage::setDefaults() {
     config.mqttUser = "";
     config.mqttPassword = "";
     config.mqttClientID = "ESP32_Allsky_Display";
-    config.mqttRebootTopic = "Astro/AllSky/display/reboot";
-    config.mqttBrightnessTopic = "Astro/AllSky/display/brightness";
-    config.mqttBrightnessStatusTopic = "Astro/AllSky/display/brightness/status";
+    
+    // Home Assistant Discovery defaults
+    config.haDiscoveryEnabled = true;
+    config.haDeviceName = "ESP32 AllSky Display";
+    config.haDiscoveryPrefix = "homeassistant";
+    config.haStateTopic = "allsky_display";
+    config.haSensorUpdateInterval = 30; // 30 seconds
     
     config.imageURL = "http://allskypi5.lan/current/resized/image.jpg";
     
@@ -87,9 +91,13 @@ void ConfigStorage::loadConfig() {
         config.mqttUser = preferences.getString("mqtt_user", config.mqttUser);
         config.mqttPassword = preferences.getString("mqtt_pwd", config.mqttPassword);
         config.mqttClientID = preferences.getString("mqtt_client", config.mqttClientID);
-        config.mqttRebootTopic = preferences.getString("mqtt_reboot", config.mqttRebootTopic);
-        config.mqttBrightnessTopic = preferences.getString("mqtt_bright", config.mqttBrightnessTopic);
-        config.mqttBrightnessStatusTopic = preferences.getString("mqtt_b_stat", config.mqttBrightnessStatusTopic);
+        
+        // Load Home Assistant Discovery settings
+        config.haDiscoveryEnabled = preferences.getBool("ha_disc_en", config.haDiscoveryEnabled);
+        config.haDeviceName = preferences.getString("ha_dev_name", config.haDeviceName);
+        config.haDiscoveryPrefix = preferences.getString("ha_disc_pfx", config.haDiscoveryPrefix);
+        config.haStateTopic = preferences.getString("ha_state_top", config.haStateTopic);
+        config.haSensorUpdateInterval = preferences.getULong("ha_sens_int", config.haSensorUpdateInterval);
         
         config.imageURL = preferences.getString("image_url", config.imageURL);
         
@@ -147,9 +155,13 @@ void ConfigStorage::saveConfig() {
     preferences.putString("mqtt_user", config.mqttUser);
     preferences.putString("mqtt_pwd", config.mqttPassword);
     preferences.putString("mqtt_client", config.mqttClientID);
-    preferences.putString("mqtt_reboot", config.mqttRebootTopic);
-    preferences.putString("mqtt_bright", config.mqttBrightnessTopic);
-    preferences.putString("mqtt_b_stat", config.mqttBrightnessStatusTopic);
+    
+    // Save Home Assistant Discovery settings
+    preferences.putBool("ha_disc_en", config.haDiscoveryEnabled);
+    preferences.putString("ha_dev_name", config.haDeviceName);
+    preferences.putString("ha_disc_pfx", config.haDiscoveryPrefix);
+    preferences.putString("ha_state_top", config.haStateTopic);
+    preferences.putULong("ha_sens_int", config.haSensorUpdateInterval);
     
     preferences.putString("image_url", config.imageURL);
     
@@ -219,10 +231,16 @@ void ConfigStorage::setMQTTPort(int port) { config.mqttPort = port; }
 void ConfigStorage::setMQTTUser(const String& user) { config.mqttUser = user; }
 void ConfigStorage::setMQTTPassword(const String& password) { config.mqttPassword = password; }
 void ConfigStorage::setMQTTClientID(const String& clientId) { config.mqttClientID = clientId; }
-void ConfigStorage::setMQTTRebootTopic(const String& topic) { config.mqttRebootTopic = topic; }
-void ConfigStorage::setMQTTBrightnessTopic(const String& topic) { config.mqttBrightnessTopic = topic; }
-void ConfigStorage::setMQTTBrightnessStatusTopic(const String& topic) { config.mqttBrightnessStatusTopic = topic; }
 void ConfigStorage::setImageURL(const String& url) { config.imageURL = url; }
+
+// Home Assistant Discovery setters
+void ConfigStorage::setHADiscoveryEnabled(bool enabled) { config.haDiscoveryEnabled = enabled; }
+void ConfigStorage::setHADeviceName(const String& name) { config.haDeviceName = name; }
+void ConfigStorage::setHADiscoveryPrefix(const String& prefix) { config.haDiscoveryPrefix = prefix; }
+void ConfigStorage::setHAStateTopic(const String& topic) { config.haStateTopic = topic; }
+void ConfigStorage::setHASensorUpdateInterval(unsigned long interval) { 
+    config.haSensorUpdateInterval = constrain(interval, 10UL, 300UL); // 10-300 seconds
+}
 void ConfigStorage::setDefaultBrightness(int brightness) { config.defaultBrightness = brightness; }
 void ConfigStorage::setBrightnessAutoMode(bool autoMode) { config.brightnessAutoMode = autoMode; }
 void ConfigStorage::setUpdateInterval(unsigned long interval) { config.updateInterval = interval; }
@@ -246,10 +264,14 @@ int ConfigStorage::getMQTTPort() { return config.mqttPort; }
 String ConfigStorage::getMQTTUser() { return config.mqttUser; }
 String ConfigStorage::getMQTTPassword() { return config.mqttPassword; }
 String ConfigStorage::getMQTTClientID() { return config.mqttClientID; }
-String ConfigStorage::getMQTTRebootTopic() { return config.mqttRebootTopic; }
-String ConfigStorage::getMQTTBrightnessTopic() { return config.mqttBrightnessTopic; }
-String ConfigStorage::getMQTTBrightnessStatusTopic() { return config.mqttBrightnessStatusTopic; }
 String ConfigStorage::getImageURL() { return config.imageURL; }
+
+// Home Assistant Discovery getters
+bool ConfigStorage::getHADiscoveryEnabled() { return config.haDiscoveryEnabled; }
+String ConfigStorage::getHADeviceName() { return config.haDeviceName; }
+String ConfigStorage::getHADiscoveryPrefix() { return config.haDiscoveryPrefix; }
+String ConfigStorage::getHAStateTopic() { return config.haStateTopic; }
+unsigned long ConfigStorage::getHASensorUpdateInterval() { return config.haSensorUpdateInterval; }
 int ConfigStorage::getDefaultBrightness() { return config.defaultBrightness; }
 bool ConfigStorage::getBrightnessAutoMode() { return config.brightnessAutoMode; }
 unsigned long ConfigStorage::getUpdateInterval() { return config.updateInterval; }
