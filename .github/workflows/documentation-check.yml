@@ -1,0 +1,53 @@
+name: Documentation Check
+
+on:
+  push:
+    branches: [ main, Snd, Dev ]
+  pull_request:
+    branches: [ main, Snd, Dev ]
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Check README exists
+      run: |
+        if [ ! -f "README.md" ]; then
+          echo "❌ README.md not found"
+          exit 1
+        fi
+        echo "✅ README.md exists"
+    
+    - name: Check README completeness
+      run: |
+        required_sections=("Features" "Hardware Requirements" "Installation" "Setup" "Configuration")
+        missing=0
+        for section in "${required_sections[@]}"; do
+          if ! grep -q "## $section" README.md; then
+            echo "❌ Missing section: $section"
+            missing=1
+          fi
+        done
+        if [ $missing -eq 1 ]; then
+          exit 1
+        fi
+        echo "✅ All required README sections present"
+    
+    - name: Check for broken links in README
+      uses: gaurav-nelson/github-action-markdown-link-check@v1
+      with:
+        use-quiet-mode: 'yes'
+        config-file: '.github/markdown-link-check-config.json'
+      continue-on-error: true
+    
+    - name: Validate code examples in README
+      run: |
+        if grep -q '```cpp' README.md; then
+          echo "✅ Code examples found in README"
+        else
+          echo "⚠️ No code examples in README"
+        fi
