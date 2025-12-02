@@ -1,0 +1,55 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Arduino CLI
+      uses: arduino/setup-arduino-cli@v1
+    
+    - name: Install dependencies
+      run: |
+        arduino-cli core update-index
+        arduino-cli core install esp32:esp32@3.0.0
+        arduino-cli lib install "GFX Library for Arduino"
+        arduino-cli lib install "JPEGDEC"
+        arduino-cli lib install "PubSubClient"
+    
+    - name: Compile release build
+      run: |
+        arduino-cli compile --fqbn esp32:esp32:esp32p4 \
+          --build-property "build.flash_size=16MB" \
+          --build-property "build.psram_type=opi" \
+          --build-property "build.partitions=default_16MB" \
+          --output-dir ./build \
+          ESP32-P4-Allsky-Display.ino
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          build/*.bin
+          README.md
+        body: |
+          ## Installation
+          
+          1. Download the `.bin` file
+          2. Use esptool or Arduino IDE to flash to your ESP32-P4
+          3. Edit WiFi credentials in `config_storage.cpp` before first compile
+          
+          See [README.md](README.md) for complete setup instructions.
+          
+          ## What's Changed
+          
+          See commit history for detailed changes in this release.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

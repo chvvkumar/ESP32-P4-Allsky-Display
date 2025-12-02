@@ -86,6 +86,63 @@ Home Assistant MQTT Device
    - Access web interface at device IP
    - Configure image sources and settings
 
+## Setup
+
+### Before First Compile
+
+**IMPORTANT**: You must configure your WiFi credentials before compiling and uploading the code.
+
+1. **Edit WiFi Credentials** in [config_storage.cpp](config_storage.cpp):
+   ```cpp
+   void ConfigStorage::setDefaults() {
+       // *** EDIT THESE LINES WITH YOUR WIFI CREDENTIALS ***
+       config.wifiSSID = "YOUR_WIFI_SSID";        // Replace with your WiFi network name
+       config.wifiPassword = "YOUR_WIFI_PASSWORD"; // Replace with your WiFi password
+       
+       // MQTT settings (edit if using MQTT/Home Assistant)
+       config.mqttServer = "192.168.1.250";        // Your MQTT broker IP
+       config.mqttPort = 1883;
+       // ... rest of configuration
+   }
+   ```
+
+2. **Configure Default Image Source** in [config.cpp](config.cpp) (optional):
+   ```cpp
+   const char* DEFAULT_IMAGE_SOURCES[] = {
+       "http://your-server.com/image.jpg"  // Replace with your image URL
+   };
+   ```
+
+3. **Enable PSRAM** in Arduino IDE:
+   - Go to `Tools > PSRAM` → Select `"OPI PSRAM"`
+   - This is **required** for the application to work
+
+4. **Select Correct Board**:
+   - `Tools > Board` → `ESP32P4 Dev Module`
+   - `Tools > Flash Size` → `16MB (128Mb)`
+   - `Tools > Partition Scheme` → `16M Flash (3MB APP/9.9MB FATFS)`
+
+5. **Compile and Upload**:
+   - Click the Upload button in Arduino IDE
+   - Wait for compilation and upload to complete
+
+### After First Boot
+
+Once uploaded with your WiFi credentials, you can:
+
+1. **Access Web Interface**: Navigate to `http://[device-ip]:8080/`
+   - Find the device IP in the Serial Monitor output
+   - Configure additional settings without recompiling
+
+2. **Configure via Web Interface**:
+   - Network settings (change WiFi)
+   - MQTT broker settings
+   - Image sources and cycling
+   - Display brightness and transforms
+   - Home Assistant integration
+
+All settings are stored persistently and survive reboots. You only need to edit the code once for initial WiFi setup.
+
 ## Dependencies
 
 - ESP32 Core (3.2.1+)
@@ -162,3 +219,4 @@ Open source project. Check license file for details.
 - Create GitHub issues for bugs/features
 - Check troubleshooting section
 - Monitor serial output for debugging
+

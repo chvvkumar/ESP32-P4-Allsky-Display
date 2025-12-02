@@ -1,0 +1,47 @@
+name: Arduino Compilation Check
+
+on:
+  push:
+    branches: [ main, Snd, Dev ]
+  pull_request:
+    branches: [ main, Snd, Dev ]
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Arduino CLI
+      uses: arduino/setup-arduino-cli@v1
+    
+    - name: Install ESP32 core
+      run: |
+        arduino-cli core update-index
+        arduino-cli core install esp32:esp32@3.0.0
+    
+    - name: Install required libraries
+      run: |
+        arduino-cli lib install "GFX Library for Arduino"
+        arduino-cli lib install "JPEGDEC"
+        arduino-cli lib install "PubSubClient"
+    
+    - name: Compile sketch
+      run: |
+        arduino-cli compile --fqbn esp32:esp32:esp32p4 \
+          --build-property "build.flash_size=16MB" \
+          --build-property "build.psram_type=opi" \
+          --build-property "build.partitions=default_16MB" \
+          ESP32-P4-Allsky-Display.ino
+    
+    - name: Report compilation result
+      if: always()
+      run: |
+        if [ $? -eq 0 ]; then
+          echo "✅ Compilation successful"
+        else
+          echo "❌ Compilation failed"
+          exit 1
+        fi
