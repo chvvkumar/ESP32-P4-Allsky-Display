@@ -17,6 +17,16 @@ jobs:
     - name: Setup Arduino CLI
       uses: arduino/setup-arduino-cli@v1
     
+    - name: Cache Arduino CLI dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.arduino15
+          ~/Arduino/libraries
+        key: ${{ runner.os }}-arduino-${{ hashFiles('**/ESP32-P4-Allsky-Display.ino') }}
+        restore-keys: |
+          ${{ runner.os }}-arduino-
+    
     - name: Install ESP32 core and libraries
       run: |
         arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
@@ -38,7 +48,7 @@ jobs:
           --build-property "build.psram_type=opi" \
           --build-property "build.partitions=huge_app" \
           --build-property "compiler.cpp.extra_flags=-DBOARD_HAS_PSRAM" \
-          ESP32-P4-Allsky-Display.ino --verbose > build.log 2>&1 || true
+          ESP32-P4-Allsky-Display.ino > build.log 2>&1 || true
         
         # Show compilation errors if any
         if grep -q "Error" build.log; then

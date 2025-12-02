@@ -17,15 +17,20 @@ jobs:
     - name: Setup Arduino CLI
       uses: arduino/setup-arduino-cli@v1
     
+    - name: Cache Arduino CLI dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.arduino15
+          ~/Arduino/libraries
+        key: ${{ runner.os }}-arduino-${{ hashFiles('**/ESP32-P4-Allsky-Display.ino') }}
+        restore-keys: |
+          ${{ runner.os }}-arduino-
+    
     - name: Install ESP32 core
       run: |
         arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
         arduino-cli core install esp32:esp32@3.3.4 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-    
-    - name: List available ESP32 boards
-      run: |
-        echo "Available ESP32 boards:"
-        arduino-cli board listall | grep esp32
     
     - name: Install required libraries
       run: |
@@ -41,17 +46,10 @@ jobs:
     
     - name: Compile sketch
       run: |
-        set -x
-        if arduino-cli compile --fqbn esp32:esp32:esp32p4 \
+        arduino-cli compile --fqbn esp32:esp32:esp32p4 \
           --build-property "build.flash_size=32MB" \
           --build-property "build.psram_type=opi" \
           --build-property "build.partitions=huge_app" \
           --build-property "compiler.cpp.extra_flags=-DBOARD_HAS_PSRAM" \
-          ESP32-P4-Allsky-Display.ino --verbose; then
-          echo "✅ Compilation successful"
-        else
-          echo "❌ Compilation failed"
-          echo "Checking if board exists..."
-          arduino-cli board listall | grep -i esp32p4 || echo "Board esp32p4 not found in available boards"
-          exit 1
-        fi
+          ESP32-P4-Allsky-Display.ino
+        echo "✅ Compilation successful"
