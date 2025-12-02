@@ -31,6 +31,7 @@ jobs:
           --build-property "build.flash_size=32MB" \
           --build-property "build.psram_type=opi" \
           --build-property "build.partitions=huge_app" \
+          --build-property "compiler.cpp.extra_flags=-DBOARD_HAS_PSRAM" \
           ESP32-P4-Allsky-Display.ino --verbose > build.log 2>&1 || true
         
         # Show compilation errors if any
