@@ -1,156 +1,156 @@
-# ESP32-P4-WIFI6-Touch-LCD-3.4C / ESP32-P4-WIFI6-Touch-LCD-4C AllSky Display
+# ESP32-P4 AllSky Display
 
-An image display system for ESP32-P4 with multi-image cycling, hardware acceleration, web configuration, and MQTT control.
+An image display for [AllSky](https://github.com/AllskyTeam/allsky) cameras using ESP32-P4 with multi-image cycling, hardware acceleration, web configuration, and Home Assistant integration.
 
-## Documentation
+<img src="images/display.jpg" alt="Display in Action" width="600">
 
-🔗 [Product Page](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.4c.htm)
+## 🎥 Demo
 
-📝 [Product documentation](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-3.4C)
+Check out the video below to see the display in action:
 
-## Features
+[![Demo Video](https://img.youtube.com/vi/pPAgbkPNvvY/0.jpg)](https://www.youtube.com/watch?v=pPAgbkPNvvY)
+
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Hardware Requirements](#hardware-requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Home Assistant Integration](#home-assistant-integration)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+
+## 🌟 Overview
+
+This project transforms your ESP32-P4 touch display into a powerful all-sky camera viewer with advanced features like image cycling, per-image transformations, MQTT control, and seamless Home Assistant integration.
+
+**Key Highlights:**
+- Display images from multiple sources with automatic cycling
+- Real-time image transformations (scale, offset, rotation)
+- Complete web-based configuration interface
+- Native Home Assistant integration via MQTT discovery
+- Touch controls for quick navigation
+- Hardware-accelerated image processing using ESP32-P4 PPA
+
+## ✨ Features
 
 ### Image Display & Processing
-- **Multi-Image Cycling**: Cycle through up to 10 image sources
-- **Hardware Acceleration**: PPA for fast scaling and rotation
-- **Real-time Transformations**: Scale, rotate, and position images
-- **JPEG Support**: Efficient decoding with format validation
-- **Memory Management**: PSRAM-optimized buffering
+- **Multi-source support**: Cycle through up to 10 image URLs
+- **Hardware acceleration**: ESP32-P4 PPA for fast scaling and rotation
+- **Per-image transforms**: Individual scale, offset, and rotation settings
+- **Smart caching**: Reduces bandwidth with HTTP cache headers
+- **Auto-refresh**: Configurable update intervals (1-1440 minutes)
+- **JPEG support**: Efficient decoding with JPEGDEC library
 
 ### Web Configuration Interface
-- **Modern UI**: Clean, responsive web interface
-- **Real-time Status**: Live system monitoring
-- **Image Source Management**: Add/remove/configure sources
-- **Display Settings**: Brightness and update intervals
+- **Modern UI**: Responsive design with real-time status updates
+- **Network settings**: WiFi configuration without code changes
+- **MQTT setup**: Easy broker configuration
+- **Image management**: Add/remove/reorder sources via web interface
+- **Display controls**: Brightness, timing, and transform settings
+- **System monitoring**: Heap, PSRAM, WiFi signal, and uptime
 
 ### Home Assistant Integration
-- **MQTT Discovery**: Automatic entity creation in Home Assistant
-- **Full Device Control**: All settings controllable from HA
-- **Per-Image Transforms**: Control scale, offset, rotation for each image
-- **Live Sensors**: Heap, PSRAM, WiFi signal, uptime monitoring
-- **Buttons & Switches**: Reboot, next image, cycling controls
+- **MQTT Discovery**: Automatic entity creation
+- **Full control**: All settings accessible from HA
+- **Per-image entities**: Scale, offset, rotation for each image
+- **Live sensors**: Memory, WiFi, uptime monitoring
+- **Buttons & switches**: Reboot, next image, cycling controls
+- **Select entity**: Choose active image source
 
 ### Interactive Controls
-- **Touch Interface**: Single tap (next image), double tap (toggle mode)
-- **Serial Commands**: Real-time manipulation via serial
-- **Transform Controls**: Scale (+/-), Move (WASD), Rotate (QE)
+- **Touch interface**: 
+  - Single tap: Next image
+  - Double tap: Toggle cycling/refresh modes
+- **Serial commands**: Real-time manipulation via USB
+- **Transform controls**: Scale (+/-), Move (WASD), Rotate (QE)
 
 ### System Features
-- **Simple WiFi setup**: With hotspot
-- **MQTT Integration**: Home Assistant auto-discovery
-- **Watchdog Protection**: Prevents system freezes
-- **Memory Monitoring**: Real-time usage tracking
-- **Error Recovery**: Automatic reconnection and retry
+- **WiFi manager**: Simple credential setup
+- **Watchdog protection**: Prevents system freezes
+- **Memory monitoring**: Automatic health checks
+- **Error recovery**: Auto-reconnection and retry logic
+- **OTA updates**: Ready for over-the-air firmware updates
 
-## Demo
+## 🛠️ Hardware Requirements
 
-![Display System](images/display.jpg)
+**Supported Displays:**
+- [Waveshare ESP32-P4-WIFI6-Touch-LCD-3.4C](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.4c.htm) (480x480)
+- [Waveshare ESP32-P4-WIFI6-Touch-LCD-4C](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-4C) (720x720)
 
-**Watch the ESP32-P4 AllSky Display in action:**
+**Specifications:**
+- ESP32-P4 MCU with WiFi 6
+- DSI touch display
+- GT911 capacitive touch controller
+- 16MB flash, PSRAM support required
 
-[![ESP32-P4 AllSky Display Demo](https://img.youtube.com/vi/pPAgbkPNvvY/0.jpg)](https://www.youtube.com/watch?v=pPAgbkPNvvY)
+**Optional:**
+- 3D printed case: [Download from Printables](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
 
-[View on YouTube](https://www.youtube.com/watch?v=pPAgbkPNvvY)
+## 📦 Installation
 
-## 3D Printed Case
+### Prerequisites
 
-[Printables link for 3D printed case](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
+1. **Arduino IDE** (1.8.19 or later) or **PlatformIO**
+2. **ESP32 Arduino Core** (3.2.1+)
+3. **Required Libraries**:
+   - GFX Library for Arduino (1.6.0+)
+   - JPEGDEC (1.8.2+)
+   - PubSubClient (2.8+)
 
-## Screenshots
+### Initial Setup
 
-### Web Interface
+#### 1. Configure WiFi Credentials
 
-Home Page
-![Home Page](images/2025-11-19_9-01-02.jpg)
+**⚠️ IMPORTANT**: Edit WiFi settings **before** first upload.
 
-MQTT Settings
-![MQTT Settings](images/2025-11-26_8-55-15.jpg)
+Open [`config_storage.cpp`](config_storage.cpp) and modify:
 
-Home Assistant MQTT Device
-![Home Assistant MQTT Device](images/2025-11-26_9-00-46.jpg)
+````cpp
+void ConfigStorage::setDefaults() {
+    // *** EDIT THESE LINES ***
+    config.wifiSSID = "YOUR_WIFI_SSID";        // Your network name
+    config.wifiPassword = "YOUR_WIFI_PASSWORD"; // Your password
+    
+    // MQTT settings (optional, can configure via web later)
+    config.mqttServer = "192.168.1.250";       // MQTT broker IP
+    config.mqttPort = 1883;
+    config.mqttUser = "";                       // Optional
+    config.mqttPassword = "";                   // Optional
+}
+````
 
-## Hardware Requirements
+#### 2. Configure Default Image Source (Optional)
 
-- ESP32-P4 microcontroller with PSRAM
-- DSI Display with GT911 touch controller
-- WiFi connection for image downloading
+In [`config.cpp`](config.cpp), set your default image URLs:
 
-## Installation
+```cpp
+const char* DEFAULT_IMAGE_SOURCES[] = {
+    "http://your-server.com/image1.jpg",
+    "http://your-server.com/image2.jpg",
+    // Add more as needed
+};
+```
 
-1. **Arduino IDE Setup**:
-   - Install ESP32 core (3.2.1+)
-   - Enable PSRAM in Tools menu
-   - Install required libraries
+#### 3. Select Correct Board in Arduino IDE
 
-2. **Configuration**:
-   - Access web interface at device IP
-   - Configure image sources and settings
+- `Tools > Board` → `ESP32P4 Dev Module`
+- `Tools > Flash Size` → `16MB (128Mb)`
+- `Tools > Partition Scheme` → `16M Flash (3MB APP/9.9MB FATFS)`
 
-## Setup
+#### 4. Compile and Upload
 
-### Before First Compile
+- Click the Upload button in Arduino IDE
+- Monitor serial output for IP address and status
 
-**IMPORTANT**: You must configure your WiFi credentials before compiling and uploading the code.
+### 5. Access Web Interface
 
-1. **Edit WiFi Credentials** in [config_storage.cpp](config_storage.cpp):
-   ```cpp
-   void ConfigStorage::setDefaults() {
-       // *** EDIT THESE LINES WITH YOUR WIFI CREDENTIALS ***
-       config.wifiSSID = "YOUR_WIFI_SSID";        // Replace with your WiFi network name
-       config.wifiPassword = "YOUR_WIFI_PASSWORD"; // Replace with your WiFi password
-       
-       // MQTT settings (edit if using MQTT/Home Assistant)
-       config.mqttServer = "192.168.1.250";        // Your MQTT broker IP
-       config.mqttPort = 1883;
-       // ... rest of configuration
-   }
-   ```
+- Open a browser and go to `http://[device-ip]:8080/`
+- Configure additional settings like MQTT and image sources
 
-2. **Configure Default Image Source** in [config.cpp](config.cpp) (optional):
-   ```cpp
-   const char* DEFAULT_IMAGE_SOURCES[] = {
-       "http://your-server.com/image.jpg"  // Replace with your image URL
-   };
-   ```
-
-3. **Enable PSRAM** in Arduino IDE:
-   - Go to `Tools > PSRAM` → Select `"OPI PSRAM"`
-   - This is **required** for the application to work
-
-4. **Select Correct Board**:
-   - `Tools > Board` → `ESP32P4 Dev Module`
-   - `Tools > Flash Size` → `16MB (128Mb)`
-   - `Tools > Partition Scheme` → `16M Flash (3MB APP/9.9MB FATFS)`
-
-5. **Compile and Upload**:
-   - Click the Upload button in Arduino IDE
-   - Wait for compilation and upload to complete
-
-### After First Boot
-
-Once uploaded with your WiFi credentials, you can:
-
-1. **Access Web Interface**: Navigate to `http://[device-ip]:8080/`
-   - Find the device IP in the Serial Monitor output
-   - Configure additional settings without recompiling
-
-2. **Configure via Web Interface**:
-   - Network settings (change WiFi)
-   - MQTT broker settings
-   - Image sources and cycling
-   - Display brightness and transforms
-   - Home Assistant integration
-
-All settings are stored persistently and survive reboots. You only need to edit the code once for initial WiFi setup.
-
-## Dependencies
-
-- ESP32 Core (3.2.1+)
-- GFX Library for Arduino (1.6.0)
-- JPEGDEC (1.8.2+)
-- PubSubClient (2.8+)
-
-## Configuration
+## ⚙️ Configuration
 
 ### Web Interface
 - Access: `http://[device-ip]:8080/`
@@ -190,7 +190,7 @@ A/D   : Move left/right    B     : Reboot
 Q/E   : Rotate CCW/CW      M/I/P : System info
 ```
 
-## Troubleshooting
+## 🐛 Troubleshooting
 
 ### Common Issues
 1. **Compilation**: Enable PSRAM, check ESP32 core version
