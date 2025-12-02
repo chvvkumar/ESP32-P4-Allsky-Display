@@ -25,6 +25,12 @@ jobs:
         arduino-cli lib install "JPEGDEC"
         arduino-cli lib install "PubSubClient"
     
+    - name: Patch GFX Library for ESP32-P4 compatibility
+      run: |
+        # Fix MIPI_DSI_PHY_CLK_SRC_DEFAULT compatibility issue
+        sed -i 's/.phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT,/.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_PLL_F20M, \/\/MIPI_DSI_PHY_CLK_SRC_DEFAULT,/' ~/Arduino/libraries/GFX_Library_for_Arduino/src/databus/Arduino_ESP32DSIPanel.cpp
+        echo "✅ GFX Library patched for ESP32-P4"
+    
     - name: Compile and analyze memory
       run: |
         arduino-cli compile --fqbn esp32:esp32:esp32p4 \
