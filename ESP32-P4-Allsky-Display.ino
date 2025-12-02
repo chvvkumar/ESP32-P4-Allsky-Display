@@ -1,7 +1,3 @@
-#ifndef BOARD_HAS_PSRAM
-#error "Error: This program requires PSRAM enabled, please enable PSRAM option in 'Tools' menu of Arduino IDE"
-#endif
-
 // Include all our modular components
 #include "config.h"
 #include "config_storage.h"
@@ -20,7 +16,6 @@
 #include <JPEGDEC.h>
 #include <PubSubClient.h>
 #include <WebServer.h>
-#include <ElegantOTA.h>
 #include <Preferences.h>
 
 // Global variables for image processing
