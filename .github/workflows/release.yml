@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -15,6 +18,16 @@ jobs:
     
     - name: Setup Arduino CLI
       uses: arduino/setup-arduino-cli@v1
+    
+    - name: Cache Arduino CLI dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.arduino15
+          ~/Arduino/libraries
+        key: ${{ runner.os }}-arduino-${{ hashFiles('**/ESP32-P4-Allsky-Display.ino') }}
+        restore-keys: |
+          ${{ runner.os }}-arduino-
     
     - name: Install dependencies
       run: |
