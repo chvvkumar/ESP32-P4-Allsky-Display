@@ -20,7 +20,7 @@ jobs:
     - name: Install ESP32 core and libraries
       run: |
         arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-        arduino-cli core install esp32:esp32@3.0.7 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+        arduino-cli core install esp32:esp32@3.3.4 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
         arduino-cli lib install "GFX Library for Arduino"
         arduino-cli lib install "JPEGDEC"
         arduino-cli lib install "PubSubClient"
@@ -33,6 +33,12 @@ jobs:
           --build-property "build.partitions=32M_flash" \
           ESP32-P4-Allsky-Display.ino --verbose > build.log 2>&1 || true
         
+        # Show compilation errors if any
+        if grep -q "Error" build.log; then
+          echo "⚠️ Compilation errors found:"
+          grep -A 5 "Error" build.log || true
+        fi
+        
         # Extract memory usage
         if grep -q "Sketch uses" build.log; then
           grep "Sketch uses" build.log || true
@@ -40,6 +46,8 @@ jobs:
           echo "✅ Memory analysis complete"
         else
           echo "⚠️ Could not extract memory usage details"
+          echo "Last 50 lines of build log:"
+          tail -50 build.log
         fi
     
     - name: Check for memory warnings

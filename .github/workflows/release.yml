@@ -19,7 +19,7 @@ jobs:
     - name: Install dependencies
       run: |
         arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-        arduino-cli core install esp32:esp32@3.0.7 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+        arduino-cli core install esp32:esp32@3.3.4 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
         arduino-cli lib install "GFX Library for Arduino"
         arduino-cli lib install "JPEGDEC"
         arduino-cli lib install "PubSubClient"
