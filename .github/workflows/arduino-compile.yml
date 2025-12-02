@@ -39,7 +39,7 @@ jobs:
         if arduino-cli compile --fqbn esp32:esp32:esp32p4 \
           --build-property "build.flash_size=32MB" \
           --build-property "build.psram_type=opi" \
-          --build-property "build.partitions=32M_flash" \
+          --build-property "build.partitions=huge_app" \
           ESP32-P4-Allsky-Display.ino --verbose; then
           echo "✅ Compilation successful"
         else
