@@ -19,8 +19,8 @@ jobs:
     
     - name: Install ESP32 core
       run: |
-        arduino-cli core update-index
-        arduino-cli core install esp32:esp32@3.0.0
+        arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+        arduino-cli core install esp32:esp32@3.0.7 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
     
     - name: Install required libraries
       run: |
@@ -31,9 +31,9 @@ jobs:
     - name: Compile sketch
       run: |
         arduino-cli compile --fqbn esp32:esp32:esp32p4 \
-          --build-property "build.flash_size=16MB" \
+          --build-property "build.flash_size=32MB" \
           --build-property "build.psram_type=opi" \
-          --build-property "build.partitions=default_16MB" \
+          --build-property "build.partitions=32M_flash" \
           ESP32-P4-Allsky-Display.ino
     
     - name: Report compilation result
