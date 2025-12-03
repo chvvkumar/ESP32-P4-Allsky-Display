@@ -12,6 +12,7 @@ Check out the video below to see the display in action:
 
 ## 📋 Table of Contents
 
+- [Build Status](#build-status)
 - [Overview](#overview)
 - [Features](#features)
 - [Hardware Requirements](#hardware-requirements)
@@ -21,6 +22,12 @@ Check out the video below to see the display in action:
 - [Home Assistant Integration](#home-assistant-integration)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
+
+## 🚀 Build Status
+
+[![Arduino Compilation Check](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml/badge.svg)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml)
+[![Create Release](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/release.yml/badge.svg)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/release.yml)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/chvvkumar/ESP32-P4-Allsky-Display)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
 
 ## 🌟 Overview
 
