@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - 'main'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'images/**'
+      - '.gitignore'
+      - 'LICENSE'
   workflow_dispatch:
 
 permissions:
