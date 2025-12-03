@@ -93,12 +93,45 @@ This project transforms your ESP32-P4 touch display into a powerful all-sky came
 
 ### Prerequisites
 
-1. **Arduino IDE** (1.8.19 or later) or **PlatformIO**
-2. **ESP32 Arduino Core** (3.2.1+)
-3. **Required Libraries**:
-   - GFX Library for Arduino (1.6.0+)
-   - JPEGDEC (1.8.2+)
-   - PubSubClient (2.8+)
+1. **Arduino IDE** (1.8.19 or later)
+2. **Arduino CLI**
+3. **ESP32 Arduino Core** (3.3.4)
+   - Additional URL: `https://espressif.github.io/arduino-esp32/package_esp32_index.json`
+4. **Required Libraries**:
+   - GFX Library for Arduino (1.6.3)
+   - JPEGDEC (1.8.4)
+   - bb_spi_lcd (2.9.7)
+   - PubSubClient (2.8.0)
+5. **ESP32 Built-in Libraries** (v3.3.4):
+   - Preferences, WebServer, FS, Networking, WiFi, SPI, Wire, HTTPClient, NetworkClientSecure, Hash
+
+### Installation via Arduino CLI
+
+```bash
+# Update core index
+arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+
+# Install ESP32 core
+arduino-cli core install esp32:esp32@3.3.4 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+
+# Install libraries
+arduino-cli lib install "GFX Library for Arduino@1.6.3"
+arduino-cli lib install "JPEGDEC@1.8.4"
+arduino-cli lib install "PubSubClient@2.8.0"
+
+# Patch GFX Library for ESP32-P4 compatibility
+sed -i 's/.phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT,/.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_PLL_F20M, \/\/MIPI_DSI_PHY_CLK_SRC_DEFAULT,/' ~/Arduino/libraries/GFX_Library_for_Arduino/src/databus/Arduino_ESP32DSIPanel.cpp
+```
+
+### Build Configuration
+
+**FQBN**: `esp32:esp32:esp32p4`
+
+**Build Properties**:
+- Flash Size: 32MB
+- PSRAM Type: opi
+- Partitions: huge_app
+- Extra Flags: `-DBOARD_HAS_PSRAM`
 
 ### Initial Setup
 
