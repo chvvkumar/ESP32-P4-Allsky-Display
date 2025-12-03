@@ -166,21 +166,21 @@ The device provides a comprehensive web-based configuration interface accessible
 
 ### Configuration Pages
 
-<img src="images/2025-12-03_10-55-20.png" alt="Web Configuration Main Page" width="600">
+<img src="images/2025-12-03_10-55-20.png" alt="Web Configuration Main Page">
 
-<img src="images/2025-12-03_10-55-31.png" alt="Image Sources Configuration" width="600">
+<img src="images/2025-12-03_10-55-31.png" alt="Image Sources Configuration">
 
-<img src="images/2025-12-03_10-55-35.png" alt="Display Settings" width="600">
+<img src="images/2025-12-03_10-55-35.png" alt="Display Settings">
 
-<img src="images/2025-12-03_10-55-38.png" alt="Network Configuration" width="600">
+<img src="images/2025-12-03_10-55-38.png" alt="Network Configuration">
 
-<img src="images/2025-12-03_10-55-42.png" alt="MQTT Configuration" width="600">
+<img src="images/2025-12-03_10-55-42.png" alt="MQTT Configuration">
 
-<img src="images/2025-12-03_10-55-48.png" alt="System Information" width="600">
+<img src="images/2025-12-03_10-55-48.png" alt="System Information">
 
 ### Home Assistant Integration
 
-<img src="images/Home Assistant.jpg" alt="Home Assistant Integration" width="600">
+<img src="images/Home Assistant.jpg" alt="Home Assistant Integration">
 
 ### Touch Controls
 ```
