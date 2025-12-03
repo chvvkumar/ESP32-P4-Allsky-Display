@@ -31,7 +31,7 @@ Check out the video below to see the display in action:
 
 ## 🌟 Overview
 
-This project transforms your ESP32-P4 touch display into a powerful all-sky camera viewer with advanced features like image cycling, per-image transformations, MQTT control, and seamless Home Assistant integration.
+This project makes your ESP32-P4 touch display into an all-sky camera viewer with features like image cycling, per-image transformations, MQTT control, and seamless Home Assistant integration.
 
 **Key Highlights:**
 - Display images from multiple sources with automatic cycling
@@ -159,6 +159,62 @@ The device automatically integrates with Home Assistant when MQTT discovery is e
 5. Device appears automatically in Home Assistant
 
 All device controls and sensors will be available in Home Assistant for dashboards, automations, and scripts.
+
+## 📷 Image Optimization for AllSky
+
+**⚠️ IMPORTANT**: The ESP32-P4 has limited resources. Large images (over 1MB or high resolution) can cause crashes or out-of-memory errors. It's highly recommended to resize images before serving them to the device.
+
+### Automated Image Resizing Script
+
+Use this script to automatically resize AllSky images to an optimal size for the display:
+
+```bash
+#!/bin/bash
+
+# Configuration variables
+INPUT_DIR="/home/pi/allsky/tmp"
+OUTPUT_DIR="/home/pi/allsky/resized"
+IMAGE_NAME="image.jpg"
+RESIZE_DIMENSIONS="720x720"
+
+# Create output directory if it doesn't exist
+mkdir -p "${OUTPUT_DIR}"
+
+# Resize allsky image on demand
+/usr/bin/mogrify -path "${OUTPUT_DIR}" -resize "${RESIZE_DIMENSIONS}" "${INPUT_DIR}/${IMAGE_NAME}" >/dev/null 2>&1
+```
+
+### Setup Options
+
+#### Option 1: AllSky Script Module (Recommended)
+
+1. Save the script as `/home/pi/allsky/scripts/resize_for_display.sh`
+2. Make it executable: `chmod +x /home/pi/allsky/scripts/resize_for_display.sh`
+3. In AllSky Web UI, go to **Module Manager → Daytime or Night time capture → Add the 'Allsky script' module to the selected modules → add script path to the module config**
+4. Point your display to `http://your-allsky-server/resized/image.jpg`
+
+#### Option 2: Cron Job
+
+1. Save the script to `/home/pi/resize_allsky.sh`
+2. Make it executable: `chmod +x /home/pi/resize_allsky.sh`
+3. Edit crontab: `crontab -e`
+4. Add one of these lines based on your preference:
+
+```bash
+# Run every minute
+* * * * * /home/pi/resize_allsky.sh
+
+# Run every 5 minutes
+*/5 * * * * /home/pi/resize_allsky.sh
+
+# Run every 10 minutes
+*/10 * * * * /home/pi/resize_allsky.sh
+```
+
+5. Save and exit
+6. Point your display to `http://your-allsky-server/current/resized/image.jpg`
+
+**Note**: Adjust `RESIZE_DIMENSIONS` based on your display model (720x720 for 4C, 800x800 for 3.4C).
 
 ## 🖥️ Web Configuration Interface
 
