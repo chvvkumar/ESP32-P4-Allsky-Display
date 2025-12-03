@@ -31,7 +31,7 @@ Check out the video below to see the display in action:
 
 ## 🌟 Overview
 
-This project transforms your ESP32-P4 touch display into a powerful all-sky camera viewer with advanced features like image cycling, per-image transformations, MQTT control, and seamless Home Assistant integration.
+This project transforms your ESP32-P4 touch display into an all-sky camera viewer with advanced features like image cycling, per-image transformations, MQTT control, and seamless Home Assistant integration.
 
 **Key Highlights:**
 - Display images from multiple sources with automatic cycling
