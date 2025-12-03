@@ -160,6 +160,28 @@ The device automatically integrates with Home Assistant when MQTT discovery is e
 
 All device controls and sensors will be available in Home Assistant for dashboards, automations, and scripts.
 
+## 🖥️ Web Configuration Interface
+
+The device provides a comprehensive web-based configuration interface accessible at `http://[device-ip]:8080/`. All settings can be configured through an intuitive UI without needing to recompile the firmware.
+
+### Configuration Pages
+
+<img src="images/2025-12-03_10-55-20.png" alt="Web Configuration Main Page">
+
+<img src="images/2025-12-03_10-55-31.png" alt="Image Sources Configuration">
+
+<img src="images/2025-12-03_10-55-35.png" alt="Display Settings">
+
+<img src="images/2025-12-03_10-55-38.png" alt="Network Configuration">
+
+<img src="images/2025-12-03_10-55-42.png" alt="MQTT Configuration">
+
+<img src="images/2025-12-03_10-55-48.png" alt="System Information">
+
+### Home Assistant Integration
+
+<img src="images/Home Assistant.jpg" alt="Home Assistant Integration">
+
 ### Touch Controls
 ```
 Single Tap  : Next image (cycling mode)
