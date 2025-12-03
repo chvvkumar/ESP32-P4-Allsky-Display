@@ -43,29 +43,12 @@ This project transforms your ESP32-P4 touch display into a powerful all-sky came
 
 ## ✨ Features
 
-### Image Display & Processing
-- **Multi-source support**: Cycle through up to 10 image URLs
-- **Hardware acceleration**: ESP32-P4 PPA for fast scaling and rotation
-- **Per-image transforms**: Individual scale, offset, and rotation settings
-- **Smart caching**: Reduces bandwidth with HTTP cache headers
-- **Auto-refresh**: Configurable update intervals (1-1440 minutes)
-- **JPEG support**: Efficient decoding with JPEGDEC library
-
-### Web Configuration Interface
-- **Modern UI**: Responsive design with real-time status updates
-- **Network settings**: WiFi configuration without code changes
-- **MQTT setup**: Easy broker configuration
-- **Image management**: Add/remove/reorder sources via web interface
-- **Display controls**: Brightness, timing, and transform settings
-- **System monitoring**: Heap, PSRAM, WiFi signal, and uptime
-
-### Home Assistant Integration
-- **MQTT Discovery**: Automatic entity creation
-- **Full control**: All settings accessible from HA
-- **Per-image entities**: Scale, offset, rotation for each image
-- **Live sensors**: Memory, WiFi, uptime monitoring
-- **Buttons & switches**: Reboot, next image, cycling controls
-- **Select entity**: Choose active image source
+- **Multi-source image cycling**: Display images from up to 10 different URLs with automatic cycling
+- **Hardware-accelerated processing**: Fast image scaling and rotation using ESP32-P4 PPA
+- **Per-image transformations**: Individual scale, offset, and rotation settings for each image
+- **Web-based configuration**: Complete setup interface accessible via browser
+- **Home Assistant integration**: Native MQTT discovery with full control and monitoring
+- **Touch controls**: Single tap for next image, double tap to toggle modes
 
 ### Interactive Controls
 - **Touch interface**: 
@@ -73,13 +56,6 @@ This project transforms your ESP32-P4 touch display into a powerful all-sky came
   - Double tap: Toggle cycling/refresh modes
 - **Serial commands**: Real-time manipulation via USB
 - **Transform controls**: Scale (+/-), Move (WASD), Rotate (QE)
-
-### System Features
-- **WiFi manager**: Simple credential setup
-- **Watchdog protection**: Prevents system freezes
-- **Memory monitoring**: Automatic health checks
-- **Error recovery**: Auto-reconnection and retry logic
-- **OTA updates**: Ready for over-the-air firmware updates
 
 ## 🛠️ Hardware Requirements
 
@@ -93,52 +69,26 @@ This project transforms your ESP32-P4 touch display into a powerful all-sky came
 - GT911 capacitive touch controller
 - 16MB flash, PSRAM support required
 
-**Optional:**
-- 3D printed case: [Download from Printables](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
+**Optional 3D Printed Case:**
+
+<img src="images/Case.jpg" alt="3D Printed Case" width="400">
+
+[Download from Printables](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
 
 ## 📦 Installation
 
 ### Prerequisites
 
-1. **Arduino IDE** (1.8.19 or later)
-2. **Arduino CLI**
-3. **ESP32 Arduino Core** (3.3.4)
-   - Additional URL: `https://espressif.github.io/arduino-esp32/package_esp32_index.json`
-4. **Required Libraries**:
-   - GFX Library for Arduino (1.6.3)
-   - JPEGDEC (1.8.4)
-   - bb_spi_lcd (2.9.7)
-   - PubSubClient (2.8.0)
-5. **ESP32 Built-in Libraries** (v3.3.4):
-   - Preferences, WebServer, FS, Networking, WiFi, SPI, Wire, HTTPClient, NetworkClientSecure, Hash
+1. **Arduino IDE** (1.8.19 or later) or **PlatformIO**
+2. **ESP32 Arduino Core** (3.3.4+)
+3. **Required Libraries**:
+   - GFX Library for Arduino (1.6.3+)
+   - JPEGDEC (1.8.4+)
+   - PubSubClient (2.8.0+)
 
-### Installation via Arduino CLI
+### Arduino IDE Setup
 
-```bash
-# Update core index
-arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-
-# Install ESP32 core
-arduino-cli core install esp32:esp32@3.3.4 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-
-# Install libraries
-arduino-cli lib install "GFX Library for Arduino@1.6.3"
-arduino-cli lib install "JPEGDEC@1.8.4"
-arduino-cli lib install "PubSubClient@2.8.0"
-
-# Patch GFX Library for ESP32-P4 compatibility
-sed -i 's/.phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT,/.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_PLL_F20M, \/\/MIPI_DSI_PHY_CLK_SRC_DEFAULT,/' ~/Arduino/libraries/GFX_Library_for_Arduino/src/databus/Arduino_ESP32DSIPanel.cpp
-```
-
-### Build Configuration
-
-**FQBN**: `esp32:esp32:esp32p4`
-
-**Build Properties**:
-- Flash Size: 32MB
-- PSRAM Type: opi
-- Partitions: huge_app
-- Extra Flags: `-DBOARD_HAS_PSRAM`
+<img src="images/ArduinoIDE.jpg" alt="Arduino IDE Configuration" width="600">
 
 ### Initial Setup
 
@@ -174,18 +124,12 @@ const char* DEFAULT_IMAGE_SOURCES[] = {
 };
 ```
 
-#### 3. Select Correct Board in Arduino IDE
-
-- `Tools > Board` → `ESP32P4 Dev Module`
-- `Tools > Flash Size` → `16MB (128Mb)`
-- `Tools > Partition Scheme` → `16M Flash (3MB APP/9.9MB FATFS)`
-
-#### 4. Compile and Upload
+#### 3. Compile and Upload
 
 - Click the Upload button in Arduino IDE
 - Monitor serial output for IP address and status
 
-### 5. Access Web Interface
+#### 4. Access Web Interface
 
 - Open a browser and go to `http://[device-ip]:8080/`
 - Configure additional settings like MQTT and image sources
