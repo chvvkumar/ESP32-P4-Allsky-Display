@@ -42,8 +42,6 @@ void TaskRetryHandler::addTask(TaskType type, TaskCallback callback, const char*
     task.nextRetryTime = millis();  // Start immediately
     
     taskQueue.push_back(task);
-    
-    Serial.printf("Task added: %s (max %d attempts)\n", taskName, maxAttempts);
 }
 
 void TaskRetryHandler::process() {
@@ -71,11 +69,7 @@ void TaskRetryHandler::process() {
         // Check if max attempts exceeded
         if (task.attemptCount >= task.maxAttempts) {
             task.status = TASK_FAILED;
-            Serial.printf("Task FAILED after %d attempts: %s\n", task.attemptCount, task.taskName);
-            
-            // Display error as overlay on current image
-            String errorMsg = String("ERROR: ") + task.taskName + " failed!";
-            displayManager.drawStatusOverlay(errorMsg.c_str(), COLOR_RED, 30);
+            Serial.printf("Task FAILED: %s\n", task.taskName);
             continue;
         }
         
@@ -83,9 +77,6 @@ void TaskRetryHandler::process() {
         task.attemptCount++;
         task.status = TASK_RUNNING;
         task.lastAttemptTime = now;
-        
-        Serial.printf("Task executing (attempt %d/%d): %s\n", 
-                     task.attemptCount, task.maxAttempts, task.taskName);
         
         // Reset watchdog before task execution
         systemMonitor.forceResetWatchdog();
@@ -101,25 +92,9 @@ void TaskRetryHandler::process() {
         
         if (success) {
             task.status = TASK_SUCCESS;
-            Serial.printf("Task SUCCESS: %s\n", task.taskName);
-            
-            // Display success as overlay on current image
-            String successMsg = String(task.taskName) + " - OK";
-            displayManager.drawStatusOverlay(successMsg.c_str(), COLOR_GREEN, 60);
-            
-            // Clear overlay after 2 seconds by redrawing image
-            // The overlay will disappear when the next image refresh occurs
         } else {
             task.status = TASK_RETRYING;
             task.nextRetryTime = now + calculateNextRetryInterval(task);
-            
-            Serial.printf("Task RETRYING in %lu ms: %s (error: %s)\n", 
-                         calculateNextRetryInterval(task), task.taskName, task.errorMessage);
-            
-            // Display retry status as overlay on current image
-            unsigned long retryIn = (task.nextRetryTime - now) / 1000;
-            String retryMsg = String("Retrying: ") + task.taskName + " in " + retryIn + "s";
-            displayManager.drawStatusOverlay(retryMsg.c_str(), COLOR_YELLOW, 90);
         }
     }
 }
@@ -137,7 +112,6 @@ void TaskRetryHandler::cancelTask(TaskType type) {
     for (auto& task : taskQueue) {
         if (task.type == type) {
             task.status = TASK_CANCELLED;
-            Serial.printf("Task cancelled: %s\n", task.taskName);
             break;
         }
     }

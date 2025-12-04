@@ -32,7 +32,6 @@ bool MQTTManager::begin() {
     // Initialize Home Assistant discovery
     haDiscovery.begin(&mqttClient);
     
-    Serial.println("MQTT Manager initialized");
     return true;
 }
 
@@ -41,11 +40,6 @@ void MQTTManager::connect() {
     
     // Reset watchdog before attempting connection
     esp_task_wdt_reset();
-    
-    if (debugPrintFunc && !firstImageLoaded) {
-        debugPrintFunc("Connecting to MQTT...", COLOR_YELLOW);
-        debugPrintfFunc(COLOR_WHITE, "Broker: %s:%d", MQTT_SERVER, MQTT_PORT);
-    }
     
     // Generate unique client ID
     String clientId = String(configStorage.getMQTTClientID().c_str()) + "_" + String(random(0xffff), HEX);
@@ -80,12 +74,6 @@ void MQTTManager::connect() {
         reconnectBackoff = 5000;  // Reset backoff
         discoveryPublished = false; // Reset discovery flag
         
-        Serial.printf("MQTT connected as: %s\n", clientId.c_str());
-        
-        if (debugPrintFunc && !firstImageLoaded) {
-            debugPrintFunc("MQTT connected!", COLOR_GREEN);
-        }
-        
         // Publish availability as online
         esp_task_wdt_reset();
         haDiscovery.publishAvailability(true);
@@ -93,31 +81,19 @@ void MQTTManager::connect() {
         // Publish Home Assistant discovery if enabled
         if (configStorage.getHADiscoveryEnabled()) {
             esp_task_wdt_reset();
-            if (debugPrintFunc && !firstImageLoaded) {
-                debugPrintFunc("Publishing HA discovery...", COLOR_CYAN);
-            }
             
             if (haDiscovery.publishDiscovery()) {
                 discoveryPublished = true;
-                Serial.println("Home Assistant discovery published");
                 
                 // Subscribe to command topic filter
                 String commandFilter = haDiscovery.getCommandTopicFilter();
-                Serial.printf("Attempting to subscribe to: '%s'\n", commandFilter.c_str());
-                if (mqttClient.subscribe(commandFilter.c_str())) {
-                    Serial.printf("✓ Successfully subscribed to HA commands: %s\n", commandFilter.c_str());
-                    if (debugPrintFunc && !firstImageLoaded) {
-                        debugPrintFunc("HA discovery complete!", COLOR_GREEN);
-                    }
-                } else {
+                if (!mqttClient.subscribe(commandFilter.c_str())) {
                     Serial.printf("✗ FAILED to subscribe to HA command topics! MQTT state: %d\n", mqttClient.state());
                 }
                 
                 // Publish initial state
                 esp_task_wdt_reset();
                 haDiscovery.publishState();
-            } else {
-                Serial.println("Failed to publish HA discovery");
             }
         }
         
@@ -176,16 +152,9 @@ void MQTTManager::messageCallback(char* topic, byte* payload, unsigned int lengt
         message += (char)payload[i];
     }
     
-    Serial.println("============================================================");
-    Serial.println("MQTT MESSAGE RECEIVED:");
-    Serial.printf("  Topic: '%s'\n", topic);
-    Serial.printf("  Payload: '%s' (length: %d)\n", message.c_str(), length);
-    Serial.println("============================================================");
-    
     // Handle Home Assistant commands
     String topicStr = String(topic);
     haDiscovery.handleCommand(topicStr, message);
-    Serial.println("Command handled.\n");
 }
 
 
@@ -202,20 +171,14 @@ void MQTTManager::setDebugFunctions(void (*debugPrint)(const char*, uint16_t),
 void MQTTManager::update() {
     bool currentConnectionState = isConnected();
     
-    // Log connection state changes immediately
+    // Track connection state changes
     if (currentConnectionState != lastConnectionState) {
         lastConnectionState = currentConnectionState;
-        if (currentConnectionState) {
-            Serial.println("MQTT: Connection established");
-        } else {
-            Serial.println("MQTT: Connection lost");
-        }
     }
     
     if (!currentConnectionState) {
         if (mqttConnected) {
             mqttConnected = false;
-            Serial.println("MQTT: Disconnected - attempting reconnect");
         }
         reconnect();
     } else {
@@ -250,36 +213,7 @@ void MQTTManager::printConnectionInfo() {
 }
 
 void MQTTManager::logConnectionStatus() {
-    unsigned long now = millis();
-    
-    // Log status every 30 seconds
-    if (now - lastStatusLog >= 30000) {
-        lastStatusLog = now;
-        
-        Serial.println("=== MQTT Status ===");
-        Serial.printf("Connected: %s\n", isConnected() ? "YES" : "NO");
-        
-        if (isConnected()) {
-            Serial.printf("Broker: %s:%d\n", configStorage.getMQTTServer().c_str(), configStorage.getMQTTPort());
-            Serial.printf("Discovery Published: %s\n", discoveryPublished ? "YES" : "NO");
-            
-            unsigned long timeSinceAvailability = (lastAvailabilityPublish > 0) ? (now - lastAvailabilityPublish) : 0;
-            
-            // Get sensor publish time from HA discovery
-            unsigned long haSensorPublish = haDiscovery.getLastSensorPublish();
-            unsigned long timeSinceSensor = (haSensorPublish > 0) ? (now - haSensorPublish) : 0;
-            
-            Serial.printf("Last Availability: %lu s ago\n", timeSinceAvailability / 1000);
-            Serial.printf("Last Sensor Update: %lu s ago\n", timeSinceSensor / 1000);
-        } else {
-            Serial.printf("Failed Attempts: %d\n", reconnectFailures);
-            unsigned long nextRetryTime = (lastReconnectAttempt + reconnectBackoff > now) ? 
-                                          (lastReconnectAttempt + reconnectBackoff - now) / 1000 : 0;
-            Serial.printf("Next Retry: %lu s\n", nextRetryTime);
-            Serial.printf("MQTT State: %d\n", mqttClient.state());
-        }
-        Serial.println("==================");
-    }
+    // Periodic status logging removed to reduce code size
 }
 
 void MQTTManager::publishAvailabilityHeartbeat() {
@@ -292,12 +226,7 @@ void MQTTManager::publishAvailabilityHeartbeat() {
     // Publish availability heartbeat every 30 seconds
     if (now - lastAvailabilityPublish >= 30000) {
         lastAvailabilityPublish = now;
-        
-        if (haDiscovery.publishAvailability(true)) {
-            Serial.println("MQTT: Availability heartbeat sent");
-        } else {
-            Serial.println("MQTT: WARNING - Failed to send availability heartbeat");
-        }
+        haDiscovery.publishAvailability(true);
     }
 }
 

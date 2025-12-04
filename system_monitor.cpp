@@ -14,8 +14,6 @@ SystemMonitor::SystemMonitor() :
 }
 
 bool SystemMonitor::begin() {
-    Serial.println("Configuring watchdog timer...");
-    
     // Try to initialize watchdog timer for system stability
     esp_task_wdt_config_t wdt_config = {
         .timeout_ms = WATCHDOG_TIMEOUT_MS,
@@ -26,32 +24,23 @@ bool SystemMonitor::begin() {
     esp_err_t result = esp_task_wdt_init(&wdt_config);
     if (result == ESP_ERR_INVALID_STATE) {
         // Watchdog already initialized, that's fine
-        Serial.println("Watchdog already initialized, using existing configuration");
     } else if (result != ESP_OK) {
         Serial.printf("Watchdog init failed: %s\n", esp_err_to_name(result));
         return false;
-    } else {
-        Serial.println("Watchdog timer initialized");
     }
     
     // Add current task to watchdog
     result = esp_task_wdt_add(NULL);
     if (result == ESP_ERR_INVALID_ARG) {
         // Task already added, that's fine
-        Serial.println("Task already added to watchdog");
     } else if (result != ESP_OK) {
         Serial.printf("Watchdog add task failed: %s\n", esp_err_to_name(result));
         return false;
-    } else {
-        Serial.println("Task added to watchdog");
     }
-    
-    Serial.println("Watchdog timer configured successfully");
     
     // Initialize memory tracking
     minFreeHeap = ESP.getFreeHeap();
     minFreePsram = ESP.getFreePsram();
-    Serial.printf("Initial memory - Heap: %d, PSRAM: %d\n", minFreeHeap, minFreePsram);
     
     return true;
 }
@@ -95,10 +84,6 @@ void SystemMonitor::checkSystemHealth() {
         } else {
             systemHealthy = true;
         }
-        
-        // Log memory status periodically
-        Serial.printf("Memory status - Heap: %d (min: %d), PSRAM: %d (min: %d)\n", 
-                     freeHeap, minFreeHeap, freePsram, minFreePsram);
         
         lastMemoryCheck = now;
     }

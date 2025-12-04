@@ -88,10 +88,9 @@ bool HADiscovery::publishLightDiscovery() {
     payload += "\"icon\":\"mdi:brightness-6\"";
     payload += "}";
     
-    Serial.printf("Publishing light discovery (size: %d bytes)\n", payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
     if (!result) {
-        Serial.printf("ERROR: Failed to publish light discovery! Payload size: %d\n", payload.length());
+        Serial.println("ERROR: Failed to publish light discovery!");
     }
     return result;
 }
@@ -110,11 +109,7 @@ bool HADiscovery::publishSwitchDiscovery(const char* entityId, const char* name,
     payload += "\"icon\":\"" + String(icon) + "\"";
     payload += "}";
     
-    Serial.printf("Publishing switch '%s' (size: %d bytes)\n", entityId, payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
-    if (!result) {
-        Serial.printf("ERROR: Failed to publish switch '%s'! Payload size: %d\n", entityId, payload.length());
-    }
     return result;
 }
 
@@ -138,11 +133,7 @@ bool HADiscovery::publishNumberDiscovery(const char* entityId, const char* name,
     payload += "\"icon\":\"" + String(icon) + "\"";
     payload += "}";
     
-    Serial.printf("Publishing number '%s' (size: %d bytes)\n", entityId, payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
-    if (!result) {
-        Serial.printf("ERROR: Failed to publish number '%s'! Payload size: %d\n", entityId, payload.length());
-    }
     return result;
 }
 
@@ -169,11 +160,7 @@ bool HADiscovery::publishSelectDiscovery() {
     payload += "\"icon\":\"mdi:image-multiple\"";
     payload += "}";
     
-    Serial.printf("Publishing select 'image_source' (size: %d bytes)\n", payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
-    if (!result) {
-        Serial.printf("ERROR: Failed to publish select! Payload size: %d\n", payload.length());
-    }
     return result;
 }
 
@@ -189,11 +176,7 @@ bool HADiscovery::publishButtonDiscovery(const char* entityId, const char* name,
     payload += "\"icon\":\"" + String(icon) + "\"";
     payload += "}";
     
-    Serial.printf("Publishing button '%s' (size: %d bytes)\n", entityId, payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
-    if (!result) {
-        Serial.printf("ERROR: Failed to publish button '%s'! Payload size: %d\n", entityId, payload.length());
-    }
     return result;
 }
 
@@ -216,11 +199,7 @@ bool HADiscovery::publishSensorDiscovery(const char* entityId, const char* name,
     payload += "\"icon\":\"" + String(icon) + "\"";
     payload += "}";
     
-    Serial.printf("Publishing sensor '%s' (size: %d bytes)\n", entityId, payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
-    if (!result) {
-        Serial.printf("ERROR: Failed to publish sensor '%s'! Payload size: %d\n", entityId, payload.length());
-    }
     return result;
 }
 
@@ -309,7 +288,6 @@ bool HADiscovery::publishDiscovery() {
     
     // Per-image transform entities
     if (!publishImageTransformEntities()) {
-        Serial.println("Failed to publish image transform entities");
         return false;
     }
     
@@ -339,7 +317,6 @@ bool HADiscovery::publishDiscovery() {
     if (!publishSensorDiscovery("image_count", "Image Count", "", "", "mdi:counter")) return false;
     delay(50);
     
-    Serial.println("Home Assistant discovery complete");
     return true;
 }
 
@@ -456,8 +433,6 @@ bool HADiscovery::publishSensors() {
     String imageCount = String(configStorage.getImageSourceCount());
     mqttClient->publish(buildStateTopic("image_count").c_str(), imageCount.c_str());
     
-    Serial.println("MQTT: Sensor data published to Home Assistant");
-    
     return true;
 }
 
@@ -477,22 +452,13 @@ void HADiscovery::update() {
 
 void HADiscovery::handleCommand(const String& topic, const String& payload) {
     if (!configStorage.getHADiscoveryEnabled()) {
-        Serial.println("⚠️ HA Discovery is disabled - ignoring command");
         return;
     }
-    
-    Serial.printf("📨 HA Command Handler\n");
-    Serial.printf("  Topic: '%s'\n", topic.c_str());
-    Serial.printf("  Payload: '%s'\n", payload.c_str());
-    Serial.printf("  Base Topic: '%s'\n", baseTopic.c_str());
     
     // Extract entity name from topic (format: baseTopic/entity/set)
     int lastSlash = topic.lastIndexOf('/');
     int secondLastSlash = topic.lastIndexOf('/', lastSlash - 1);
     String entity = topic.substring(secondLastSlash + 1, lastSlash);
-    
-    Serial.printf("  Extracted Entity: '%s'\n", entity.c_str());
-    Serial.printf("  lastSlash: %d, secondLastSlash: %d\n", lastSlash, secondLastSlash);
     
     // Handle brightness
     if (entity == "brightness") {
@@ -549,25 +515,20 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     }
     // Handle buttons
     else if (entity == "reboot" && payload == "PRESS") {
-        Serial.println("✓ BUTTON PRESS: Reboot requested via Home Assistant");
         delay(100);
         ESP.restart();
     }
     else if (entity == "next_image" && payload == "PRESS") {
-        Serial.println("✓ BUTTON PRESS: Next Image");
         int nextIndex = (configStorage.getCurrentImageIndex() + 1) % configStorage.getImageSourceCount();
         configStorage.setCurrentImageIndex(nextIndex);
         configStorage.saveConfig();
         String imageSource = "Image " + String(nextIndex + 1);
         mqttClient->publish(buildStateTopic("image_source").c_str(), imageSource.c_str());
-        Serial.printf("  Switched to image index %d\n", nextIndex);
     }
     else if (entity == "reset_transforms" && payload == "PRESS") {
-        Serial.println("✓ BUTTON PRESS: Reset Transforms");
         configStorage.copyAllDefaultsToImageTransforms();
         configStorage.saveConfig();
         publishState(); // Update all transform states
-        Serial.println("  Transforms reset to defaults");
     }
     // Handle per-image transforms
     else if (entity.startsWith("img")) {
@@ -608,8 +569,5 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
                 mqttClient->publish(buildStateTopic(entity.c_str()).c_str(), payload.c_str());
             }
         }
-    }
-    else {
-        Serial.printf("⚠️ Unknown command: entity='%s', payload='%s'\n", entity.c_str(), payload.c_str());
     }
 }
