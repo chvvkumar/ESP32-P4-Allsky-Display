@@ -90,17 +90,7 @@ String WebConfig::generateMainPage() {
         html += "<p style='word-break:break-all;margin-top:0.5rem;font-size:0.9rem;color:#94a3b8'><strong>Source:</strong> " + escapeHtml(configStorage.getImageURL()) + "</p>";
     }
     html += "</div><p style='font-size:0.8rem;color:#64748b;margin-top:1rem'><strong>Update Interval:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p></div>";
-    html += "</div>";
-    
-    // Quick actions
-    html += "<div class='card' style='margin-top:1.5rem'><h2>⚡ Quick Actions</h2>";
-    html += "<div style='display:flex;gap:1rem;flex-wrap:wrap;align-items:center'>";
-    if (configStorage.getImageSourceCount() > 1) {
-        html += "<button type='button' class='btn btn-primary' onclick='nextImage(this)'><i class='fas fa-forward' style='margin-right:8px'></i> Next Image</button>";
-    }
-    html += "<button class='btn btn-primary' style='background:#3b82f6' onclick='restart()'><i class='fas fa-sync-alt' style='margin-right:8px'></i> Restart Device</button>";
-    html += "<button class='btn btn-danger' onclick='factoryReset()'><i class='fas fa-trash-alt' style='margin-right:8px'></i> Factory Reset</button>";
-    html += "</div></div></div></div>";
+    html += "</div></div></div>";
     
     return html;
 }
@@ -166,6 +156,7 @@ String WebConfig::generateMQTTPage() {
 String WebConfig::generateImageSourcesPage() {
     String html = "<div class='main'><div class='container'>";
     html += "<form id='cyclingForm'><div class='card'><h2>🔄 Image Cycling Configuration</h2>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem;font-size:0.9rem;background:rgba(56,189,248,0.1);padding:0.75rem;border-radius:6px;border-left:4px solid #38bdf8'>ℹ️ Maximum supported image size: <strong>724x724 pixels</strong> (1MB buffer limit). Images larger than this will fail to display.</p>";
     html += "<div class='form-group'><div style='display:flex;align-items:center;margin-bottom:1rem'>";
     html += "<input type='checkbox' id='cycling_enabled' name='cycling_enabled' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px' " + String(configStorage.getCyclingEnabled() ? "checked" : "") + ">";
     html += "<label for='cycling_enabled' style='margin-bottom:0;cursor:pointer;font-size:1rem'>Enable automatic cycling through multiple image sources</label></div></div>";
@@ -182,14 +173,15 @@ String WebConfig::generateImageSourcesPage() {
     for (int i = 0; i < sourceCount; i++) {
         String url = configStorage.getImageSource(i);
         html += "<div class='image-source-item' style='margin-bottom:1.5rem;padding:1rem;border:1px solid #334155;border-radius:8px;background:#0f172a;'>";
-        html += "<div style='display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap'>";
+        html += "<div style='display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;flex-wrap:wrap'>";
         html += "<span style='font-weight:bold;color:#38bdf8;font-size:1.1rem'>" + String(i + 1) + ".</span>";
-        html += "<input type='url' class='form-control' style='flex:1;min-width:200px' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this)'>";
+        html += "<input type='url' class='form-control' id='imageUrl_" + String(i) + "' style='flex:1;min-width:200px' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this)'>";
         html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(" + String(i) + ")'><i class='fas fa-cog'></i> Options</button>";
         if (sourceCount > 1) {
             html += "<button type='button' class='btn btn-danger' onclick='removeImageSource(" + String(i) + ", this)'><i class='fas fa-trash'></i></button>";
         }
         html += "</div>";
+        html += "<div id='imageError_" + String(i) + "' style='display:none;margin-left:2.5rem;padding:0.5rem;background:rgba(239,68,68,0.1);border-left:3px solid #ef4444;border-radius:4px;font-size:0.85rem;color:#fca5a5;margin-bottom:0.5rem'></div>";
         html += "<div id='transformSection_" + String(i) + "' class='transform-section' style='display:none;margin-top:1rem;padding:1.5rem;background:#1e293b;border-radius:8px;border:1px solid #475569;'>";
         html += "<h3 style='margin-top:0;font-size:1rem;color:#cbd5e1;margin-bottom:1rem;border-bottom:1px solid #334155;padding-bottom:0.5rem'>Transform Settings</h3>";
         html += "<div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:1rem;'>";
