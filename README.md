@@ -18,10 +18,12 @@ Check out the video below to see the display in action:
 - [Hardware Requirements](#hardware-requirements)
 - [Installation](#installation)
 - [Configuration](#configuration)
-- [Usage](#usage)
-- [Home Assistant Integration](#home-assistant-integration)
+- [Image Optimization for AllSky](#image-optimization-for-allsky)
+- [Web Configuration Interface](#web-configuration-interface)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
+- [License](#license)
+- [Support](#support)
 
 ## 🚀 Build Status
 
@@ -281,4 +283,3 @@ Open source project. Check license file for details.
 - Create GitHub issues for bugs/features
 - Check troubleshooting section
 - Monitor serial output for debugging
-
