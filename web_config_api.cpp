@@ -119,11 +119,9 @@ void WebConfig::handleSaveConfig() {
     // Apply immediate changes
     if (brightnessChanged && newBrightness >= 0) {
         displayManager.setBrightness(newBrightness);
-        Serial.printf("Applied brightness change immediately: %d%%\n", newBrightness);
     }
     
     if (imageSettingsChanged) {
-        Serial.println("Image settings changed - applying immediately");
         applyImageSettings();
     }
     
@@ -138,15 +136,11 @@ void WebConfig::handleSaveConfig() {
 }
 
 void WebConfig::handleRestart() {
-    Serial.println("Device restart requested via web interface");
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Device restarting now...\"}");
     
     displayManager.debugPrint("Device restart requested...", COLOR_YELLOW);
-    displayManager.debugPrint("Restarting device...", COLOR_CYAN);
-    displayManager.debugPrint("See you soon!", COLOR_YELLOW);
     
     delay(500);
-    Serial.println("Executing ESP.restart()...");
     ESP.restart();
 }
 
@@ -242,7 +236,6 @@ void WebConfig::handleUpdateImageTransform() {
                 else if (property == "rotation") rotationAngle = configStorage.getImageRotation(index);
                 
                 renderFullImage();
-                Serial.printf("Applied transform property %s=%.2f to current image\n", property.c_str(), value.toFloat());
             }
         }
         
@@ -293,8 +286,6 @@ void WebConfig::handleApplyTransform() {
             
             extern void downloadAndDisplayImage();
             downloadAndDisplayImage();
-            
-            Serial.printf("Switched to image %d and applied its transform\n", index);
         } else {
             extern float scaleX, scaleY;
             extern int16_t offsetX, offsetY;
@@ -308,7 +299,6 @@ void WebConfig::handleApplyTransform() {
             rotationAngle = configStorage.getImageRotation(index);
             
             renderFullImage();
-            Serial.printf("Applied transform settings for image %d\n", index);
         }
         
         sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Transform applied successfully\"}");
@@ -318,17 +308,13 @@ void WebConfig::handleApplyTransform() {
 }
 
 void WebConfig::handleFactoryReset() {
-    Serial.println("Factory reset requested via web interface");
     configStorage.resetToDefaults();
     
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Factory reset completed. Device restarting...\"}");
     
     displayManager.debugPrint("Factory reset in progress...", COLOR_YELLOW);
-    displayManager.debugPrint("Clearing all settings", COLOR_CYAN);
-    displayManager.debugPrint("Restarting device...", COLOR_YELLOW);
     
     delay(500);
-    Serial.println("Executing ESP.restart() after factory reset...");
     ESP.restart();
 }
 
@@ -343,9 +329,6 @@ void WebConfig::applyImageSettings() {
     offsetX = configStorage.getDefaultOffsetX();
     offsetY = configStorage.getDefaultOffsetY();
     rotationAngle = configStorage.getDefaultRotation();
-    
-    Serial.printf("Applied image settings: Scale=%.1fx%.1f, Offset=%d,%d, Rotation=%.0f°\n", 
-                  scaleX, scaleY, offsetX, offsetY, rotationAngle);
     
     renderFullImage();
 }
@@ -367,7 +350,4 @@ void WebConfig::reloadConfiguration() {
     cyclingEnabled = configStorage.getCyclingEnabled();
     randomOrderEnabled = configStorage.getRandomOrder();
     imageSourceCount = configStorage.getImageSourceCount();
-    
-    Serial.printf("Configuration reloaded: cycling=%s, interval=%lu ms, sources=%d\n",
-                  cyclingEnabled ? "enabled" : "disabled", currentCycleInterval, imageSourceCount);
 }

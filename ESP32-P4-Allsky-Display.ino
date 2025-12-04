@@ -154,10 +154,7 @@ void setup() {
     Serial.begin(9600);
     delay(1000); // Give serial time to initialize
     
-    Serial.println("=== ESP32-P4 Image Display Starting ===");
-    
     // Initialize configuration system first
-    Serial.println("Initializing configuration...");
     initializeConfiguration();
     
     // Initialize system monitor
@@ -190,7 +187,6 @@ void setup() {
     
     // Allocate image buffer in PSRAM
     imageBufferSize = w * h * IMAGE_BUFFER_MULTIPLIER * 2; // 16-bit color
-    debugPrintf(COLOR_WHITE, "Allocating buffer: %d bytes", imageBufferSize);
     
     imageBuffer = (uint8_t*)ps_malloc(imageBufferSize);
     if (!imageBuffer) {
@@ -200,7 +196,6 @@ void setup() {
     
     // Allocate full image buffer for smooth rendering
     fullImageBufferSize = FULL_IMAGE_BUFFER_SIZE;
-    debugPrintf(COLOR_WHITE, "Allocating full image buffer: %d bytes", fullImageBufferSize);
     
     fullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
     if (!fullImageBuffer) {
@@ -209,8 +204,6 @@ void setup() {
     }
     
     // Allocate pending image buffer (for seamless transitions without flicker)
-    debugPrintf(COLOR_WHITE, "Allocating pending image buffer: %d bytes", fullImageBufferSize);
-    
     pendingFullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
     if (!pendingFullImageBuffer) {
         debugPrint("ERROR: Pending image buffer allocation failed!", COLOR_RED);
@@ -219,7 +212,6 @@ void setup() {
     
     // Allocate scaling buffer for transformed images
     scaledBufferSize = w * h * SCALED_BUFFER_MULTIPLIER * 2;
-    debugPrintf(COLOR_WHITE, "Allocating scaling buffer: %d bytes", scaledBufferSize);
     
     scaledBuffer = (uint16_t*)ps_malloc(scaledBufferSize);
     if (!scaledBuffer) {
@@ -227,16 +219,8 @@ void setup() {
         while(1) delay(1000);
     }
     
-    debugPrint("Memory allocated successfully", COLOR_GREEN);
-    debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
-    debugPrintf(COLOR_WHITE, "Free PSRAM: %d bytes", systemMonitor.getCurrentFreePsram());
-    
     // Initialize PPA hardware acceleration
-    if (ppaAccelerator.begin(w, h)) {
-        debugPrint("Hardware acceleration enabled!", COLOR_GREEN);
-    } else {
-        debugPrint("Using software scaling fallback", COLOR_YELLOW);
-    }
+    ppaAccelerator.begin(w, h);
     
     // Initialize brightness control
     displayManager.initBrightness();
@@ -247,15 +231,12 @@ void setup() {
         debugPrint("Please configure WiFi in config.cpp", COLOR_YELLOW);
     } else {
         // Try to connect to WiFi with watchdog protection
-        debugPrint("Starting WiFi connection...", COLOR_YELLOW);
         systemMonitor.forceResetWatchdog();
         wifiManager.connectToWiFi();
         systemMonitor.forceResetWatchdog();  // Reset after WiFi connect attempt
         
         // Check if WiFi connection failed
         if (!wifiManager.isConnected()) {
-            debugPrint("WiFi connection failed!", COLOR_RED);
-            debugPrint("Will retry in main loop...", COLOR_YELLOW);
             systemMonitor.forceResetWatchdog();
         }
     }
@@ -263,22 +244,13 @@ void setup() {
     // Initialize MQTT manager
     if (!mqttManager.begin()) {
         debugPrint("ERROR: MQTT initialization failed!", COLOR_RED);
-    } else {
-        debugPrint("MQTT manager initialized", COLOR_GREEN);
-        // MQTT connection will be attempted after WiFi is established
     }
     
     // Start web configuration server if WiFi is connected
     if (wifiManager.isConnected()) {
-        debugPrint("Starting web configuration server...", COLOR_YELLOW);
-        if (webConfig.begin(8080)) {
-            debugPrintf(COLOR_GREEN, "Web config available at: http://%s:8080", WiFi.localIP().toString().c_str());
-            Serial.printf("Web configuration server started successfully at: http://%s:8080\n", WiFi.localIP().toString().c_str());
-        } else {
+        if (!webConfig.begin(8080)) {
             debugPrint("ERROR: Web config server failed to start", COLOR_RED);
         }
-    } else {
-        debugPrint("WiFi not connected - web server will start after connection", COLOR_YELLOW);
     }
     
     // Load cycling configuration after all modules are initialized
@@ -290,7 +262,6 @@ void setup() {
     // Initialize touch controller
     initializeTouchController();
     
-    debugPrint("Setup complete!", COLOR_GREEN);
     delay(1000);
 }
 
@@ -341,7 +312,6 @@ void renderFullImage() {
     
     if (!hasSeenFirstImage) {
         // First image ONLY: clear entire screen once
-        debugPrint("DEBUG: First image - clearing entire screen", COLOR_WHITE);
         displayManager.clearScreen();
         hasSeenFirstImage = true;
         systemMonitor.forceResetWatchdog();
@@ -355,7 +325,6 @@ void renderFullImage() {
     
     if (scaleX == 1.0 && scaleY == 1.0 && rotationAngle == 0.0) {
         // No scaling or rotation needed, direct copy
-        debugPrint("DEBUG: Using direct copy (no scaling or rotation)", COLOR_WHITE);
         displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
         
         systemMonitor.forceResetWatchdog();
@@ -370,7 +339,6 @@ void renderFullImage() {
         size_t scaledImageSize = scaledWidth * scaledHeight * 2;
         
         if (ppaAccelerator.isAvailable() && scaledImageSize <= scaledBufferSize) {
-            debugPrint("DEBUG: Attempting PPA hardware scale+rotate", COLOR_WHITE);
             systemMonitor.forceResetWatchdog();
             
             unsigned long hwStart = millis();
@@ -380,10 +348,6 @@ void renderFullImage() {
             
             if (ppaAccelerator.scaleRotateImage(fullImageBuffer, fullImageWidth, fullImageHeight,
                                               scaledBuffer, scaledWidth, scaledHeight, rotationAngle)) {
-                unsigned long hwTime = millis() - hwStart;
-                debugPrintf(COLOR_WHITE, "PPA scale+rotate: %lums (%dx%d -> %dx%d, %.0f°)", 
-                           hwTime, fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, rotationAngle);
-                
                 // Resume display after heavy operation
                 displayManager.resumeDisplay();
                 
@@ -495,30 +459,13 @@ void downloadAndDisplayImage() {
     Serial.flush();
     Serial.printf("DEBUG: Current image URL: %s\n", imageURL.c_str());
     Serial.flush();
-    
-    debugPrint("=== Starting Download ===", COLOR_CYAN);
-    debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
-    debugPrintf(COLOR_WHITE, "URL: %s", imageURL.c_str());
-    
-    Serial.println("DEBUG: Debug messages printed");
+
     Serial.flush();
     
     // Reset watchdog before HTTP operations
     systemMonitor.forceResetWatchdog();
     
-    Serial.println("DEBUG: About to create HTTPClient");
-    Serial.flush();
-    
     HTTPClient http;
-    
-    Serial.println("DEBUG: HTTPClient created");
-    Serial.flush();
-    
-    // Add timeout protection for HTTP begin
-    debugPrint("Initializing HTTP client...", COLOR_WHITE);
-    
-    Serial.println("DEBUG: About to call http.begin()");
-    Serial.flush();
     
     // Reset watchdog before potentially blocking http.begin() call
     systemMonitor.forceResetWatchdog();
@@ -527,10 +474,6 @@ void downloadAndDisplayImage() {
     
     // Enhanced HTTP begin operation with task-based timeout protection
     bool httpBeginSuccess = false;
-    
-    // Start the HTTP begin operation with enhanced monitoring
-    Serial.println("DEBUG: Starting http.begin() with enhanced timeout protection");
-    Serial.flush();
     
     // Create a flag for completion monitoring
     volatile bool beginCompleted = false;
@@ -568,8 +511,6 @@ void downloadAndDisplayImage() {
         return;
     }
     
-    debugPrintf(COLOR_WHITE, "HTTP begin took: %lu ms", httpBeginTime);
-    
     // Set enhanced timeouts to prevent any blocking
     http.setTimeout(HTTP_REQUEST_TIMEOUT);      // Use config value
     http.setConnectTimeout(HTTP_CONNECT_TIMEOUT); // Use config value
@@ -582,7 +523,6 @@ void downloadAndDisplayImage() {
     // Reset watchdog before GET request
     systemMonitor.forceResetWatchdog();
     
-    debugPrint("Sending HTTP request...", COLOR_WHITE);
     unsigned long downloadStart = millis();
     
     // Enhanced GET request with timeout monitoring
@@ -614,8 +554,6 @@ void downloadAndDisplayImage() {
     
     // Reset watchdog immediately after GET
     systemMonitor.forceResetWatchdog();
-    
-    debugPrintf(COLOR_WHITE, "HTTP code: %d (GET: %lu ms)", httpCode, getRequestTime);
     
     // Enhanced error handling for different HTTP codes
     if (httpCode != HTTP_CODE_OK) {
@@ -726,8 +664,6 @@ void downloadAndDisplayImage() {
                 
                 // Show progress and reset watchdog
                 if (millis() - lastProgressTime > 1000) {  // Every 1 second
-                    debugPrintf(COLOR_YELLOW, "Downloaded: %.1f%% (%d/%d bytes)", 
-                               (float)bytesRead/size*100, bytesRead, size);
                     lastProgressTime = millis();
                     systemMonitor.forceResetWatchdog();
                 }
@@ -754,17 +690,10 @@ void downloadAndDisplayImage() {
     }
     
     unsigned long readTime = millis() - readStart;
-    debugPrintf(COLOR_GREEN, "Download complete: %d bytes in %lu ms", bytesRead, readTime);
-    
-    if (readTime > 0) {
-        debugPrintf(COLOR_WHITE, "Speed: %.2f KB/s", (float)bytesRead/readTime);
-    }
     
     // Close HTTP connection immediately
     http.end();
     systemMonitor.forceResetWatchdog();
-    
-    debugPrintf(COLOR_CYAN, "DEBUG: About to validate download - size=%d, expected=%d", bytesRead, size);
     
     // Validate download completeness
     if (bytesRead < size) {
@@ -780,22 +709,14 @@ void downloadAndDisplayImage() {
         return;
     }
     
-    debugPrint("DEBUG: Download validation passed", COLOR_GREEN);
-    
     // Reset watchdog before JPEG processing
     systemMonitor.forceResetWatchdog();
-    
-    // Decode and display JPEG
-    debugPrint("Decoding JPEG...", COLOR_YELLOW);
     
     // Check JPEG header first
     if (bytesRead < 10) {
         debugPrintf(COLOR_RED, "ERROR: Downloaded data too small: %d bytes", bytesRead);
         return;
     }
-    
-    debugPrintf(COLOR_CYAN, "DEBUG: First 4 bytes: 0x%02X%02X%02X%02X", 
-               imageBuffer[0], imageBuffer[1], imageBuffer[2], imageBuffer[3]);
     
     // Check for PNG magic numbers first
     if (imageBuffer[0] == 0x89 && imageBuffer[1] == 0x50 && imageBuffer[2] == 0x4E && imageBuffer[3] == 0x47) {
@@ -807,38 +728,21 @@ void downloadAndDisplayImage() {
     // Check for JPEG magic numbers
     if (imageBuffer[0] != 0xFF || imageBuffer[1] != 0xD8) {
         debugPrintf(COLOR_RED, "ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)", imageBuffer[0], imageBuffer[1]);
-        // Print first few bytes for debugging
-        Serial.print("First bytes: ");
-        for (int i = 0; i < min(16, (int)bytesRead); i++) {
-            Serial.printf("0x%02X ", imageBuffer[i]);
-        }
-        Serial.println();
-        Serial.println("ERROR: File format not supported. Please use JPEG images only.");
         return;
     }
-    
-    debugPrint("DEBUG: JPEG header validation passed", COLOR_GREEN);
-    
-    debugPrint("DEBUG: Attempting to open JPEG with openRAM", COLOR_CYAN);
     
     if (jpeg.openRAM(imageBuffer, bytesRead, JPEGDraw)) {
         pendingImageWidth = jpeg.getWidth();
         pendingImageHeight = jpeg.getHeight();
         
-        debugPrintf(COLOR_WHITE, "JPEG: %dx%d pixels", pendingImageWidth, pendingImageHeight);
-        
         // Check if image fits in our pending buffer
         size_t requiredSize = pendingImageWidth * pendingImageHeight * 2;
-        debugPrintf(COLOR_CYAN, "DEBUG: Required buffer size: %d, available: %d", requiredSize, fullImageBufferSize);
         
         if (requiredSize <= fullImageBufferSize) {
-            debugPrint("Decoding to PENDING buffer...", COLOR_YELLOW);
-            
             // Clear the PENDING image buffer
             memset(pendingFullImageBuffer, 0, pendingImageWidth * pendingImageHeight * sizeof(uint16_t));
             
             // Decode the full image into PENDING buffer with watchdog protection
-            debugPrint("Starting JPEG decode to pending buffer...", COLOR_YELLOW);
             systemMonitor.forceResetWatchdog();
             
             unsigned long decodeStart = millis();
@@ -847,15 +751,10 @@ void downloadAndDisplayImage() {
             const unsigned long DECODE_TIMEOUT = 5000;  // 5 second timeout for decode
             unsigned long decodeStartTime = millis();
             
-            debugPrint("DEBUG: Calling jpeg.decode() into pending buffer", COLOR_CYAN);
-            
             // Pause display during decode to prevent LCD underrun from memory contention
             displayManager.pauseDisplay();
             
             if (jpeg.decode(0, 0, 0)) {
-                unsigned long decodeTime = millis() - decodeStart;
-                debugPrintf(COLOR_WHITE, "JPEG decode completed in %lu ms", decodeTime);
-                
                 // Resume display after decode completes
                 displayManager.resumeDisplay();
                 

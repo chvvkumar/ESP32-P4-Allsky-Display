@@ -22,9 +22,6 @@ bool WiFiManager::begin() {
         return false;
     }
     
-    Serial.println("Setting WiFi mode to STA");
-    if (debugPrintFunc) debugPrintFunc("Setting WiFi mode to STA", COLOR_WHITE);
-    
     WiFi.mode(WIFI_STA);
     return true;
 }
@@ -38,13 +35,6 @@ void WiFiManager::connectToWiFi() {
     }
     
     lastConnectionAttempt = now;
-    
-    if (debugPrintFunc) {
-        debugPrintfFunc(COLOR_WHITE, "Connecting to: %s", WIFI_SSID);
-        debugPrintFunc("WiFi connecting", COLOR_YELLOW);
-    }
-    
-    Serial.printf("Connecting to WiFi: %s\n", WIFI_SSID);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     
     connectionAttempts = 0;
@@ -61,15 +51,7 @@ void WiFiManager::connectToWiFi() {
         systemMonitor.resetWatchdog(); // Explicitly reset watchdog during connection attempts
         connectionAttempts++;
         
-        // Show progress dots
-        if (!firstImageLoaded && debugPrintFunc) {
-            Serial.print(".");
-        }
-        
-        if (connectionAttempts % 4 == 0) {  // More frequent status updates
-            if (debugPrintfFunc) {
-                debugPrintfFunc(COLOR_YELLOW, "Attempt %d/%d...", connectionAttempts, WIFI_MAX_ATTEMPTS);
-            }
+        if (connectionAttempts % 4 == 0) {
             systemMonitor.resetWatchdog(); // Additional watchdog reset
         }
         
@@ -79,28 +61,10 @@ void WiFiManager::connectToWiFi() {
     
     if (WiFi.status() == WL_CONNECTED) {
         wifiConnected = true;
-        Serial.println("\nWiFi connected!");
-        Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
-        Serial.printf("Signal: %d dBm\n", WiFi.RSSI());
-        Serial.printf("MAC: %s\n", WiFi.macAddress().c_str());
-        
-        if (debugPrintFunc) {
-            debugPrintFunc("WiFi connected!", COLOR_GREEN);
-            debugPrintfFunc(COLOR_GREEN, "IP: %s", WiFi.localIP().toString().c_str());
-            debugPrintfFunc(COLOR_WHITE, "Signal: %d dBm", WiFi.RSSI());
-            debugPrintfFunc(COLOR_WHITE, "MAC: %s", WiFi.macAddress().c_str());
-        }
+        Serial.printf("WiFi connected! IP: %s\n", WiFi.localIP().toString().c_str());
     } else {
         wifiConnected = false;
-        Serial.printf("WiFi failed after %d attempts\n", connectionAttempts);
-        Serial.printf("Status code: %d\n", WiFi.status());
-        Serial.println("Will retry in main loop...");
-        
-        if (debugPrintFunc) {
-            debugPrintfFunc(COLOR_RED, "WiFi failed after %d attempts", connectionAttempts);
-            debugPrintfFunc(COLOR_RED, "Status code: %d", WiFi.status());
-            debugPrintFunc("Will retry in main loop...", COLOR_YELLOW);
-        }
+        Serial.printf("WiFi failed (status: %d)\n", WiFi.status());
         
         // Disconnect to clean up any partial connection state
         WiFi.disconnect();
@@ -116,19 +80,9 @@ void WiFiManager::checkConnection() {
     bool currentStatus = (WiFi.status() == WL_CONNECTED);
     
     if (currentStatus != wifiConnected) {
-        if (currentStatus) {
-            wifiConnected = true;
-            Serial.println("WiFi reconnected!");
-            if (debugPrintFunc && !firstImageLoaded) {
-                debugPrintFunc("WiFi reconnected!", COLOR_GREEN);
-            }
-        } else {
-            wifiConnected = false;
+        wifiConnected = currentStatus;
+        if (!currentStatus) {
             Serial.println("WiFi disconnected!");
-            if (debugPrintFunc && !firstImageLoaded) {
-                debugPrintFunc("ERROR: WiFi disconnected!", COLOR_RED);
-                debugPrintFunc("Attempting reconnection...", COLOR_YELLOW);
-            }
         }
     }
 }
