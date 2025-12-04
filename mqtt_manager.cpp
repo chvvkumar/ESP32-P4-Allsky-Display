@@ -103,13 +103,14 @@ void MQTTManager::connect() {
                 
                 // Subscribe to command topic filter
                 String commandFilter = haDiscovery.getCommandTopicFilter();
+                Serial.printf("Attempting to subscribe to: '%s'\n", commandFilter.c_str());
                 if (mqttClient.subscribe(commandFilter.c_str())) {
-                    Serial.printf("Subscribed to HA commands: %s\n", commandFilter.c_str());
+                    Serial.printf("✓ Successfully subscribed to HA commands: %s\n", commandFilter.c_str());
                     if (debugPrintFunc && !firstImageLoaded) {
                         debugPrintFunc("HA discovery complete!", COLOR_GREEN);
                     }
                 } else {
-                    Serial.println("Failed to subscribe to HA command topics!");
+                    Serial.printf("✗ FAILED to subscribe to HA command topics! MQTT state: %d\n", mqttClient.state());
                 }
                 
                 // Publish initial state
@@ -175,11 +176,16 @@ void MQTTManager::messageCallback(char* topic, byte* payload, unsigned int lengt
         message += (char)payload[i];
     }
     
-    Serial.printf("MQTT message received on topic '%s': %s\n", topic, message.c_str());
+    Serial.println("============================================================");
+    Serial.println("MQTT MESSAGE RECEIVED:");
+    Serial.printf("  Topic: '%s'\n", topic);
+    Serial.printf("  Payload: '%s' (length: %d)\n", message.c_str(), length);
+    Serial.println("============================================================");
     
     // Handle Home Assistant commands
     String topicStr = String(topic);
     haDiscovery.handleCommand(topicStr, message);
+    Serial.println("Command handled.\n");
 }
 
 

@@ -477,15 +477,22 @@ void HADiscovery::update() {
 
 void HADiscovery::handleCommand(const String& topic, const String& payload) {
     if (!configStorage.getHADiscoveryEnabled()) {
+        Serial.println("⚠️ HA Discovery is disabled - ignoring command");
         return;
     }
     
-    Serial.printf("HA Command - Topic: %s, Payload: %s\n", topic.c_str(), payload.c_str());
+    Serial.printf("📨 HA Command Handler\n");
+    Serial.printf("  Topic: '%s'\n", topic.c_str());
+    Serial.printf("  Payload: '%s'\n", payload.c_str());
+    Serial.printf("  Base Topic: '%s'\n", baseTopic.c_str());
     
     // Extract entity name from topic (format: baseTopic/entity/set)
     int lastSlash = topic.lastIndexOf('/');
     int secondLastSlash = topic.lastIndexOf('/', lastSlash - 1);
     String entity = topic.substring(secondLastSlash + 1, lastSlash);
+    
+    Serial.printf("  Extracted Entity: '%s'\n", entity.c_str());
+    Serial.printf("  lastSlash: %d, secondLastSlash: %d\n", lastSlash, secondLastSlash);
     
     // Handle brightness
     if (entity == "brightness") {
@@ -542,21 +549,25 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     }
     // Handle buttons
     else if (entity == "reboot" && payload == "PRESS") {
-        Serial.println("Reboot requested via Home Assistant");
+        Serial.println("✓ BUTTON PRESS: Reboot requested via Home Assistant");
         delay(100);
         ESP.restart();
     }
     else if (entity == "next_image" && payload == "PRESS") {
+        Serial.println("✓ BUTTON PRESS: Next Image");
         int nextIndex = (configStorage.getCurrentImageIndex() + 1) % configStorage.getImageSourceCount();
         configStorage.setCurrentImageIndex(nextIndex);
         configStorage.saveConfig();
         String imageSource = "Image " + String(nextIndex + 1);
         mqttClient->publish(buildStateTopic("image_source").c_str(), imageSource.c_str());
+        Serial.printf("  Switched to image index %d\n", nextIndex);
     }
     else if (entity == "reset_transforms" && payload == "PRESS") {
+        Serial.println("✓ BUTTON PRESS: Reset Transforms");
         configStorage.copyAllDefaultsToImageTransforms();
         configStorage.saveConfig();
         publishState(); // Update all transform states
+        Serial.println("  Transforms reset to defaults");
     }
     // Handle per-image transforms
     else if (entity.startsWith("img")) {
@@ -597,5 +608,8 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
                 mqttClient->publish(buildStateTopic(entity.c_str()).c_str(), payload.c_str());
             }
         }
+    }
+    else {
+        Serial.printf("⚠️ Unknown command: entity='%s', payload='%s'\n", entity.c_str(), payload.c_str());
     }
 }
