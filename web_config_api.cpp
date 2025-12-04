@@ -103,24 +103,12 @@ void WebConfig::handleSaveConfig() {
         else if (name == "critical_psram_threshold") configStorage.setCriticalPSRAMThreshold(value.toInt());
     }
     
-    // Handle checkbox parameters
-    bool cyclingEnabledFound = false;
-    bool randomOrderFound = false;
-    bool brightnessAutoModeFound = false;
-    bool haDiscoveryEnabledFound = false;
-    
-    for (int i = 0; i < server->args(); i++) {
-        String name = server->argName(i);
-        if (name == "cycling_enabled") cyclingEnabledFound = true;
-        else if (name == "random_order") randomOrderFound = true;
-        else if (name == "brightness_auto_mode") brightnessAutoModeFound = true;
-        else if (name == "ha_discovery_enabled") haDiscoveryEnabledFound = true;
-    }
-    
-    configStorage.setCyclingEnabled(cyclingEnabledFound);
-    configStorage.setRandomOrder(randomOrderFound);
-    configStorage.setBrightnessAutoMode(brightnessAutoModeFound);
-    configStorage.setHADiscoveryEnabled(haDiscoveryEnabledFound);
+    // Handle checkbox parameters - HTML forms only send checked checkbox values
+    // If a checkbox parameter is not present, it means the checkbox was unchecked
+    configStorage.setCyclingEnabled(server->hasArg("cycling_enabled"));
+    configStorage.setRandomOrder(server->hasArg("random_order"));
+    configStorage.setBrightnessAutoMode(server->hasArg("brightness_auto_mode"));
+    configStorage.setHADiscoveryEnabled(server->hasArg("ha_discovery_enabled"));
     
     // Save configuration to persistent storage
     configStorage.saveConfig();
