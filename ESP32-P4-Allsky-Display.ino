@@ -695,9 +695,12 @@ void downloadAndDisplayImage() {
     http.end();
     systemMonitor.forceResetWatchdog();
     
+    Serial.printf("DEBUG: Download complete - Read %d bytes (expected %d)\n", bytesRead, size);
+    
     // Validate download completeness
     if (bytesRead < size) {
         debugPrintf(COLOR_RED, "Incomplete download: %d/%d bytes", bytesRead, size);
+        Serial.printf("ERROR: Incomplete download: %d/%d bytes\n", bytesRead, size);
         systemMonitor.forceResetWatchdog();
         return;
     }
@@ -705,9 +708,12 @@ void downloadAndDisplayImage() {
     // Additional validation: ensure we have enough data for JPEG processing
     if (bytesRead < 1024) {  // Minimum reasonable JPEG size
         debugPrintf(COLOR_RED, "Downloaded data too small: %d bytes", bytesRead);
+        Serial.printf("ERROR: Downloaded data too small: %d bytes (minimum 1024)\n", bytesRead);
         systemMonitor.forceResetWatchdog();
         return;
     }
+    
+    Serial.println("DEBUG: Size validation passed");
     
     // Reset watchdog before JPEG processing
     systemMonitor.forceResetWatchdog();
@@ -715,30 +721,42 @@ void downloadAndDisplayImage() {
     // Check JPEG header first
     if (bytesRead < 10) {
         debugPrintf(COLOR_RED, "ERROR: Downloaded data too small: %d bytes", bytesRead);
+        Serial.printf("ERROR: Downloaded data too small for header check: %d bytes\n", bytesRead);
         return;
     }
+    
+    Serial.printf("DEBUG: Checking image format (first 4 bytes: %02X %02X %02X %02X)...\n",
+                 imageBuffer[0], imageBuffer[1], imageBuffer[2], imageBuffer[3]);
     
     // Check for PNG magic numbers first
     if (imageBuffer[0] == 0x89 && imageBuffer[1] == 0x50 && imageBuffer[2] == 0x4E && imageBuffer[3] == 0x47) {
         debugPrint("ERROR: PNG format detected - not supported (JPEG only)", COLOR_RED);
+        Serial.println("ERROR: PNG format detected - not supported (JPEG only)");
         Serial.println("This device only supports JPEG images. Please use a JPEG format image URL.");
         return;
     }
     
+    Serial.println("DEBUG: Not PNG format, checking for JPEG...");
+    
     // Check for JPEG magic numbers
     if (imageBuffer[0] != 0xFF || imageBuffer[1] != 0xD8) {
         debugPrintf(COLOR_RED, "ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)", imageBuffer[0], imageBuffer[1]);
+        Serial.printf("ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)\n", imageBuffer[0], imageBuffer[1]);
         return;
     }
     
+    Serial.printf("DEBUG: Opening JPEG in RAM (%d bytes)...\n", bytesRead);
     if (jpeg.openRAM(imageBuffer, bytesRead, JPEGDraw)) {
+        Serial.printf("DEBUG: JPEG opened successfully - %dx%d\n", jpeg.getWidth(), jpeg.getHeight());
         pendingImageWidth = jpeg.getWidth();
         pendingImageHeight = jpeg.getHeight();
         
         // Check if image fits in our pending buffer
         size_t requiredSize = pendingImageWidth * pendingImageHeight * 2;
+        Serial.printf("DEBUG: Image size check - Required: %d bytes, Available: %d bytes\n", requiredSize, fullImageBufferSize);
         
         if (requiredSize <= fullImageBufferSize) {
+            Serial.println("DEBUG: Image fits in buffer, proceeding with decode...");
             // Clear the PENDING image buffer
             memset(pendingFullImageBuffer, 0, pendingImageWidth * pendingImageHeight * sizeof(uint16_t));
             
@@ -777,6 +795,8 @@ void downloadAndDisplayImage() {
                 }
             } else {
                 debugPrint("ERROR: JPEG decode() function failed!", COLOR_RED);
+                Serial.println("ERROR: JPEG decode() function failed!");
+                displayManager.resumeDisplay();  // Make sure to resume even on error
             }
             
             jpeg.close();
@@ -784,11 +804,19 @@ void downloadAndDisplayImage() {
         } else {
             debugPrintf(COLOR_RED, "ERROR: Image too large for buffer! Required: %d, Available: %d", 
                        requiredSize, fullImageBufferSize);
+            Serial.printf("ERROR: Image too large for buffer! Required: %d bytes, Available: %d bytes\n", 
+                         requiredSize, fullImageBufferSize);
             jpeg.close();
         }
     } else {
         debugPrint("ERROR: JPEG openRAM() failed!", COLOR_RED);
         debugPrintf(COLOR_RED, "Downloaded %d bytes, buffer size: %d", bytesRead, imageBufferSize);
+        Serial.printf("ERROR: JPEG openRAM() failed! Downloaded %d bytes, buffer size: %d\n", bytesRead, imageBufferSize);
+        Serial.printf("First 16 bytes: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+                     imageBuffer[0], imageBuffer[1], imageBuffer[2], imageBuffer[3],
+                     imageBuffer[4], imageBuffer[5], imageBuffer[6], imageBuffer[7],
+                     imageBuffer[8], imageBuffer[9], imageBuffer[10], imageBuffer[11],
+                     imageBuffer[12], imageBuffer[13], imageBuffer[14], imageBuffer[15]);
     }
     
     // Final watchdog reset and cleanup
@@ -835,7 +863,9 @@ void updateCurrentImageTransformSettings() {
 
 // Advance to next image in cycling sequence
 void advanceToNextImage() {
-    if (!cyclingEnabled || imageSourceCount <= 1) {
+    // Allow manual advancing even if cycling is disabled
+    if (imageSourceCount <= 1) {
+        Serial.println("Cannot advance: only 1 image source configured");
         return;
     }
     
@@ -884,40 +914,54 @@ void processSerialCommands() {
             case '+':
                 scaleX = constrain(scaleX + SCALE_STEP, MIN_SCALE, MAX_SCALE);
                 scaleY = constrain(scaleY + SCALE_STEP, MIN_SCALE, MAX_SCALE);
+                configStorage.setImageScaleX(currentImageIndex, scaleX);
+                configStorage.setImageScaleY(currentImageIndex, scaleY);
+                configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Scale both: %.1fx%.1f\n", scaleX, scaleY);
+                Serial.printf("Scale both: %.1fx%.1f (saved for image %d)\n", scaleX, scaleY, currentImageIndex + 1);
                 break;
             case '-':
                 scaleX = constrain(scaleX - SCALE_STEP, MIN_SCALE, MAX_SCALE);
                 scaleY = constrain(scaleY - SCALE_STEP, MIN_SCALE, MAX_SCALE);
+                configStorage.setImageScaleX(currentImageIndex, scaleX);
+                configStorage.setImageScaleY(currentImageIndex, scaleY);
+                configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Scale both: %.1fx%.1f\n", scaleX, scaleY);
+                Serial.printf("Scale both: %.1fx%.1f (saved for image %d)\n", scaleX, scaleY, currentImageIndex + 1);
                 break;
                 
             // Movement commands
             case 'W':
             case 'w':
                 offsetY -= MOVE_STEP;
+                configStorage.setImageOffsetY(currentImageIndex, offsetY);
+                configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Move up, offset: %d,%d\n", offsetX, offsetY);
+                Serial.printf("Move up, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
                 break;
             case 'S':
             case 's':
                 offsetY += MOVE_STEP;
+                configStorage.setImageOffsetY(currentImageIndex, offsetY);
+                configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Move down, offset: %d,%d\n", offsetX, offsetY);
+                Serial.printf("Move down, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
                 break;
             case 'A':
             case 'a':
                 offsetX -= MOVE_STEP;
+                configStorage.setImageOffsetX(currentImageIndex, offsetX);
+                configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Move left, offset: %d,%d\n", offsetX, offsetY);
+                Serial.printf("Move left, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
                 break;
             case 'D':
             case 'd':
                 offsetX += MOVE_STEP;
+                configStorage.setImageOffsetX(currentImageIndex, offsetX);
+                configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Move right, offset: %d,%d\n", offsetX, offsetY);
+                Serial.printf("Move right, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
                 break;
                 
             // Rotation commands
@@ -925,15 +969,19 @@ void processSerialCommands() {
             case 'q':
                 rotationAngle -= ROTATION_STEP;
                 if (rotationAngle < 0) rotationAngle += 360.0;
+                configStorage.setImageRotation(currentImageIndex, rotationAngle);
+                configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Rotate CCW: %.0f°\n", rotationAngle);
+                Serial.printf("Rotate CCW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
                 break;
             case 'E':
             case 'e':
                 rotationAngle += ROTATION_STEP;
                 if (rotationAngle >= 360.0) rotationAngle -= 360.0;
+                configStorage.setImageRotation(currentImageIndex, rotationAngle);
+                configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Rotate CW: %.0f°\n", rotationAngle);
+                Serial.printf("Rotate CW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
                 break;
                 
             // Reset command
@@ -944,8 +992,27 @@ void processSerialCommands() {
                 offsetX = DEFAULT_OFFSET_X;
                 offsetY = DEFAULT_OFFSET_Y;
                 rotationAngle = DEFAULT_ROTATION;
+                configStorage.setImageScaleX(currentImageIndex, scaleX);
+                configStorage.setImageScaleY(currentImageIndex, scaleY);
+                configStorage.setImageOffsetX(currentImageIndex, offsetX);
+                configStorage.setImageOffsetY(currentImageIndex, offsetY);
+                configStorage.setImageRotation(currentImageIndex, rotationAngle);
+                configStorage.saveConfig();
                 renderFullImage();
-                Serial.println("Reset all transformations");
+                Serial.printf("Reset all transformations (saved for image %d)\n", currentImageIndex + 1);
+                break;
+                
+            // Save current transform settings to config for this image
+            case 'V':
+            case 'v':
+                configStorage.setImageScaleX(currentImageIndex, scaleX);
+                configStorage.setImageScaleY(currentImageIndex, scaleY);
+                configStorage.setImageOffsetX(currentImageIndex, offsetX);
+                configStorage.setImageOffsetY(currentImageIndex, offsetY);
+                configStorage.setImageRotation(currentImageIndex, rotationAngle);
+                configStorage.saveConfig();
+                Serial.printf("Saved transform settings for image %d: scale=%.1fx%.1f, offset=%d,%d, rotation=%.0f°\n",
+                             currentImageIndex + 1, scaleX, scaleY, offsetX, offsetY, rotationAngle);
                 break;
                 
             // Brightness commands
@@ -982,6 +1049,7 @@ void processSerialCommands() {
                 Serial.println("  Q/E : Rotate 90° CCW/CW");
                 Serial.println("Reset:");
                 Serial.println("  R   : Reset all transformations");
+                Serial.println("  V   : Save (persist) current transform settings for this image");
                 Serial.println("Brightness:");
                 Serial.println("  L/K : Brightness up/down");
                 Serial.println("System:");
