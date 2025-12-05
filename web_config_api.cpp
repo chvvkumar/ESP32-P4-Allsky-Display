@@ -201,6 +201,18 @@ void WebConfig::handleNextImage() {
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Switched to next image and refreshed display\"}");
 }
 
+void WebConfig::handlePreviousImage() {
+    extern void advanceToPreviousImage();
+    extern void updateCyclingVariables();
+    extern void downloadAndDisplayImage();
+    
+    updateCyclingVariables();
+    advanceToPreviousImage();
+    downloadAndDisplayImage();
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Switched to previous image and refreshed display\"}");
+}
+
 void WebConfig::handleUpdateImageTransform() {
     if (server->hasArg("index") && server->hasArg("property") && server->hasArg("value")) {
         int index = server->arg("index").toInt();

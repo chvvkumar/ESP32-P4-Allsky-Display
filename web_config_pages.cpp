@@ -115,6 +115,15 @@ String WebConfig::generateMainPage() {
         html += "<h3 class='text-muted-sm' style='margin-bottom:1rem'>Image Source:</h3>";
         html += "<div class='text-light text-muted-sm' style='padding:0.75rem;background:#1e293b;border-radius:8px;border-left:4px solid #0ea5e9;overflow-wrap:break-word;word-break:break-all;font-family:monospace'>" + escapeHtml(configStorage.getImageURL()) + "</div>";
     }
+    
+    // Add image navigation controls
+    if (configStorage.getCyclingEnabled() && configStorage.getImageSourceCount() > 1) {
+        html += "<div style='margin-top:1.5rem;display:flex;gap:0.75rem;justify-content:center'>";
+        html += "<button type='button' class='btn btn-secondary' onclick='previousImage(this)' style='flex:1;max-width:200px'><i class='fas fa-chevron-left'></i> Previous</button>";
+        html += "<button type='button' class='btn btn-secondary' onclick='nextImage(this)' style='flex:1;max-width:200px'>Next <i class='fas fa-chevron-right'></i></button>";
+        html += "</div>";
+    }
+    
     html += "</div></div></div>";
     
     return html;
@@ -231,7 +240,21 @@ String WebConfig::generateImageSourcesPage() {
     if (sourceCount > 1) {
         html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources(this)' style='margin-left:1rem;'>🗑️ Clear All</button>";
     }
-    html += "</div></div></div></div>";
+    html += "</div>";
+    
+    // Add image navigation controls for multi-image mode
+    if (sourceCount > 1) {
+        html += "<div style='margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid #334155'>";
+        html += "<h3 style='margin-bottom:1rem;color:#cbd5e1'>Manual Navigation</h3>";
+        html += "<div style='display:flex;gap:0.75rem;justify-content:center'>";
+        html += "<button type='button' class='btn btn-secondary' onclick='previousImage(this)' style='flex:1;max-width:200px'><i class='fas fa-chevron-left'></i> Previous Image</button>";
+        html += "<button type='button' class='btn btn-secondary' onclick='nextImage(this)' style='flex:1;max-width:200px'>Next Image <i class='fas fa-chevron-right'></i></button>";
+        html += "</div>";
+        html += "<p class='text-muted-sm' style='margin-top:0.75rem;text-align:center'><i class='fas fa-info-circle' style='margin-right:4px'></i>Manually switch between images without waiting for the cycle interval</p>";
+        html += "</div>";
+    }
+    
+    html += "</div></div></div>";
     return html;
 }
 
@@ -353,6 +376,16 @@ String WebConfig::generateSerialCommandsPage() {
     html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Key</th>";
     html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Action</th>";
     html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Description</th></tr></thead><tbody>";
+    
+    html += "<tr style='background:#1e3a2e;border-left:4px solid #10b981'><td colspan='3' style='padding:0.75rem;font-weight:bold;color:#10b981;font-size:1.05rem'>🖼️ Image Navigation</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>→ / ↓</td>";
+    html += "<td style='padding:0.75rem'>Next Image</td><td class='text-muted-sm' style='padding:0.75rem'>Switch to the next image (Right or Down arrow keys)</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>← / ↑</td>";
+    html += "<td style='padding:0.75rem'>Previous Image</td><td class='text-muted-sm' style='padding:0.75rem'>Go back to the previous image (Left or Up arrow keys)</td></tr>";
+    
+    html += "<tr style='background:#1e3a2e;border-left:4px solid #10b981'><td colspan='3' style='padding:0.75rem;font-weight:bold;color:#10b981;font-size:1.05rem'>⚙️ Image Transformations</td></tr>";
     
     html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>+</td>";
     html += "<td style='padding:0.75rem'>Scale Up</td><td class='text-muted-sm' style='padding:0.75rem'>Increase image scale on both axes by 0.1</td></tr>";

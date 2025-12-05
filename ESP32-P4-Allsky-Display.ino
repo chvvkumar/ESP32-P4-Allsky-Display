@@ -898,6 +898,37 @@ void advanceToNextImage() {
                   currentImageIndex + 1, imageSourceCount, getCurrentImageURL().c_str());
 }
 
+// Go back to previous image in cycling sequence
+void advanceToPreviousImage() {
+    // Allow manual advancing even if cycling is disabled
+    if (imageSourceCount <= 1) {
+        LOG_PRINTLN("Cannot go back: only 1 image source configured");
+        return;
+    }
+    
+    if (randomOrderEnabled) {
+        // Random order: pick a different random image
+        int newIndex;
+        do {
+            newIndex = random(0, imageSourceCount);
+        } while (newIndex == currentImageIndex && imageSourceCount > 1);
+        currentImageIndex = newIndex;
+    } else {
+        // Sequential order: go to previous image
+        currentImageIndex = (currentImageIndex - 1 + imageSourceCount) % imageSourceCount;
+    }
+    
+    // Save the new index to persistent storage
+    configStorage.setCurrentImageIndex(currentImageIndex);
+    configStorage.saveConfig();
+    
+    // Update transform settings for the new image
+    updateCurrentImageTransformSettings();
+    
+    LOG_PRINTF("Went back to image %d/%d: %s\n", 
+                  currentImageIndex + 1, imageSourceCount, getCurrentImageURL().c_str());
+}
+
 // Get current image URL based on cycling configuration
 String getCurrentImageURL() {
     if (cyclingEnabled && imageSourceCount > 0) {
@@ -968,6 +999,25 @@ void processSerialCommands() {
                 configStorage.saveConfig();
                 renderFullImage();
                 LOG_PRINTF("Move right, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
+                break;
+                
+            // Image navigation commands (Arrow keys)
+            case 27:  // ESC character - start of arrow key sequence
+                if (Serial.available() >= 2) {
+                    char seq1 = Serial.read();
+                    char seq2 = Serial.read();
+                    if (seq1 == '[') {
+                        if (seq2 == 'C' || seq2 == 'B') {  // Right arrow or Down arrow
+                            advanceToNextImage();
+                            downloadAndDisplayImage();
+                            LOG_PRINTF("Next image (arrow key): showing image %d/%d\n", currentImageIndex + 1, imageSourceCount);
+                        } else if (seq2 == 'D' || seq2 == 'A') {  // Left arrow or Up arrow
+                            advanceToPreviousImage();
+                            downloadAndDisplayImage();
+                            LOG_PRINTF("Previous image (arrow key): showing image %d/%d\n", currentImageIndex + 1, imageSourceCount);
+                        }
+                    }
+                }
                 break;
                 
             // Rotation commands
@@ -1046,6 +1096,9 @@ void processSerialCommands() {
             case 'h':
             case '?':
                 LOG_PRINTLN("\n=== Image Control Commands ===");
+                LOG_PRINTLN("Image Navigation:");
+                LOG_PRINTLN("  → ↓ : Next image (Right/Down arrows)");
+                LOG_PRINTLN("  ← ↑ : Previous image (Left/Up arrows)");
                 LOG_PRINTLN("Scaling:");
                 LOG_PRINTLN("  +/- : Scale both axes");
                 LOG_PRINTLN("Movement:");

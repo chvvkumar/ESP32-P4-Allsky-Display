@@ -40,6 +40,7 @@ bool WebConfig::begin(int port) {
         server->on("/api/update-source", HTTP_POST, [this]() { handleUpdateImageSource(); });
         server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
         server->on("/api/next-image", HTTP_POST, [this]() { handleNextImage(); });
+        server->on("/api/previous-image", HTTP_POST, [this]() { handlePreviousImage(); });
         server->on("/api/update-transform", HTTP_POST, [this]() { handleUpdateImageTransform(); });
         server->on("/api/copy-defaults", HTTP_POST, [this]() { handleCopyDefaultsToImage(); });
         server->on("/api/apply-transform", HTTP_POST, [this]() { handleApplyTransform(); });
