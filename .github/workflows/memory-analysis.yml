@@ -120,8 +120,8 @@ jobs:
         fi
         
         # Create JSON files for shields.io endpoint badges
-        echo "{\"schemaVersion\":1,\"label\":\"Flash\",\"message\":\"$FLASH_PCT% (${{ steps.memory.outputs.flash_used }} / ${{ steps.memory.outputs.flash_max }} bytes)\",\"color\":\"$FLASH_COLOR\"}" > .github/badges/flash.json
-        echo "{\"schemaVersion\":1,\"label\":\"RAM\",\"message\":\"$RAM_PCT% (${{ steps.memory.outputs.ram_used }} / ${{ steps.memory.outputs.ram_max }} bytes)\",\"color\":\"$RAM_COLOR\"}" > .github/badges/ram.json
+        echo "{\"schemaVersion\":1,\"label\":\"Flash\",\"message\":\"$FLASH_PCT% (${{ steps.memory.outputs.flash_used }} / ${{ steps.memory.outputs.flash_max }} bytes)\",\"color\":\"$FLASH_COLOR\",\"labelColor\":\"555\",\"style\":\"flat\"}" > .github/badges/flash.json
+        echo "{\"schemaVersion\":1,\"label\":\"RAM\",\"message\":\"$RAM_PCT% (${{ steps.memory.outputs.ram_used }} / ${{ steps.memory.outputs.ram_max }} bytes)\",\"color\":\"$RAM_COLOR\",\"labelColor\":\"555\",\"style\":\"flat\"}" > .github/badges/ram.json
     
     - name: Commit badges
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/snd'
