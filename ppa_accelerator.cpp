@@ -131,7 +131,9 @@ bool PPAAccelerator::scaleRotateImage(uint16_t* srcPixels, int16_t srcWidth, int
     memcpy(ppa_src_buffer, srcPixels, srcSize);
     
     // Ensure cache coherency for DMA operations
-    esp_cache_msync(ppa_src_buffer, srcSize, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+    // Align size to cache line boundary (64 bytes)
+    size_t srcSizeAligned = (srcSize + 63) & ~63;
+    esp_cache_msync(ppa_src_buffer, srcSizeAligned, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
     
     // Configure PPA scaling and rotation operation
     ppa_srm_oper_config_t srm_oper_config = {};
@@ -184,7 +186,9 @@ bool PPAAccelerator::scaleRotateImage(uint16_t* srcPixels, int16_t srcWidth, int
     }
     
     // Ensure cache coherency for reading results
-    esp_cache_msync(ppa_dst_buffer, dstSize, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+    // Align size to cache line boundary (64 bytes)
+    size_t dstSizeAligned = (dstSize + 63) & ~63;
+    esp_cache_msync(ppa_dst_buffer, dstSizeAligned, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
     
     // Copy result to destination buffer
     memcpy(dstPixels, ppa_dst_buffer, dstSize);
