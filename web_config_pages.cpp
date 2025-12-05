@@ -11,27 +11,99 @@
 String WebConfig::generateMainPage() {
     String html = "<div class='main'><div class='container'>";
     
-    // System status cards
-    html += "<div class='stats'>";
+    // Calculate usage percentages
+    int heapUsedPercent = 100 - (ESP.getFreeHeap() * 100 / ESP.getHeapSize());
+    int psramUsedPercent = 100 - (ESP.getFreePsram() * 100 / ESP.getPsramSize());
+    int flashUsedPercent = (ESP.getSketchSize() * 100) / ESP.getFlashChipSize();
+    
+    // Get cycling info
+    bool isCycling = configStorage.getCyclingEnabled();
+    unsigned long cycleIntervalMs = configStorage.getCycleInterval();
+    unsigned long cycleIntervalSec = cycleIntervalMs / 1000;  // Convert milliseconds to seconds
+    
+    // Format interval: convert seconds to readable format
+    String cycleIntervalStr;
+    if (cycleIntervalSec >= 3600) {
+        // Hours and minutes
+        int hours = cycleIntervalSec / 3600;
+        int mins = (cycleIntervalSec % 3600) / 60;
+        cycleIntervalStr = String(hours) + "h";
+        if (mins > 0) cycleIntervalStr += " " + String(mins) + "m";
+    } else if (cycleIntervalSec >= 60) {
+        // Minutes and seconds
+        int mins = cycleIntervalSec / 60;
+        int secs = cycleIntervalSec % 60;
+        cycleIntervalStr = String(mins) + "m";
+        if (secs > 0) cycleIntervalStr += " " + String(secs) + "s";
+    } else {
+        // Just seconds
+        cycleIntervalStr = String(cycleIntervalSec) + "s";
+    }
+    
+    // Key metrics in top row - 4 evenly spaced cards
+    html += "<div class='stats' style='grid-template-columns:repeat(4,1fr)'>";
+    
     html += "<div class='stat-card'><i class='fas fa-clock stat-icon'></i>";
     html += "<div class='stat-value'>" + formatUptime(millis()) + "</div>";
     html += "<div class='stat-label'>Uptime</div></div>";
     
-    html += "<div class='stat-card'><i class='fas fa-microchip stat-icon'></i>";
-    html += "<div class='stat-value'>" + formatBytes(systemMonitor.getCurrentFreeHeap()) + "</div>";
-    html += "<div class='stat-label'>Free Heap</div></div>";
-    
-    html += "<div class='stat-card'><i class='fas fa-memory stat-icon'></i>";
-    html += "<div class='stat-value'>" + formatBytes(systemMonitor.getCurrentFreePsram()) + "</div>";
-    html += "<div class='stat-label'>Free PSRAM</div></div>";
-    
     html += "<div class='stat-card'><i class='fas fa-sun stat-icon'></i>";
     html += "<div class='stat-value'>" + String(displayManager.getBrightness()) + "%</div>";
-    html += "<div class='stat-label'>Brightness</div></div>";
+    html += "<div class='stat-label'>Brightness (" + String(configStorage.getBrightnessAutoMode() ? "Auto" : "Manual") + ")</div></div>";
+    
+    html += "<div class='stat-card'><i class='fas fa-image stat-icon'></i>";
+    html += "<div class='stat-value'>" + String(isCycling ? "Multi" : "Single") + "</div>";
+    html += "<div class='stat-label'>Image Mode</div></div>";
+    
+    html += "<div class='stat-card'><i class='fas fa-sync-alt stat-icon'></i>";
+    html += "<div class='stat-value'>" + cycleIntervalStr + "</div>";
+    html += "<div class='stat-label'>Update Frequency</div></div>";
+    
     html += "</div>";
     
-    // Quick status cards
-    html += "<div class='grid'>";
+    // Information cards grid
+    html += "<div class='grid' style='margin-top:2rem'>";
+    
+    // System Information Card - now includes CPU, temp, health
+    html += "<div class='card'><h2>💻 System Information</h2>";
+    html += "<div style='flex:1'>";
+    html += "<div class='stat-grid'>";
+    html += "<div><strong class='text-label'>Chip Model:</strong><br>ESP32-P4 (Rev " + String(ESP.getChipRevision()) + ")</div>";
+    html += "<div><strong class='text-label'>CPU Cores:</strong><br>" + String(ESP.getChipCores()) + " @ " + String(ESP.getCpuFreqMHz()) + " MHz</div>";
+    html += "<div><strong class='text-label'>Temperature:</strong><br>" + String(temperatureRead(), 1) + "°C</div>";
+    html += "<div><strong class='text-label'>SDK Version:</strong><br>" + String(ESP.getSdkVersion()) + "</div>";
+    html += "<div><strong class='text-label'>Flash Size:</strong><br>" + formatBytes(ESP.getFlashChipSize()) + " (" + String(flashUsedPercent) + "% used)</div>";
+    html += "<div><strong class='text-label'>Sketch Size:</strong><br>" + formatBytes(ESP.getSketchSize()) + "</div>";
+    html += "<div><strong class='text-label'>Free Flash:</strong><br>" + formatBytes(ESP.getFreeSketchSpace()) + "</div>";
+    html += "<div><strong class='text-label'>System Health:</strong><br>" + String(systemMonitor.isSystemHealthy() ? "✓ Healthy" : "⚠ Warning") + "</div>";
+    html += "</div></div></div>";
+    
+    // Memory Details Card - now includes heap and PSRAM with percentages
+    html += "<div class='card'><h2>🧠 Memory Details</h2>";
+    html += "<div style='flex:1'>";
+    html += "<h3 style='color:#10b981;font-size:1rem;margin-bottom:0.75rem'>Heap Memory</h3>";
+    html += "<div style='margin-bottom:1.5rem'>";
+    html += "<div style='display:flex;justify-content:space-between;margin-bottom:0.5rem'>";
+    html += "<span class='text-muted-sm'>Used: " + formatBytes(ESP.getHeapSize() - ESP.getFreeHeap()) + " / " + formatBytes(ESP.getHeapSize()) + "</span>";
+    html += "<span class='text-cyan-xs'>" + String(heapUsedPercent) + "%</span>";
+    html += "</div>";
+    html += "<div class='progress'><div class='progress-bar' style='width:" + String(heapUsedPercent) + "%'></div></div>";
+    html += "<p class='text-muted' style='margin-top:0.5rem;font-size:0.85rem'>Free: " + formatBytes(ESP.getFreeHeap()) + " | Min Free: " + formatBytes(systemMonitor.getMinFreeHeap()) + "</p>";
+    html += "</div>";
+    html += "<h3 style='color:#10b981;font-size:1rem;margin-bottom:0.75rem'>PSRAM Memory</h3>";
+    html += "<div>";
+    html += "<div style='display:flex;justify-content:space-between;margin-bottom:0.5rem'>";
+    html += "<span class='text-muted-sm'>Used: " + formatBytes(ESP.getPsramSize() - ESP.getFreePsram()) + " / " + formatBytes(ESP.getPsramSize()) + "</span>";
+    html += "<span class='text-cyan-xs'>" + String(psramUsedPercent) + "%</span>";
+    html += "</div>";
+    html += "<div class='progress'><div class='progress-bar' style='width:" + String(psramUsedPercent) + "%'></div></div>";
+    html += "<p class='text-muted' style='margin-top:0.5rem;font-size:0.85rem'>Free: " + formatBytes(ESP.getFreePsram()) + " | Min Free: " + formatBytes(systemMonitor.getMinFreePsram()) + "</p>";
+    html += "</div></div></div>";
+    
+    html += "</div>";
+    
+    // Status cards grid
+    html += "<div class='grid' style='margin-top:1.5rem'>";
     
     // WiFi Status
     html += "<div class='card'><h2>📡 Network Status</h2>";
