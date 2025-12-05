@@ -511,6 +511,9 @@ void downloadAndDisplayImage() {
         return;
     }
     
+    // Enable redirect following for URLs like picsum.photos
+    http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+    
     // Set enhanced timeouts to prevent any blocking
     http.setTimeout(HTTP_REQUEST_TIMEOUT);      // Use config value
     http.setConnectTimeout(HTTP_CONNECT_TIMEOUT); // Use config value
@@ -535,6 +538,9 @@ void downloadAndDisplayImage() {
     // Start GET request with enhanced error handling
     try {
         httpCode = http.GET();
+        // Debug: Print the response code and final URL after redirects
+        Serial.printf("DEBUG: HTTP response code: %d\n", httpCode);
+        Serial.printf("DEBUG: Final URL after redirects: %s\n", http.getLocation().c_str());
     } catch (...) {
         debugPrint("ERROR: Exception during HTTP GET", COLOR_RED);
         http.end();

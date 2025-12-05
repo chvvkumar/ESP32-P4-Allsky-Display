@@ -35,6 +35,7 @@ private:
     void handleImageSources();
     void handleDisplayConfig();
     void handleAdvancedConfig();
+    void handleSerialCommands();
     void handleStatus();
     void handleSaveConfig();
     void handleAddImageSource();
@@ -61,6 +62,7 @@ private:
     String generateDisplayPage();
     String generateAdvancedPage();
     String generateStatusPage();
+    String generateSerialCommandsPage();
     
     // Utility functions
     String getSystemStatus();

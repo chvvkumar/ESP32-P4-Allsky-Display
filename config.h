@@ -59,7 +59,7 @@ extern const char* IMAGE_URL;
 
 // Multi-image cycling configuration
 #define MAX_IMAGE_SOURCES 10             // Maximum number of image sources
-#define DEFAULT_CYCLE_INTERVAL 60000     // 1 minute between image switches
+#define DEFAULT_CYCLE_INTERVAL 30000     // 30 seconds between image switches
 #define MIN_CYCLE_INTERVAL 10000         // Minimum 10 seconds between switches
 #define MAX_CYCLE_INTERVAL 3600000       // Maximum 1 hour between switches
 
