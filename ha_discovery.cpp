@@ -4,6 +4,17 @@
 #include <WiFi.h>
 #include <esp_task_wdt.h>
 
+// JSON key constants for deduplication
+static const char* JSON_NAME = "\"name\":";
+static const char* JSON_UNIQUE_ID = "\"unique_id\":";
+static const char* JSON_DEVICE = "\"device\":";
+static const char* JSON_STATE_TOPIC = "\"state_topic\":";
+static const char* JSON_COMMAND_TOPIC = "\"command_topic\":";
+static const char* JSON_AVAILABILITY_TOPIC = "\"availability_topic\":";
+static const char* JSON_ICON = "\"icon\":";
+static const char* JSON_UNIT = "\"unit_of_measurement\":";
+static const char* JSON_DEVICE_CLASS = "\"device_class\":";
+
 // Global instance
 HADiscovery haDiscovery;
 
@@ -75,23 +86,22 @@ String HADiscovery::getDeviceJson() {
 bool HADiscovery::publishLightDiscovery() {
     String topic = buildDiscoveryTopic("light", "brightness");
     String payload = "{";
-    payload += "\"name\":\"Brightness\",";
-    payload += "\"unique_id\":\"" + deviceId + "_brightness\",";
-    payload += "\"device\":" + getDeviceJson() + ",";
-    payload += "\"state_topic\":\"" + buildStateTopic("brightness") + "\",";
-    payload += "\"command_topic\":\"" + buildCommandTopic("brightness") + "\",";
-    payload += "\"availability_topic\":\"" + getAvailabilityTopic() + "\",";
+    payload += JSON_NAME;payload += "\"Brightness\",";
+    payload += JSON_UNIQUE_ID;payload += "\"" + deviceId + "_brightness\",";
+    payload += JSON_DEVICE;payload += getDeviceJson() + ",";
+    payload += JSON_STATE_TOPIC;payload += "\"" + buildStateTopic("brightness") + "\",";
+    payload += JSON_COMMAND_TOPIC;payload += "\"" + buildCommandTopic("brightness") + "\",";
+    payload += JSON_AVAILABILITY_TOPIC;payload += "\"" + getAvailabilityTopic() + "\",";
     payload += "\"brightness_scale\":100,";
     payload += "\"brightness_state_topic\":\"" + buildStateTopic("brightness") + "\",";
     payload += "\"brightness_command_topic\":\"" + buildCommandTopic("brightness") + "\",";
     payload += "\"on_command_type\":\"brightness\",";
-    payload += "\"icon\":\"mdi:brightness-6\"";
+    payload += JSON_ICON;payload += "\"mdi:brightness-6\"";
     payload += "}";
     
-    Serial.printf("Publishing light discovery (size: %d bytes)\n", payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
     if (!result) {
-        Serial.printf("ERROR: Failed to publish light discovery! Payload size: %d\n", payload.length());
+        LOG_PRINTLN("ERROR: Failed to publish light discovery!");
     }
     return result;
 }
@@ -99,22 +109,18 @@ bool HADiscovery::publishLightDiscovery() {
 bool HADiscovery::publishSwitchDiscovery(const char* entityId, const char* name, const char* icon) {
     String topic = buildDiscoveryTopic("switch", entityId);
     String payload = "{";
-    payload += "\"name\":\"" + String(name) + "\",";
-    payload += "\"unique_id\":\"" + deviceId + "_" + String(entityId) + "\",";
-    payload += "\"device\":" + getDeviceJson() + ",";
-    payload += "\"state_topic\":\"" + buildStateTopic(entityId) + "\",";
-    payload += "\"command_topic\":\"" + buildCommandTopic(entityId) + "\",";
-    payload += "\"availability_topic\":\"" + getAvailabilityTopic() + "\",";
+    payload += JSON_NAME;payload += "\"" + String(name) + "\",";
+    payload += JSON_UNIQUE_ID;payload += "\"" + deviceId + "_" + String(entityId) + "\",";
+    payload += JSON_DEVICE;payload += getDeviceJson() + ",";
+    payload += JSON_STATE_TOPIC;payload += "\"" + buildStateTopic(entityId) + "\",";
+    payload += JSON_COMMAND_TOPIC;payload += "\"" + buildCommandTopic(entityId) + "\",";
+    payload += JSON_AVAILABILITY_TOPIC;payload += "\"" + getAvailabilityTopic() + "\",";
     payload += "\"payload_on\":\"ON\",";
     payload += "\"payload_off\":\"OFF\",";
-    payload += "\"icon\":\"" + String(icon) + "\"";
+    payload += JSON_ICON;payload += "\"" + String(icon) + "\"";
     payload += "}";
     
-    Serial.printf("Publishing switch '%s' (size: %d bytes)\n", entityId, payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
-    if (!result) {
-        Serial.printf("ERROR: Failed to publish switch '%s'! Payload size: %d\n", entityId, payload.length());
-    }
     return result;
 }
 
@@ -123,26 +129,22 @@ bool HADiscovery::publishNumberDiscovery(const char* entityId, const char* name,
                                          const char* unit, const char* icon) {
     String topic = buildDiscoveryTopic("number", entityId);
     String payload = "{";
-    payload += "\"name\":\"" + String(name) + "\",";
-    payload += "\"unique_id\":\"" + deviceId + "_" + String(entityId) + "\",";
-    payload += "\"device\":" + getDeviceJson() + ",";
-    payload += "\"state_topic\":\"" + buildStateTopic(entityId) + "\",";
-    payload += "\"command_topic\":\"" + buildCommandTopic(entityId) + "\",";
-    payload += "\"availability_topic\":\"" + getAvailabilityTopic() + "\",";
+    payload += JSON_NAME;payload += "\"" + String(name) + "\",";
+    payload += JSON_UNIQUE_ID;payload += "\"" + deviceId + "_" + String(entityId) + "\",";
+    payload += JSON_DEVICE;payload += getDeviceJson() + ",";
+    payload += JSON_STATE_TOPIC;payload += "\"" + buildStateTopic(entityId) + "\",";
+    payload += JSON_COMMAND_TOPIC;payload += "\"" + buildCommandTopic(entityId) + "\",";
+    payload += JSON_AVAILABILITY_TOPIC;payload += "\"" + getAvailabilityTopic() + "\",";
     payload += "\"min\":" + String(min, 2) + ",";
     payload += "\"max\":" + String(max, 2) + ",";
     payload += "\"step\":" + String(step, 2) + ",";
     if (unit != nullptr && strlen(unit) > 0) {
-        payload += "\"unit_of_measurement\":\"" + String(unit) + "\",";
+        payload += JSON_UNIT;payload += "\"" + String(unit) + "\",";
     }
-    payload += "\"icon\":\"" + String(icon) + "\"";
+    payload += JSON_ICON;payload += "\"" + String(icon) + "\"";
     payload += "}";
     
-    Serial.printf("Publishing number '%s' (size: %d bytes)\n", entityId, payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
-    if (!result) {
-        Serial.printf("ERROR: Failed to publish number '%s'! Payload size: %d\n", entityId, payload.length());
-    }
     return result;
 }
 
@@ -159,41 +161,33 @@ bool HADiscovery::publishSelectDiscovery() {
     options += "]";
     
     String payload = "{";
-    payload += "\"name\":\"Image Source\",";
-    payload += "\"unique_id\":\"" + deviceId + "_image_source\",";
-    payload += "\"device\":" + getDeviceJson() + ",";
-    payload += "\"state_topic\":\"" + buildStateTopic("image_source") + "\",";
-    payload += "\"command_topic\":\"" + buildCommandTopic("image_source") + "\",";
-    payload += "\"availability_topic\":\"" + getAvailabilityTopic() + "\",";
+    payload += JSON_NAME;payload += "\"Image Source\",";
+    payload += JSON_UNIQUE_ID;payload += "\"" + deviceId + "_image_source\",";
+    payload += JSON_DEVICE;payload += getDeviceJson() + ",";
+    payload += JSON_STATE_TOPIC;payload += "\"" + buildStateTopic("image_source") + "\",";
+    payload += JSON_COMMAND_TOPIC;payload += "\"" + buildCommandTopic("image_source") + "\",";
+    payload += JSON_AVAILABILITY_TOPIC;payload += "\"" + getAvailabilityTopic() + "\",";
     payload += "\"options\":" + options + ",";
-    payload += "\"icon\":\"mdi:image-multiple\"";
+    payload += JSON_ICON;payload += "\"mdi:image-multiple\"";
     payload += "}";
     
-    Serial.printf("Publishing select 'image_source' (size: %d bytes)\n", payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
-    if (!result) {
-        Serial.printf("ERROR: Failed to publish select! Payload size: %d\n", payload.length());
-    }
     return result;
 }
 
 bool HADiscovery::publishButtonDiscovery(const char* entityId, const char* name, const char* icon) {
     String topic = buildDiscoveryTopic("button", entityId);
     String payload = "{";
-    payload += "\"name\":\"" + String(name) + "\",";
-    payload += "\"unique_id\":\"" + deviceId + "_" + String(entityId) + "\",";
-    payload += "\"device\":" + getDeviceJson() + ",";
-    payload += "\"command_topic\":\"" + buildCommandTopic(entityId) + "\",";
-    payload += "\"availability_topic\":\"" + getAvailabilityTopic() + "\",";
+    payload += JSON_NAME;payload += "\"" + String(name) + "\",";
+    payload += JSON_UNIQUE_ID;payload += "\"" + deviceId + "_" + String(entityId) + "\",";
+    payload += JSON_DEVICE;payload += getDeviceJson() + ",";
+    payload += JSON_COMMAND_TOPIC;payload += "\"" + buildCommandTopic(entityId) + "\",";
+    payload += JSON_AVAILABILITY_TOPIC;payload += "\"" + getAvailabilityTopic() + "\",";
     payload += "\"payload_press\":\"PRESS\",";
-    payload += "\"icon\":\"" + String(icon) + "\"";
+    payload += JSON_ICON;payload += "\"" + String(icon) + "\"";
     payload += "}";
     
-    Serial.printf("Publishing button '%s' (size: %d bytes)\n", entityId, payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
-    if (!result) {
-        Serial.printf("ERROR: Failed to publish button '%s'! Payload size: %d\n", entityId, payload.length());
-    }
     return result;
 }
 
@@ -202,25 +196,21 @@ bool HADiscovery::publishSensorDiscovery(const char* entityId, const char* name,
                                          const char* icon) {
     String topic = buildDiscoveryTopic("sensor", entityId);
     String payload = "{";
-    payload += "\"name\":\"" + String(name) + "\",";
-    payload += "\"unique_id\":\"" + deviceId + "_" + String(entityId) + "\",";
-    payload += "\"device\":" + getDeviceJson() + ",";
-    payload += "\"state_topic\":\"" + buildStateTopic(entityId) + "\",";
-    payload += "\"availability_topic\":\"" + getAvailabilityTopic() + "\",";
+    payload += JSON_NAME;payload += "\"" + String(name) + "\",";
+    payload += JSON_UNIQUE_ID;payload += "\"" + deviceId + "_" + String(entityId) + "\",";
+    payload += JSON_DEVICE;payload += getDeviceJson() + ",";
+    payload += JSON_STATE_TOPIC;payload += "\"" + buildStateTopic(entityId) + "\",";
+    payload += JSON_AVAILABILITY_TOPIC;payload += "\"" + getAvailabilityTopic() + "\",";
     if (unit != nullptr && strlen(unit) > 0) {
-        payload += "\"unit_of_measurement\":\"" + String(unit) + "\",";
+        payload += JSON_UNIT;payload += "\"" + String(unit) + "\",";
     }
     if (deviceClass != nullptr && strlen(deviceClass) > 0) {
-        payload += "\"device_class\":\"" + String(deviceClass) + "\",";
+        payload += JSON_DEVICE_CLASS;payload += "\"" + String(deviceClass) + "\",";
     }
-    payload += "\"icon\":\"" + String(icon) + "\"";
+    payload += JSON_ICON;payload += "\"" + String(icon) + "\"";
     payload += "}";
     
-    Serial.printf("Publishing sensor '%s' (size: %d bytes)\n", entityId, payload.length());
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
-    if (!result) {
-        Serial.printf("ERROR: Failed to publish sensor '%s'! Payload size: %d\n", entityId, payload.length());
-    }
     return result;
 }
 
@@ -284,11 +274,11 @@ bool HADiscovery::publishDiscovery() {
         return false;
     }
     
-    Serial.println("Publishing Home Assistant discovery messages...");
+    LOG_PRINTLN("Publishing Home Assistant discovery messages...");
     
     // Light entity (brightness)
     if (!publishLightDiscovery()) {
-        Serial.println("Failed to publish light discovery");
+        LOG_PRINTLN("Failed to publish light discovery");
         return false;
     }
     delay(50);
@@ -309,7 +299,6 @@ bool HADiscovery::publishDiscovery() {
     
     // Per-image transform entities
     if (!publishImageTransformEntities()) {
-        Serial.println("Failed to publish image transform entities");
         return false;
     }
     
@@ -339,7 +328,6 @@ bool HADiscovery::publishDiscovery() {
     if (!publishSensorDiscovery("image_count", "Image Count", "", "", "mdi:counter")) return false;
     delay(50);
     
-    Serial.println("Home Assistant discovery complete");
     return true;
 }
 
@@ -456,8 +444,6 @@ bool HADiscovery::publishSensors() {
     String imageCount = String(configStorage.getImageSourceCount());
     mqttClient->publish(buildStateTopic("image_count").c_str(), imageCount.c_str());
     
-    Serial.println("MQTT: Sensor data published to Home Assistant");
-    
     return true;
 }
 
@@ -479,8 +465,6 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     if (!configStorage.getHADiscoveryEnabled()) {
         return;
     }
-    
-    Serial.printf("HA Command - Topic: %s, Payload: %s\n", topic.c_str(), payload.c_str());
     
     // Extract entity name from topic (format: baseTopic/entity/set)
     int lastSlash = topic.lastIndexOf('/');
@@ -542,7 +526,6 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     }
     // Handle buttons
     else if (entity == "reboot" && payload == "PRESS") {
-        Serial.println("Reboot requested via Home Assistant");
         delay(100);
         ESP.restart();
     }
@@ -599,3 +582,4 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
         }
     }
 }
+

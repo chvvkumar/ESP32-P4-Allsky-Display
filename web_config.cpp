@@ -14,15 +14,15 @@ bool WebConfig::begin(int port) {
     if (serverRunning) return true;
     
     try {
-        Serial.printf("Creating WebServer on port %d...\n", port);
+        LOG_PRINTF("Creating WebServer on port %d...\n", port);
         server = new WebServer(port);
         
         if (!server) {
-            Serial.println("ERROR: Failed to allocate WebServer memory!");
+            LOG_PRINTLN("ERROR: Failed to allocate WebServer memory!");
             return false;
         }
         
-        Serial.println("Setting up routes...");
+        LOG_PRINTLN("Setting up routes...");
         
         // Setup routes
         server->on("/", [this]() { handleRoot(); });
@@ -32,6 +32,7 @@ bool WebConfig::begin(int port) {
         server->on("/config/sources", [this]() { handleImageSources(); });
         server->on("/config/display", [this]() { handleDisplayConfig(); });
         server->on("/config/advanced", [this]() { handleAdvancedConfig(); });
+        server->on("/config/commands", [this]() { handleSerialCommands(); });
         server->on("/status", [this]() { handleStatus(); });
         server->on("/api/save", HTTP_POST, [this]() { handleSaveConfig(); });
         server->on("/api/add-source", HTTP_POST, [this]() { handleAddImageSource(); });
@@ -46,23 +47,23 @@ bool WebConfig::begin(int port) {
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
         server->onNotFound([this]() { handleNotFound(); });
         
-        Serial.println("Starting WebServer...");
+        LOG_PRINTLN("Starting WebServer...");
         server->begin();
         
         if (!server) {
-            Serial.println("ERROR: WebServer failed to start!");
+            LOG_PRINTLN("ERROR: WebServer failed to start!");
             return false;
         }
         
         serverRunning = true;
-        Serial.printf("✓ Web configuration server started successfully on port %d\n", port);
+        LOG_PRINTF("✓ Web configuration server started successfully on port %d\n", port);
         return true;
         
     } catch (const std::exception& e) {
-        Serial.printf("ERROR: Exception starting web server: %s\n", e.what());
+        LOG_PRINTF("ERROR: Exception starting web server: %s\n", e.what());
         return false;
     } catch (...) {
-        Serial.println("ERROR: Unknown exception starting web server!");
+        LOG_PRINTLN("ERROR: Unknown exception starting web server!");
         return false;
     }
 }
@@ -143,6 +144,14 @@ void WebConfig::handleAdvancedConfig() {
     sendResponse(200, "text/html", html);
 }
 
+void WebConfig::handleSerialCommands() {
+    String html = generateHeader("Serial Commands");
+    html += generateNavigation("commands");
+    html += generateSerialCommandsPage();
+    html += generateFooter();
+    sendResponse(200, "text/html", html);
+}
+
 void WebConfig::handleStatus() {
     String json = getSystemStatus();
     sendResponse(200, "application/json", json);
@@ -173,6 +182,11 @@ String WebConfig::generateHeader(const String& title) {
     html += "<div class='status-badges'>";
     html += "<a href='https://github.com/chvvkumar/ESP32-P4-Allsky-Display' target='_blank' class='github-link'><i class='github-icon fa-github'></i> GitHub</a>";
     html += getConnectionStatus();
+    if (configStorage.getImageSourceCount() > 1) {
+        html += "<button type='button' class='github-link' style='cursor:pointer;border:none' onclick='nextImage(this)'><i class='fas fa-forward' style='margin-right:6px'></i> Next</button>";
+    }
+    html += "<button class='github-link' style='cursor:pointer;border:none;background:#3b82f6;border-color:#2563eb' onclick='restart()'><i class='fas fa-sync-alt' style='margin-right:6px'></i> Restart</button>";
+    html += "<button class='github-link' style='cursor:pointer;border:none;background:#ef4444;border-color:#dc2626' onclick='factoryReset()'><i class='fas fa-trash-alt' style='margin-right:6px'></i> Reset</button>";
     html += "</div></div></div></div>";
     
     return html;
@@ -181,11 +195,11 @@ String WebConfig::generateHeader(const String& title) {
 String WebConfig::generateNavigation(const String& currentPage) {
     String html = "<div class='nav'><div class='container'><div class='nav-content'>";
     
-    String pages[] = {"dashboard", "network", "mqtt", "image", "sources", "display", "advanced"};
-    String labels[] = {"🏠 Dashboard", "📡 Network", "🔗 MQTT", "🖼️ Single Image", "🔄 Multi-Image", "💡 Display", "⚙️ Advanced"};
-    String urls[] = {"/", "/config/network", "/config/mqtt", "/config/image", "/config/sources", "/config/display", "/config/advanced"};
+    String pages[] = {"dashboard", "network", "mqtt", "image", "sources", "display", "advanced", "commands"};
+    String labels[] = {"🏠 Dashboard", "📡 Network", "🔗 MQTT", "🖼️ Single Image", "🔄 Multi-Image", "💡 Display", "⚙️ Advanced", "📟 Commands"};
+    String urls[] = {"/", "/config/network", "/config/mqtt", "/config/image", "/config/sources", "/config/display", "/config/advanced", "/config/commands"};
     
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
         String activeClass = (currentPage == pages[i]) ? " active" : "";
         html += "<a href='" + urls[i] + "' class='nav-item" + activeClass + "'>" + labels[i] + "</a>";
     }

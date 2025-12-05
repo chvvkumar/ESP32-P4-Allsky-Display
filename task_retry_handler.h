@@ -3,7 +3,7 @@
 #define TASK_RETRY_HANDLER_H
 
 #include <Arduino.h>
-#include <vector>
+#include "config.h"
 
 // Task callback function type - returns true if task succeeded, false if it should retry
 typedef bool (*TaskCallback)();
@@ -58,7 +58,9 @@ struct RetryTask {
 
 class TaskRetryHandler {
 private:
-    std::vector<RetryTask> taskQueue;
+    static const int MAX_TASKS = 10;
+    RetryTask taskQueue[MAX_TASKS];
+    uint8_t taskCount;
     unsigned long lastProcessTime;
     static const unsigned long PROCESS_INTERVAL = 100;  // Check tasks every 100ms
     

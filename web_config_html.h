@@ -33,15 +33,15 @@ body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .modal-warning{border-left:4px solid #f59e0b}
 .header{background:#1e293b;padding:1rem 0;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3);border-bottom:1px solid #334155}
 .container{max-width:1200px;margin:0 auto;padding:0 1rem}
-.header-content{display:flex;justify-content:space-between;align-items:center;color:#f8fafc}
+.header-content{display:flex;justify-content:space-between;align-items:center;color:#f8fafc;flex-wrap:wrap;gap:1rem}
 .logo{font-size:1.5rem;font-weight:bold;color:#38bdf8;letter-spacing:-0.5px}
-.status-badges{display:flex;gap:0.5rem}
+.status-badges{display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center}
 .badge{padding:0.35rem 0.85rem;border-radius:9999px;font-size:0.75rem;font-weight:600;letter-spacing:0.5px;text-transform:uppercase}
 .badge.success{background:#059669;color:#ecfdf5}
 .badge.error{background:#dc2626;color:#fef2f2}
 .badge.warning{background:#d97706;color:#fffbeb}
-.github-link{display:flex;align-items:center;margin-right:1rem;padding:0.4rem 0.8rem;background:#334155;color:#e2e8f0;border-radius:8px;text-decoration:none;font-size:0.9rem;border:1px solid #475569;transition:all 0.2s ease}
-.github-link:hover{background:#475569;border-color:#64748b;transform:translateY(-1px)}
+.github-link{display:inline-flex;align-items:center;padding:0.5rem 0.9rem;background:#334155;color:#e2e8f0;border-radius:8px;text-decoration:none;font-size:0.85rem;border:1px solid #475569;transition:all 0.2s ease;white-space:nowrap;font-weight:500}
+.github-link:hover{background:#475569;border-color:#64748b;transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
 .github-link .github-icon{font-family:'Font Awesome 6 Brands';margin-right:0.4rem}
 .nav{background:#0f172a;padding:0;border-bottom:1px solid #334155;position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);background:rgba(15,23,42,0.95)}
 .nav-content{display:flex;gap:0.5rem;overflow-x:auto;padding:0.5rem 0}
@@ -85,6 +85,21 @@ body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .error{border-left:4px solid #ef4444}.warning{border-left:4px solid #f59e0b}.success{border-left:4px solid #10b981}
 .image-source-item{background:#0f172a !important;border:1px solid #334155 !important;padding:1.25rem !important}
 .transform-section{background:#1e293b !important;border:1px dashed #475569 !important}
+.text-muted{color:#94a3b8;font-size:0.85rem}
+.text-muted-sm{color:#94a3b8;font-size:0.9rem}
+.text-label{color:#64748b;font-size:0.85rem}
+.text-label-sm{color:#64748b;font-size:0.9rem}
+.text-cyan{color:#38bdf8}
+.text-cyan-sm{color:#38bdf8;font-size:0.9rem}
+.text-cyan-xs{color:#38bdf8;font-size:0.85rem}
+.text-white{color:#e2e8f0}
+.text-warning{color:#f59e0b}
+.text-light{color:#cbd5e1}
+.info-box{background:rgba(14,165,233,0.1);border:1px solid #0ea5e9;border-radius:8px;padding:1rem}
+.info-box-warn{background:rgba(245,158,11,0.1);border:1px solid #f59e0b;border-radius:8px;padding:1rem}
+.stat-info{display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b;border-radius:8px;margin-bottom:1rem}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.75rem;font-size:0.9rem;color:#94a3b8}
+.meta-info{margin-top:0.75rem;font-size:0.9rem;color:#94a3b8}
 )rawliteral";
 
 const char HTML_JAVASCRIPT[] PROGMEM = R"rawliteral(
@@ -104,7 +119,7 @@ function restart(){showConfirmModal('🔄 Restart Device','Are you sure you want
 function factoryReset(){showConfirmModal('🏭 Factory Reset','Are you sure you want to reset to factory defaults? This cannot be undone!',()=>{showConfirmModal('⚠️ Confirm Factory Reset','This will erase ALL your settings. Are you absolutely sure?',()=>{fetch('/api/factory-reset',{method:'POST'}).then(()=>{showModal('✓ Factory Reset','Device will restart now...','success');setTimeout(()=>location.reload(),5000)})})})}
 function addImageSource(btn){const url=prompt('Enter image URL:');if(url&&url.trim()){showButtonFeedback(btn,'loading','Adding...');const formData=new FormData();formData.append('url',url.trim());fetch('/api/add-source',{method:'POST',body:formData}).then(response=>response.json()).then(data=>{if(data.status==='success'){showButtonFeedback(btn,'success','Added!');setTimeout(()=>location.reload(),1000)}else{showButtonFeedback(btn,'error','Error: '+data.message)}}).catch(error=>{showButtonFeedback(btn,'error','Failed')})}}
 function removeImageSource(index,btn){showConfirmModal('🗑️ Remove Image Source','Are you sure you want to remove this image source?',()=>{showButtonFeedback(btn,'loading','Removing...');const formData=new FormData();formData.append('index',index);fetch('/api/remove-source',{method:'POST',body:formData}).then(response=>response.json()).then(data=>{if(data.status==='success'){showButtonFeedback(btn,'success','Removed!');setTimeout(()=>location.reload(),1000)}else{showButtonFeedback(btn,'error','Error')}}).catch(error=>{showButtonFeedback(btn,'error','Failed')})})}
-function updateImageSource(index,input){const url=input.value;const formData=new FormData();formData.append('index',index);formData.append('url',url);fetch('/api/update-source',{method:'POST',body:formData}).then(response=>response.json()).then(data=>{if(data.status!=='success'){showInputFeedback(input,'error')}else{showInputFeedback(input,'success')}}).catch(error=>{showInputFeedback(input,'error')})}
+function updateImageSource(index,input){const url=input.value;const formData=new FormData();formData.append('index',index);formData.append('url',url);const errorDiv=document.getElementById('imageError_'+index);if(errorDiv)errorDiv.style.display='none';fetch('/api/update-source',{method:'POST',body:formData}).then(response=>response.json()).then(data=>{if(data.status!=='success'){showInputFeedback(input,'error');if(data.message&&errorDiv){errorDiv.textContent='⚠️ '+data.message;errorDiv.style.display='block'}}else{showInputFeedback(input,'success');if(data.warning&&errorDiv){errorDiv.textContent='⚠️ WARNING: '+data.warning;errorDiv.style.display='block';errorDiv.style.borderLeftColor='#f59e0b';errorDiv.style.backgroundColor='rgba(245,158,11,0.1)'}}}).catch(error=>{showInputFeedback(input,'error')})}
 function clearAllSources(btn){showConfirmModal('🗑️ Clear All Sources','Are you sure you want to clear all image sources? This will reset to a single default source.',()=>{showButtonFeedback(btn,'loading','Clearing...');fetch('/api/clear-sources',{method:'POST'}).then(response=>response.json()).then(data=>{if(data.status==='success'){showButtonFeedback(btn,'success','Cleared!');setTimeout(()=>location.reload(),1000)}else{showButtonFeedback(btn,'error','Error')}}).catch(error=>{showButtonFeedback(btn,'error','Failed')})})}
 function toggleTransformSection(index){const section=document.getElementById('transformSection_'+index);if(section){section.style.display=section.style.display==='none'?'block':'none'}}
 function updateImageTransform(index,property,input){const value=input.value;const formData=new FormData();formData.append('index',index);formData.append('property',property);formData.append('value',value);fetch('/api/update-transform',{method:'POST',body:formData}).then(response=>response.json()).then(data=>{if(data.status!=='success'){showInputFeedback(input,'error')}else{showInputFeedback(input,'success')}}).catch(error=>{showInputFeedback(input,'error')})}

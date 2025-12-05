@@ -23,8 +23,6 @@ DisplayManager::~DisplayManager() {
 }
 
 bool DisplayManager::begin() {
-    Serial.println("Initializing display hardware...");
-    
     // Initialize display objects
     dsipanel = new Arduino_ESP32DSIPanel(
         display_cfg.hsync_pulse_width,
@@ -37,10 +35,9 @@ bool DisplayManager::begin() {
         display_cfg.lane_bit_rate);
     
     if (!dsipanel) {
-        Serial.println("ERROR: Failed to create DSI panel!");
+        LOG_PRINTLN("ERROR: Failed to create DSI panel!");
         return false;
     }
-    Serial.println("DSI panel created successfully");
     
     gfx = new Arduino_DSI_Display(
         display_cfg.width,
@@ -53,26 +50,21 @@ bool DisplayManager::begin() {
         display_cfg.init_cmds_size);
     
     if (!gfx) {
-        Serial.println("ERROR: Failed to create display object!");
+        LOG_PRINTLN("ERROR: Failed to create display object!");
         return false;
     }
-    Serial.println("Display object created successfully");
     
 #ifdef GFX_EXTRA_PRE_INIT
-    Serial.println("Running GFX_EXTRA_PRE_INIT");
     GFX_EXTRA_PRE_INIT();
 #endif
 
-    Serial.println("Starting display initialization...");
     if (!gfx->begin()) {
-        Serial.println("ERROR: Display init failed!");
+        LOG_PRINTLN("ERROR: Display init failed!");
         return false;
     }
-    Serial.println("Display initialized successfully!");
     
     displayWidth = gfx->width();
     displayHeight = gfx->height();
-    Serial.printf("Display size: %dx%d\n", displayWidth, displayHeight);
     
     // Clear screen and start debug output
     clearScreen();
@@ -108,8 +100,6 @@ int16_t DisplayManager::getHeight() const {
 bool DisplayManager::initBrightness() {
     if (brightnessInitialized) return true;
     
-    debugPrint("Initializing brightness control...", COLOR_YELLOW);
-    
     // Configure LEDC for backlight control using newer API
     if (ledcAttach(BACKLIGHT_PIN, BACKLIGHT_FREQ, BACKLIGHT_RESOLUTION) == 0) {
         debugPrint("ERROR: LEDC attach failed!", COLOR_RED);
@@ -118,13 +108,11 @@ bool DisplayManager::initBrightness() {
     
     // Get the default brightness from configuration storage
     displayBrightness = configStorage.getDefaultBrightness();
-    debugPrintf(COLOR_WHITE, "Using stored brightness: %d%%", displayBrightness);
     
     // Set initial brightness
     setBrightness(displayBrightness);
     brightnessInitialized = true;
     
-    debugPrint("Brightness control initialized!", COLOR_GREEN);
     return true;
 }
 
@@ -139,8 +127,6 @@ void DisplayManager::setBrightness(int brightness) {
     uint32_t duty = 1023 - ((1023 * brightness) / 100);
     
     ledcWrite(BACKLIGHT_PIN, duty);
-    
-    Serial.printf("Display brightness set to: %d%% (PWM duty: %d)\n", brightness, duty);
 }
 
 int DisplayManager::getBrightness() const {
@@ -150,8 +136,6 @@ int DisplayManager::getBrightness() const {
 void DisplayManager::debugPrint(const char* message, uint16_t color) {
     if (firstImageLoaded) return; // Don't show debug after first image loads
     if (!gfx) return;
-    
-    Serial.println(message); // Also print to serial
     
     gfx->setTextSize(DEBUG_TEXT_SIZE);
     gfx->setTextColor(color);
@@ -230,7 +214,6 @@ void DisplayManager::pauseDisplay() {
     
     // The LCD controller will pause reading from PSRAM when memory bus is saturated
     // This is handled at hardware level by the ESP32-P4 DSI controller
-    Serial.println("Display paused to reduce memory contention");
 }
 
 void DisplayManager::resumeDisplay() {
@@ -238,7 +221,6 @@ void DisplayManager::resumeDisplay() {
     if (!gfx) return;
     
     // Display automatically resumes when memory bandwidth becomes available
-    Serial.println("Display resumed - memory operations complete");
 }
 
 void DisplayManager::showSystemStatus() {

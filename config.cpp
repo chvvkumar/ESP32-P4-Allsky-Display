@@ -28,10 +28,11 @@ const char* IMAGE_URL = nullptr;
 // or when the configuration is reset to defaults.
 
 const char* DEFAULT_IMAGE_SOURCES[] = {
-    "http://allskypi5.lan/current/resized/image.jpg"      // Default source 1
+    "https://i.imgur.com/EtW1eaT.jpeg",                   // Default source 1
+    "https://i.imgur.com/k23xBF5.jpeg",                   // Default source 2
+    "https://i.imgur.com/BysRDbf.jpeg",                   // Default source 3
+    "http://allskypi5.lan/current/resized/image.jpg"      // Default source 4
     // Add more image URLs here as needed (up to MAX_IMAGE_SOURCES = 10)
-    // "https://your-server.com/camera/image4.jpg",
-    // "https://your-server.com/camera/image5.jpg",
 };
 
 const int DEFAULT_IMAGE_SOURCE_COUNT = sizeof(DEFAULT_IMAGE_SOURCES) / sizeof(DEFAULT_IMAGE_SOURCES[0]);
@@ -53,7 +54,7 @@ void initializeConfiguration() {
     
     // Check if this is first boot or configuration needs initialization
     if (!configStorage.hasStoredConfig()) {
-        Serial.println("First boot detected - initializing with default image sources");
+        LOG_PRINTLN("First boot detected - initializing with default image sources");
         
         // Clear any existing image sources
         configStorage.clearImageSources();
@@ -61,7 +62,7 @@ void initializeConfiguration() {
         // Load default image sources from config
         for (int i = 0; i < DEFAULT_IMAGE_SOURCE_COUNT; i++) {
             configStorage.addImageSource(String(DEFAULT_IMAGE_SOURCES[i]));
-            Serial.printf("Added default image source %d: %s\n", i+1, DEFAULT_IMAGE_SOURCES[i]);
+            LOG_PRINTF("Added default image source %d: %s\n", i+1, DEFAULT_IMAGE_SOURCES[i]);
         }
         
         // Set default cycling configuration
@@ -72,7 +73,7 @@ void initializeConfiguration() {
         // Save the default configuration
         configStorage.saveConfig();
         
-        Serial.printf("Initialized %d default image sources with cycling %s\n", 
+        LOG_PRINTF("Initialized %d default image sources with cycling %s\n", 
                      DEFAULT_IMAGE_SOURCE_COUNT,
                      DEFAULT_CYCLING_ENABLED ? "enabled" : "disabled");
     }
@@ -96,20 +97,20 @@ void initializeConfiguration() {
     MQTT_CLIENT_ID = mqttClientIDStr.c_str();
     IMAGE_URL = imageURLStr.c_str();
     
-    Serial.println("Configuration loaded from persistent storage");
+    LOG_PRINTLN("Configuration loaded from persistent storage");
     if (configStorage.hasStoredConfig()) {
-        Serial.println("Using stored configuration");
+        LOG_PRINTLN("Using stored configuration");
     } else {
-        Serial.println("Using default configuration (first boot)");
+        LOG_PRINTLN("Using default configuration (first boot)");
     }
     
     // Print current image source configuration
     int sourceCount = configStorage.getImageSourceCount();
-    Serial.printf("Current image sources: %d configured\n", sourceCount);
+    LOG_PRINTF("Current image sources: %d configured\n", sourceCount);
     for (int i = 0; i < sourceCount; i++) {
-        Serial.printf("  [%d] %s\n", i+1, configStorage.getImageSource(i).c_str());
+        LOG_PRINTF("  [%d] %s\n", i+1, configStorage.getImageSource(i).c_str());
     }
-    Serial.printf("Cycling: %s, Random: %s, Interval: %lu ms\n",
+    LOG_PRINTF("Cycling: %s, Random: %s, Interval: %lu ms\n",
                  configStorage.getCyclingEnabled() ? "enabled" : "disabled",
                  configStorage.getRandomOrder() ? "enabled" : "disabled",
                  configStorage.getCycleInterval());
@@ -118,5 +119,5 @@ void initializeConfiguration() {
 void reloadConfiguration() {
     // Reload configuration from storage (useful after web config changes)
     initializeConfiguration();
-    Serial.println("Configuration reloaded from storage");
+    LOG_PRINTLN("Configuration reloaded from storage");
 }

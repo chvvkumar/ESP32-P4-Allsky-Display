@@ -12,22 +12,41 @@ Check out the video below to see the display in action:
 
 ## 📋 Table of Contents
 
-- [Build Status](#build-status)
-- [Overview](#overview)
-- [Features](#features)
-- [Hardware Requirements](#hardware-requirements)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Home Assistant Integration](#home-assistant-integration)
-- [Troubleshooting](#troubleshooting)
+- [🚀 Build Status](#-build-status)
+- [🌟 Overview](#-overview)
+- [✨ Features](#-features)
+- [🛠️ Hardware Requirements](#️-hardware-requirements)
+- [📦 Installation](#-installation)
+  - [Prerequisites](#prerequisites)
+  - [Arduino IDE Setup](#arduino-ide-setup)
+  - [Initial Setup](#initial-setup)
+- [⚙️ Configuration](#️-configuration)
+  - [Web Interface](#web-interface)
+  - [Home Assistant MQTT Discovery](#home-assistant-mqtt-discovery)
+- [📷 Image Optimization for AllSky](#-image-optimization-for-allsky)
+  - [Automated Image Resizing Script](#automated-image-resizing-script)
+  - [Setup Options](#setup-options)
+- [🖥️ Web Configuration Interface](#️-web-configuration-interface)
+  - [Configuration Pages](#configuration-pages)
+  - [Home Assistant Integration](#home-assistant-integration)
+  - [Touch Controls](#touch-controls)
+  - [Serial Commands](#serial-commands)
+- [🐛 Troubleshooting](#-troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Debug Information](#debug-information)
 - [Contributing](#contributing)
+- [License](#license)
+- [Support](#support)
 
 ## 🚀 Build Status
 
 [![Arduino Compilation Check](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml/badge.svg)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml)
 [![Create Release](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/release.yml/badge.svg)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/release.yml)
+[![Memory Usage Analysis](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/memory-analysis.yml/badge.svg)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/memory-analysis.yml)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/chvvkumar/ESP32-P4-Allsky-Display)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
+
+![Flash Usage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/main/.github/badges/flash.json)
+![RAM Usage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/main/.github/badges/ram.json)
 
 ## 🌟 Overview
 
@@ -71,7 +90,7 @@ This project makes your ESP32-P4 touch display into an all-sky camera viewer wit
 
 **Optional 3D Printed Case:**
 
-<img src="images/Case.jpg" alt="3D Printed Case" width="400">
+<img src="images/Case.jpg" alt="3D Printed Case" width="600">
 
 [Download from Printables](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
 
@@ -281,4 +300,3 @@ Open source project. Check license file for details.
 - Create GitHub issues for bugs/features
 - Check troubleshooting section
 - Monitor serial output for debugging
-
