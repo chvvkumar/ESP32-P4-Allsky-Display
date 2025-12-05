@@ -11,26 +11,36 @@
 String WebConfig::generateMainPage() {
     String html = "<div class='main'><div class='container'>";
     
-    // System status cards
+    // Top row - Uptime and Image status cards
     html += "<div class='stats'>";
     html += "<div class='stat-card'><i class='fas fa-clock stat-icon'></i>";
     html += "<div class='stat-value'>" + formatUptime(millis()) + "</div>";
     html += "<div class='stat-label'>Uptime</div></div>";
     
-    html += "<div class='stat-card'><i class='fas fa-microchip stat-icon'></i>";
-    html += "<div class='stat-value'>" + formatBytes(systemMonitor.getCurrentFreeHeap()) + "</div>";
-    html += "<div class='stat-label'>Free Heap</div></div>";
+    html += "<div class='stat-card'><i class='fas fa-image stat-icon'></i>";
+    html += "<div class='stat-value'>" + String(configStorage.getCyclingEnabled() ? "Cycling" : "Single") + "</div>";
+    html += "<div class='stat-label'>Image Mode</div></div>";
     
-    html += "<div class='stat-card'><i class='fas fa-memory stat-icon'></i>";
-    html += "<div class='stat-value'>" + formatBytes(systemMonitor.getCurrentFreePsram()) + "</div>";
-    html += "<div class='stat-label'>Free PSRAM</div></div>";
-    
-    html += "<div class='stat-card'><i class='fas fa-sun stat-icon'></i>";
-    html += "<div class='stat-value'>" + String(displayManager.getBrightness()) + "%</div>";
-    html += "<div class='stat-label'>Brightness</div></div>";
+    if (configStorage.getCyclingEnabled()) {
+        html += "<div class='stat-card'><i class='fas fa-list stat-icon'></i>";
+        html += "<div class='stat-value'>" + String(configStorage.getCurrentImageIndex() + 1) + "/" + String(configStorage.getImageSourceCount()) + "</div>";
+        html += "<div class='stat-label'>Active Source</div></div>";
+        
+        html += "<div class='stat-card'><i class='fas fa-sync-alt stat-icon'></i>";
+        html += "<div class='stat-value'>" + String(configStorage.getCycleInterval() / 1000) + "s</div>";
+        html += "<div class='stat-label'>Cycle Time</div></div>";
+    } else {
+        html += "<div class='stat-card'><i class='fas fa-download stat-icon'></i>";
+        html += "<div class='stat-value'>" + String(configStorage.getUpdateInterval() / 1000 / 60) + "m</div>";
+        html += "<div class='stat-label'>Update Interval</div></div>";
+        
+        html += "<div class='stat-card'><i class='fas fa-sun stat-icon'></i>";
+        html += "<div class='stat-value'>" + String(displayManager.getBrightness()) + "%</div>";
+        html += "<div class='stat-label'>Brightness</div></div>";
+    }
     html += "</div>";
     
-    // Quick status cards
+    // Row 1: Connection Status - Network & MQTT
     html += "<div class='grid'>";
     
     // WiFi Status
@@ -62,6 +72,56 @@ String WebConfig::generateMainPage() {
         html += "<div style='flex:1'><p><span class='status-indicator status-offline'></span>Not connected</p></div>";
     }
     html += "</div>";
+    html += "</div>";
+    
+    // Row 2: Hardware Status - System & Display
+    html += "<div class='grid' style='margin-top:1.5rem'>";
+    
+    // System Info
+    html += "<div class='card'><h2>💻 System Information</h2>";
+    html += "<div style='display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.9rem;color:#94a3b8'>";
+    html += "<div><strong style='color:#64748b'>Chip:</strong><br>" + String(ESP.getChipModel()) + " rev" + String(ESP.getChipRevision()) + "</div>";
+    html += "<div><strong style='color:#64748b'>Cores:</strong><br>" + String(ESP.getChipCores()) + " @ " + String(ESP.getCpuFreqMHz()) + " MHz</div>";
+    html += "<div><strong style='color:#64748b'>Free Heap:</strong><br>" + formatBytes(systemMonitor.getCurrentFreeHeap()) + " / " + formatBytes(ESP.getHeapSize()) + "</div>";
+    html += "<div><strong style='color:#64748b'>Free PSRAM:</strong><br>" + formatBytes(systemMonitor.getCurrentFreePsram()) + " / " + formatBytes(ESP.getPsramSize()) + "</div>";
+    html += "<div><strong style='color:#64748b'>Temperature:</strong><br>" + String(temperatureRead(), 1) + "°C / " + String(temperatureRead() * 9.0 / 5.0 + 32.0, 1) + "°F</div>";
+    html += "<div><strong style='color:#64748b'>Health:</strong><br>" + String(systemMonitor.isSystemHealthy() ? "<span style='color:#10b981'>Healthy</span>" : "<span style='color:#ef4444'>Issues</span>") + "</div>";
+    html += "</div></div>";
+    
+    // Display Info
+    html += "<div class='card'><h2>🖥️ Display Information</h2>";
+    html += "<div style='display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.9rem;color:#94a3b8'>";
+    html += "<div><strong style='color:#64748b'>Resolution:</strong><br>" + String(displayManager.getWidth()) + " × " + String(displayManager.getHeight()) + "</div>";
+    html += "<div><strong style='color:#64748b'>Brightness:</strong><br>" + String(displayManager.getBrightness()) + "% " + String(configStorage.getBrightnessAutoMode() ? "(Auto)" : "(Manual)") + "</div>";
+    html += "<div><strong style='color:#64748b'>Backlight Freq:</strong><br>" + String(configStorage.getBacklightFreq()) + " Hz</div>";
+    html += "<div><strong style='color:#64748b'>Resolution:</strong><br>" + String(configStorage.getBacklightResolution()) + "-bit</div>";
+    html += "</div></div>";
+    
+    html += "</div>";
+    
+    // Row 3: Software Configuration - Firmware & Home Assistant
+    html += "<div class='grid' style='margin-top:1.5rem'>";
+    
+    // Firmware Info
+    html += "<div class='card'><h2>📦 Firmware Information</h2>";
+    html += "<div style='display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.9rem;color:#94a3b8'>";
+    html += "<div><strong style='color:#64748b'>SDK Version:</strong><br>" + String(ESP.getSdkVersion()) + "</div>";
+    html += "<div><strong style='color:#64748b'>Flash Size:</strong><br>" + formatBytes(ESP.getFlashChipSize()) + " @ " + String(ESP.getFlashChipSpeed() / 1000000) + " MHz</div>";
+    html += "<div><strong style='color:#64748b'>Sketch Size:</strong><br>" + formatBytes(ESP.getSketchSize()) + "</div>";
+    html += "<div><strong style='color:#64748b'>Free Space:</strong><br>" + formatBytes(ESP.getFreeSketchSpace()) + "</div>";
+    html += "<div style='grid-column:1/-1'><strong style='color:#64748b'>MD5:</strong><br><span style='font-family:monospace;font-size:0.8rem;word-break:break-all'>" + String(ESP.getSketchMD5()) + "</span></div>";
+    html += "</div></div>";
+    
+    // Home Assistant Info
+    html += "<div class='card'><h2>🏠 Home Assistant</h2>";
+    html += "<div style='font-size:0.9rem;color:#94a3b8'>";
+    html += "<p style='margin:0.5rem 0'><strong style='color:#64748b'>Discovery:</strong> " + String(configStorage.getHADiscoveryEnabled() ? "<span style='color:#10b981'>Enabled</span>" : "<span style='color:#64748b'>Disabled</span>") + "</p>";
+    html += "<p style='margin:0.5rem 0'><strong style='color:#64748b'>Device Name:</strong> " + escapeHtml(configStorage.getHADeviceName()) + "</p>";
+    html += "<p style='margin:0.5rem 0'><strong style='color:#64748b'>Discovery Prefix:</strong> " + escapeHtml(configStorage.getHADiscoveryPrefix()) + "</p>";
+    html += "<p style='margin:0.5rem 0'><strong style='color:#64748b'>State Topic:</strong> " + escapeHtml(configStorage.getHAStateTopic()) + "</p>";
+    html += "<p style='margin:0.5rem 0'><strong style='color:#64748b'>Update Interval:</strong> " + String(configStorage.getHASensorUpdateInterval() / 1000) + "s</p>";
+    html += "</div></div>";
+    
     html += "</div>";
     
     // Image Status - Configured Sources List
@@ -462,6 +522,351 @@ String WebConfig::generateSerialCommandsPage() {
     html += "<div style='background:rgba(245,158,11,0.1);border:1px solid #f59e0b;border-radius:8px;padding:1rem;margin-top:1rem'>";
     html += "<p style='color:#f59e0b;margin:0;font-size:0.9rem'><i class='fas fa-exclamation-triangle' style='margin-right:8px'></i><strong>Brightness:</strong> L and K commands take effect immediately but are NOT saved. Brightness settings persist only when changed via the web interface or MQTT.</p>";
     html += "</div></div>";
+    
+    html += "</div></div>";
+    return html;
+}
+
+String WebConfig::generateAPIReferencePage() {
+    String deviceUrl = "http://allskyesp32.lan:8080";
+    if (wifiManager.isConnected()) {
+        deviceUrl = "http://" + WiFi.localIP().toString() + ":8080";
+    }
+    
+    String html = "<div class='main'><div class='container'>";
+    
+    // Introduction
+    html += "<div class='card'>";
+    html += "<h1 style='color:#38bdf8;margin-bottom:1rem'>📚 API Reference</h1>";
+    html += "<p style='color:#94a3b8;font-size:1rem;line-height:1.8'>Complete REST API documentation for the ESP32 AllSky Display. ";
+    html += "All endpoints return JSON responses and support CORS for cross-origin requests.</p>";
+    html += "<div style='background:rgba(14,165,233,0.1);border:1px solid #0ea5e9;border-radius:8px;padding:1rem;margin-top:1rem'>";
+    html += "<p style='color:#38bdf8;margin:0'><strong>Base URL:</strong> <code style='background:#1e293b;padding:0.25rem 0.5rem;border-radius:4px;color:#10b981'>" + deviceUrl + "</code></p>";
+    html += "</div></div>";
+    
+    // GET Endpoints Section
+    html += "<div class='card'><h2 style='color:#10b981;border-bottom:2px solid #10b981;padding-bottom:0.5rem'>📥 GET Endpoints (Read Data)</h2>";
+    
+    // GET /api/info
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #10b981;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#10b981;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>GET</span>/api/info</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Get comprehensive device information including system status, network details, MQTT configuration, display settings, and all image sources.</p>";
+    
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Request Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0'>";
+    html += "curl -X GET " + deviceUrl + "/api/info</pre></div>";
+    
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Fields:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>firmware</code> - Sketch size, free space, MD5 hash</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>system</code> - Uptime, heap, PSRAM, CPU, flash, chip info, temperature (°C and °F)</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>network</code> - WiFi connection, IP, RSSI, MAC, hostname</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>mqtt</code> - Broker connection status and configuration</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>home_assistant</code> - HA discovery settings</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>display</code> - Resolution, brightness, backlight settings</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>image</code> - Cycling status, current URL, sources array with transformations</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>defaults</code> - Default transformation values</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>advanced</code> - Watchdog, thresholds, intervals</li>";
+    html += "</ul></div>";
+    
+    html += "<div>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Example (Partial):</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "{\n  \"firmware\": {\n    \"sketch_size\": 2359600,\n    \"free_sketch_space\": 15073296\n  },\n";
+    html += "  \"system\": {\n    \"uptime\": 31568,\n    \"free_heap\": 400828,\n    \"cpu_freq\": 360,\n    \"temperature_celsius\": 32.5,\n    \"temperature_fahrenheit\": 90.5,\n    \"chip_model\": \"ESP32-P4\"\n  },\n";
+    html += "  \"network\": {\n    \"connected\": true,\n    \"ssid\": \"MyWiFi\",\n    \"ip\": \"192.168.1.100\",\n    \"rssi\": -45\n  },\n";
+    html += "  \"image\": {\n    \"cycling_enabled\": true,\n    \"current_url\": \"http://...\",\n    \"current_index\": 0,\n    \"sources\": [\n      {\n        \"index\": 0,\n        \"url\": \"http://...\",\n        \"active\": true,\n        \"scale_x\": 1.0\n      }\n    ]\n  }\n}</pre>";
+    html += "</div></div>";
+    
+    // GET /status
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #10b981;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#10b981;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>GET</span>/status</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Get quick system status summary (lightweight version of /api/info).</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Fields:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>wifi_connected</code> - Boolean WiFi status</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>mqtt_connected</code> - Boolean MQTT status</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>free_heap</code> - Available heap memory in bytes</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>free_psram</code> - Available PSRAM in bytes</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>uptime</code> - Uptime in milliseconds</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>brightness</code> - Current display brightness (0-100)</li>";
+    html += "</ul></div></div>";
+    
+    html += "</div>"; // End GET endpoints card
+    
+    // POST Endpoints Section
+    html += "<div class='card'><h2 style='color:#f59e0b;border-bottom:2px solid #f59e0b;padding-bottom:0.5rem'>📤 POST Endpoints (Modify Settings)</h2>";
+    
+    // POST /api/save
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/save</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Save device configuration. Send form data with any combination of settings. Changes take effect immediately.</p>";
+    
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Accepted Parameters:</p>";
+    html += "<div style='display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.9rem'>";
+    html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>Network:</strong><br><code>wifi_ssid</code>, <code>wifi_password</code></div>";
+    html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>MQTT:</strong><br><code>mqtt_server</code>, <code>mqtt_port</code>, <code>mqtt_user</code>, <code>mqtt_password</code>, <code>mqtt_client_id</code></div>";
+    html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>Display:</strong><br><code>default_brightness</code>, <code>brightness_auto_mode</code></div>";
+    html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>Image:</strong><br><code>image_url</code>, <code>update_interval</code></div>";
+    html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>Cycling:</strong><br><code>cycling_enabled</code>, <code>cycle_interval</code>, <code>random_order</code></div>";
+    html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>Transform:</strong><br><code>default_scale_x</code>, <code>default_scale_y</code>, <code>default_offset_x</code>, <code>default_offset_y</code>, <code>default_rotation</code></div>";
+    html += "</div></div>";
+    
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Request Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/save \\\n  -d \"default_brightness=80\" \\\n  -d \"cycling_enabled=true\" \\\n  -d \"cycle_interval=30\"</pre></div>";
+    
+    html += "<div>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0'>";
+    html += "{\"status\":\"success\",\"message\":\"Configuration saved successfully\"}</pre>";
+    html += "</div></div>";
+    
+    // POST /api/add-source
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/add-source</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Add a new image source to the cycling list.</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Parameters:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>url</code> (required) - Full URL of the image to add</li></ul></div>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/add-source \\\n  -d \"url=http://example.com/allsky.jpg\"</pre></div>";
+    
+    // POST /api/remove-source
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/remove-source</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Remove an image source from the cycling list by index.</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Parameters:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>index</code> (required) - Zero-based index of the source to remove</li></ul></div>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/remove-source -d \"index=0\"</pre></div>";
+    
+    // POST /api/update-source
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/update-source</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Update the URL of an existing image source.</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Parameters:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>index</code> (required) - Zero-based index of the source</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>url</code> (required) - New URL for the source</li></ul></div>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/update-source \\\n  -d \"index=0\" \\\n  -d \"url=http://new-url.com/image.jpg\"</pre></div>";
+    
+    // POST /api/clear-sources
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/clear-sources</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Remove all image sources from the cycling list.</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/clear-sources</pre></div>";
+    
+    // POST /api/next-image
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/next-image</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Manually trigger switching to the next image in cycling mode.</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/next-image</pre></div>";
+    
+    // POST /api/update-transform
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/update-transform</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Update transformation settings for a specific image source.</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Parameters:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>index</code> (required) - Image source index</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>scale_x</code> (optional) - Horizontal scale factor</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>scale_y</code> (optional) - Vertical scale factor</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>offset_x</code> (optional) - Horizontal offset in pixels</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>offset_y</code> (optional) - Vertical offset in pixels</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>rotation</code> (optional) - Rotation angle in degrees</li>";
+    html += "</ul></div>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/update-transform \\\n  -d \"index=0\" \\\n  -d \"scale_x=1.2\" \\\n  -d \"scale_y=1.2\" \\\n  -d \"offset_x=10\" \\\n  -d \"offset_y=20\" \\\n  -d \"rotation=45\"</pre></div>";
+    
+    // POST /api/copy-defaults
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/copy-defaults</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Copy default transformation settings to a specific image source.</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Parameters:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>index</code> (required) - Image source index to update</li></ul></div>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/copy-defaults -d \"index=0\"</pre></div>";
+    
+    // POST /api/apply-transform
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/apply-transform</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Apply transformation settings and re-render the current image immediately.</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/apply-transform</pre></div>";
+    
+    // POST /api/restart
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #ef4444;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#ef4444;color:#fff;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/restart</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>⚠️ Restart the ESP32 device. Connection will be lost temporarily.</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/restart</pre></div>";
+    
+    // POST /api/factory-reset
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #ef4444;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#ef4444;color:#fff;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/factory-reset</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>⚠️ <strong>DANGER:</strong> Reset all settings to factory defaults. This will erase all configuration!</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/factory-reset</pre></div>";
+    
+    html += "</div>"; // End POST endpoints card
+    
+    // MQTT API Section
+    html += "<div class='card'><h2 style='color:#0ea5e9;border-bottom:2px solid #0ea5e9;padding-bottom:0.5rem'>🔗 MQTT API</h2>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Control the device via MQTT messages. All topics are prefixed with the configured state topic (default: <code>allsky_display</code>).</p>";
+    
+    html += "<div style='background:#0f172a;padding:1rem;border-radius:8px;margin-bottom:1rem'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'>Command Topics</h3>";
+    html += "<table style='width:100%;border-collapse:collapse'>";
+    html += "<thead><tr style='background:#1e293b;border-bottom:2px solid #334155'>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Topic</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Payload</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Description</th></tr></thead><tbody>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#10b981'><code>PREFIX/brightness/set</code></td>";
+    html += "<td style='padding:0.75rem'><code>0-100</code></td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Set display brightness</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#10b981'><code>PREFIX/cycling/set</code></td>";
+    html += "<td style='padding:0.75rem'><code>ON/OFF</code></td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Enable/disable image cycling</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#10b981'><code>PREFIX/next</code></td>";
+    html += "<td style='padding:0.75rem'><code>any</code></td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Switch to next image</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#10b981'><code>PREFIX/refresh</code></td>";
+    html += "<td style='padding:0.75rem'><code>any</code></td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Force refresh current image</td></tr>";
+    
+    html += "</tbody></table></div>";
+    
+    html += "<div style='background:#0f172a;padding:1rem;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'>State Topics (Published by Device)</h3>";
+    html += "<table style='width:100%;border-collapse:collapse'>";
+    html += "<thead><tr style='background:#1e293b;border-bottom:2px solid #334155'>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Topic</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Payload Type</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Description</th></tr></thead><tbody>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#10b981'><code>PREFIX/brightness</code></td>";
+    html += "<td style='padding:0.75rem'><code>number</code></td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Current brightness value</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#10b981'><code>PREFIX/cycling</code></td>";
+    html += "<td style='padding:0.75rem'><code>ON/OFF</code></td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Cycling mode status</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#10b981'><code>PREFIX/sensor/heap</code></td>";
+    html += "<td style='padding:0.75rem'><code>number</code></td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Free heap memory (bytes)</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#10b981'><code>PREFIX/sensor/psram</code></td>";
+    html += "<td style='padding:0.75rem'><code>number</code></td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Free PSRAM (bytes)</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#10b981'><code>PREFIX/sensor/wifi_signal</code></td>";
+    html += "<td style='padding:0.75rem'><code>number</code></td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>WiFi signal strength (dBm)</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#10b981'><code>PREFIX/sensor/uptime</code></td>";
+    html += "<td style='padding:0.75rem'><code>number</code></td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Device uptime (seconds)</td></tr>";
+    
+    html += "</tbody></table></div></div>";
+    
+    // Usage Examples
+    html += "<div class='card'><h2 style='color:#a855f7;border-bottom:2px solid #a855f7;padding-bottom:0.5rem'>💡 Usage Examples</h2>";
+    
+    html += "<div style='margin-top:1rem;padding:1rem;background:#0f172a;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.75rem'>Python Example</h3>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "import requests\n\n# Get all device info\nresponse = requests.get('" + deviceUrl + "/api/info')\ndata = response.json()\nprint(f\"Uptime: {data['system']['uptime']}ms\")\n\n";
+    html += "# Set brightness\nrequests.post('" + deviceUrl + "/api/save',\n              data={'default_brightness': 75})\n\n";
+    html += "# Add image source\nrequests.post('" + deviceUrl + "/api/add-source',\n              data={'url': 'http://example.com/sky.jpg'})</pre></div>";
+    
+    html += "<div style='margin-top:1rem;padding:1rem;background:#0f172a;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.75rem'>JavaScript Example</h3>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "// Get device info\nfetch('" + deviceUrl + "/api/info')\n  .then(res => res.json())\n  .then(data => {\n    console.log('Free Heap:', data.system.free_heap);\n    console.log('IP Address:', data.network.ip);\n  });\n\n";
+    html += "// Trigger next image\nfetch('" + deviceUrl + "/api/next-image', {method: 'POST'})\n  .then(res => res.json())\n  .then(data => console.log(data.message));</pre></div>";
+    
+    html += "<div style='margin-top:1rem;padding:1rem;background:#0f172a;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.75rem'>Home Assistant Automation Example</h3>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "automation:\n  - alias: \"Set AllSky Brightness at Night\"\n    trigger:\n      - platform: sun\n        event: sunset\n    action:\n      - service: rest_command.allsky_brightness\n        data:\n          brightness: 30\n\n";
+    html += "rest_command:\n  allsky_brightness:\n    url: " + deviceUrl + "/api/save\n    method: POST\n    payload: \"default_brightness={{ brightness }}\"</pre></div>";
+    
+    html += "</div>";
+    
+    // Response Codes
+    html += "<div class='card'><h2 style='color:#64748b;border-bottom:2px solid #64748b;padding-bottom:0.5rem'>📋 HTTP Response Codes</h2>";
+    html += "<table style='width:100%;border-collapse:collapse;margin-top:1rem'>";
+    html += "<thead><tr style='background:#1e293b;border-bottom:2px solid #334155'>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Code</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Meaning</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Description</th></tr></thead><tbody>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#10b981'><strong>200</strong></td>";
+    html += "<td style='padding:0.75rem'>OK</td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Request successful</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#f59e0b'><strong>400</strong></td>";
+    html += "<td style='padding:0.75rem'>Bad Request</td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Invalid parameters or missing required fields</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#ef4444'><strong>404</strong></td>";
+    html += "<td style='padding:0.75rem'>Not Found</td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Endpoint does not exist</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'>";
+    html += "<td style='padding:0.75rem;color:#ef4444'><strong>500</strong></td>";
+    html += "<td style='padding:0.75rem'>Internal Server Error</td>";
+    html += "<td style='padding:0.75rem;color:#94a3b8'>Server encountered an error processing the request</td></tr>";
+    
+    html += "</tbody></table></div>";
+    
+    // Notes
+    html += "<div class='card' style='background:rgba(14,165,233,0.1);border:2px solid #0ea5e9'>";
+    html += "<h2 style='color:#38bdf8;margin-bottom:1rem'>📝 Important Notes</h2>";
+    html += "<ul style='color:#94a3b8;line-height:2;margin-left:1.5rem'>";
+    html += "<li>All POST endpoints use <code>application/x-www-form-urlencoded</code> content type</li>";
+    html += "<li>Configuration changes via <code>/api/save</code> are persisted to flash memory</li>";
+    html += "<li>Brightness changes via <code>/api/save</code> apply immediately without restart</li>";
+    html += "<li>Network and MQTT settings require a restart to take effect</li>";
+    html += "<li>Maximum image size supported: <strong>724x724 pixels</strong> (1MB buffer)</li>";
+    html += "<li>Image transformations are per-source when cycling is enabled</li>";
+    html += "<li>MQTT topics depend on your configured state topic prefix</li>";
+    html += "<li>Home Assistant Discovery creates entities automatically when enabled</li>";
+    html += "</ul></div>";
     
     html += "</div></div>";
     return html;

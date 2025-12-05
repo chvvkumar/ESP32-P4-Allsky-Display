@@ -351,3 +351,141 @@ void WebConfig::reloadConfiguration() {
     randomOrderEnabled = configStorage.getRandomOrder();
     imageSourceCount = configStorage.getImageSourceCount();
 }
+
+void WebConfig::handleGetAllInfo() {
+    // Comprehensive device information API endpoint
+    String json = "{";
+    
+    // Firmware information
+    json += "\"firmware\":{";
+    json += "\"sketch_size\":" + String(ESP.getSketchSize()) + ",";
+    json += "\"free_sketch_space\":" + String(ESP.getFreeSketchSpace()) + ",";
+    json += "\"sketch_md5\":\"" + String(ESP.getSketchMD5()) + "\"";
+    json += "},";
+    
+    // System information
+    json += "\"system\":{";
+    json += "\"uptime\":" + String(millis()) + ",";
+    json += "\"uptime_seconds\":" + String(millis() / 1000) + ",";
+    json += "\"free_heap\":" + String(systemMonitor.getCurrentFreeHeap()) + ",";
+    json += "\"total_heap\":" + String(ESP.getHeapSize()) + ",";
+    json += "\"min_free_heap\":" + String(systemMonitor.getMinFreeHeap()) + ",";
+    json += "\"free_psram\":" + String(systemMonitor.getCurrentFreePsram()) + ",";
+    json += "\"total_psram\":" + String(ESP.getPsramSize()) + ",";
+    json += "\"min_free_psram\":" + String(systemMonitor.getMinFreePsram()) + ",";
+    json += "\"flash_size\":" + String(ESP.getFlashChipSize()) + ",";
+    json += "\"flash_speed\":" + String(ESP.getFlashChipSpeed()) + ",";
+    json += "\"chip_model\":\"" + String(ESP.getChipModel()) + "\",";
+    json += "\"chip_revision\":" + String(ESP.getChipRevision()) + ",";
+    json += "\"chip_cores\":" + String(ESP.getChipCores()) + ",";
+    json += "\"cpu_freq\":" + String(ESP.getCpuFreqMHz()) + ",";
+    json += "\"sdk_version\":\"" + String(ESP.getSdkVersion()) + "\",";
+    json += "\"temperature_celsius\":" + String(temperatureRead(), 1) + ",";
+    json += "\"temperature_fahrenheit\":" + String(temperatureRead() * 9.0 / 5.0 + 32.0, 1) + ",";
+    json += "\"healthy\":" + String(systemMonitor.isSystemHealthy() ? "true" : "false");
+    json += "},";
+    
+    // Network information
+    json += "\"network\":{";
+    json += "\"connected\":" + String(wifiManager.isConnected() ? "true" : "false") + ",";
+    if (wifiManager.isConnected()) {
+        json += "\"ssid\":\"" + escapeJson(String(WiFi.SSID())) + "\",";
+        json += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
+        json += "\"gateway\":\"" + WiFi.gatewayIP().toString() + "\",";
+        json += "\"dns\":\"" + WiFi.dnsIP().toString() + "\",";
+        json += "\"mac\":\"" + WiFi.macAddress() + "\",";
+        json += "\"rssi\":" + String(WiFi.RSSI()) + ",";
+        json += "\"hostname\":\"" + String(WiFi.getHostname()) + "\"";
+    } else {
+        json += "\"ssid\":null,";
+        json += "\"ip\":null,";
+        json += "\"gateway\":null,";
+        json += "\"dns\":null,";
+        json += "\"mac\":\"" + WiFi.macAddress() + "\",";
+        json += "\"rssi\":0,";
+        json += "\"hostname\":null";
+    }
+    json += "},";
+    
+    // MQTT information
+    json += "\"mqtt\":{";
+    json += "\"connected\":" + String(mqttManager.isConnected() ? "true" : "false") + ",";
+    json += "\"server\":\"" + escapeJson(configStorage.getMQTTServer()) + "\",";
+    json += "\"port\":" + String(configStorage.getMQTTPort()) + ",";
+    json += "\"client_id\":\"" + escapeJson(configStorage.getMQTTClientID()) + "\",";
+    json += "\"username\":\"" + escapeJson(configStorage.getMQTTUser()) + "\"";
+    json += "},";
+    
+    // Home Assistant Discovery information
+    json += "\"home_assistant\":{";
+    json += "\"discovery_enabled\":" + String(configStorage.getHADiscoveryEnabled() ? "true" : "false") + ",";
+    json += "\"device_name\":\"" + escapeJson(configStorage.getHADeviceName()) + "\",";
+    json += "\"discovery_prefix\":\"" + escapeJson(configStorage.getHADiscoveryPrefix()) + "\",";
+    json += "\"state_topic\":\"" + escapeJson(configStorage.getHAStateTopic()) + "\",";
+    json += "\"sensor_update_interval\":" + String(configStorage.getHASensorUpdateInterval());
+    json += "},";
+    
+    // Display information
+    json += "\"display\":{";
+    json += "\"width\":" + String(displayManager.getWidth()) + ",";
+    json += "\"height\":" + String(displayManager.getHeight()) + ",";
+    json += "\"brightness\":" + String(displayManager.getBrightness()) + ",";
+    json += "\"brightness_auto_mode\":" + String(configStorage.getBrightnessAutoMode() ? "true" : "false") + ",";
+    json += "\"backlight_freq\":" + String(configStorage.getBacklightFreq()) + ",";
+    json += "\"backlight_resolution\":" + String(configStorage.getBacklightResolution());
+    json += "},";
+    
+    // Image configuration
+    json += "\"image\":{";
+    json += "\"cycling_enabled\":" + String(configStorage.getCyclingEnabled() ? "true" : "false") + ",";
+    json += "\"update_interval\":" + String(configStorage.getUpdateInterval()) + ",";
+    json += "\"current_url\":\"" + escapeJson(configStorage.getCurrentImageURL()) + "\",";
+    
+    if (configStorage.getCyclingEnabled()) {
+        json += "\"cycle_interval\":" + String(configStorage.getCycleInterval()) + ",";
+        json += "\"random_order\":" + String(configStorage.getRandomOrder() ? "true" : "false") + ",";
+        json += "\"current_index\":" + String(configStorage.getCurrentImageIndex()) + ",";
+        json += "\"source_count\":" + String(configStorage.getImageSourceCount()) + ",";
+        json += "\"sources\":[";
+        int count = configStorage.getImageSourceCount();
+        for (int i = 0; i < count; i++) {
+            if (i > 0) json += ",";
+            json += "{";
+            json += "\"index\":" + String(i) + ",";
+            json += "\"url\":\"" + escapeJson(configStorage.getImageSource(i)) + "\",";
+            json += "\"active\":" + String(i == configStorage.getCurrentImageIndex() ? "true" : "false") + ",";
+            json += "\"scale_x\":" + String(configStorage.getImageScaleX(i), 4) + ",";
+            json += "\"scale_y\":" + String(configStorage.getImageScaleY(i), 4) + ",";
+            json += "\"offset_x\":" + String(configStorage.getImageOffsetX(i)) + ",";
+            json += "\"offset_y\":" + String(configStorage.getImageOffsetY(i)) + ",";
+            json += "\"rotation\":" + String(configStorage.getImageRotation(i), 4);
+            json += "}";
+        }
+        json += "]";
+    } else {
+        json += "\"url\":\"" + escapeJson(configStorage.getImageURL()) + "\"";
+    }
+    json += "},";
+    
+    // Default transformation settings
+    json += "\"defaults\":{";
+    json += "\"brightness\":" + String(configStorage.getDefaultBrightness()) + ",";
+    json += "\"scale_x\":" + String(configStorage.getDefaultScaleX(), 4) + ",";
+    json += "\"scale_y\":" + String(configStorage.getDefaultScaleY(), 4) + ",";
+    json += "\"offset_x\":" + String(configStorage.getDefaultOffsetX()) + ",";
+    json += "\"offset_y\":" + String(configStorage.getDefaultOffsetY()) + ",";
+    json += "\"rotation\":" + String(configStorage.getDefaultRotation(), 4);
+    json += "},";
+    
+    // Advanced settings
+    json += "\"advanced\":{";
+    json += "\"mqtt_reconnect_interval\":" + String(configStorage.getMQTTReconnectInterval()) + ",";
+    json += "\"watchdog_timeout\":" + String(configStorage.getWatchdogTimeout()) + ",";
+    json += "\"critical_heap_threshold\":" + String(configStorage.getCriticalHeapThreshold()) + ",";
+    json += "\"critical_psram_threshold\":" + String(configStorage.getCriticalPSRAMThreshold());
+    json += "}";
+    
+    json += "}";
+    
+    sendResponse(200, "application/json", json);
+}

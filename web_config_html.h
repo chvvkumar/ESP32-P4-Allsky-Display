@@ -11,7 +11,11 @@ const char HTML_CSS[] PROGMEM = R"rawliteral(
 @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css');
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background-color:#0f172a;color:#f8fafc;min-height:100vh;line-height:1.6;display:flex;flex-direction:column}
+body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background-color:#0f172a;color:#f8fafc;min-height:100vh;line-height:1.6;display:flex;flex-direction:column;overflow-x:hidden}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:#1e293b}
+::-webkit-scrollbar-thumb{background:#475569;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#64748b}
 .modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background-color:rgba(15,23,42,0.8);backdrop-filter:blur(4px)}
 .modal.show{display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
@@ -44,8 +48,8 @@ body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .github-link:hover{background:#475569;border-color:#64748b;transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
 .github-link .github-icon{font-family:'Font Awesome 6 Brands';margin-right:0.4rem}
 .nav{background:#0f172a;padding:0;border-bottom:1px solid #334155;position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);background:rgba(15,23,42,0.95)}
-.nav-content{display:flex;gap:0.5rem;overflow-x:auto;padding:0.5rem 0}
-.nav-item{padding:0.75rem 1.25rem;border-radius:8px;text-decoration:none;color:#94a3b8;white-space:nowrap;transition:all 0.2s ease;font-weight:500;font-size:0.95rem}
+.nav-content{display:flex;gap:0.35rem;padding:0.5rem 0;justify-content:center;overflow-x:auto;flex-wrap:nowrap}
+.nav-item{padding:0.6rem 0.9rem;border-radius:8px;text-decoration:none;color:#94a3b8;white-space:nowrap;transition:all 0.2s ease;font-weight:500;font-size:0.875rem;flex:0 0 auto}
 .nav-item:hover{background:#1e293b;color:#38bdf8}
 .nav-item.active{background:#1e293b;color:#38bdf8;box-shadow:inset 0 -2px 0 #38bdf8}
 .main{padding:2rem 0;flex:1}
@@ -74,14 +78,16 @@ body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .status-warning{background:#f59e0b;box-shadow:0 0 10px rgba(245,158,11,0.5)}
 .progress{background:#334155;border-radius:9999px;height:12px;overflow:hidden;border:none}
 .progress-bar{background:linear-gradient(90deg,#38bdf8,#0ea5e9);height:100%;transition:width 0.3s ease}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:2rem}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
 .stat-card{background:#1e293b;padding:1.5rem;border-radius:12px;text-align:center;color:#f8fafc;border:1px solid #334155;transition:transform 0.2s ease;position:relative;overflow:hidden}
 .stat-card:hover{transform:translateY(-2px);border-color:#475569;box-shadow:0 10px 15px -3px rgba(0,0,0,0.3)}
 .stat-value{font-size:2.25rem;font-weight:700;margin-bottom:0.25rem;color:#38bdf8;letter-spacing:-1px;position:relative;z-index:2}
 .stat-label{font-size:0.875rem;font-weight:500;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;position:relative;z-index:2}
 .stat-icon{position:absolute;right:10px;bottom:0px;font-size:4rem;opacity:0.05;color:#f8fafc;z-index:1;transform:rotate(-15deg)}
 .footer{text-align:center;padding:2rem 1rem;color:#64748b;border-top:1px solid #334155;margin-top:auto;font-size:0.9rem}
-@media(max-width:768px){.header-content{flex-direction:column;gap:1rem;text-align:center}.nav-content{justify-content:flex-start}.grid{grid-template-columns:1fr}}
+@media(max-width:1024px){.stats{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){.header-content{flex-direction:column;gap:1rem;text-align:center}.nav-item{padding:0.5rem 0.7rem;font-size:0.8rem}.grid{grid-template-columns:1fr}}
+@media(max-width:600px){.nav-item{padding:0.4rem 0.5rem;font-size:0.75rem}.stats{grid-template-columns:1fr}}
 .error{border-left:4px solid #ef4444}.warning{border-left:4px solid #f59e0b}.success{border-left:4px solid #10b981}
 .image-source-item{background:#0f172a !important;border:1px solid #334155 !important;padding:1.25rem !important}
 .transform-section{background:#1e293b !important;border:1px dashed #475569 !important}

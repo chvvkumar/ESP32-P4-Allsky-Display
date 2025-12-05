@@ -49,6 +49,8 @@ private:
     void handleRestart();
     void handleFactoryReset();
     void handleNotFound();
+    void handleAPIReference();
+    void handleGetAllInfo();
     
     // HTML generators
     String generateHeader(const String& title);
@@ -63,6 +65,7 @@ private:
     String generateAdvancedPage();
     String generateStatusPage();
     String generateSerialCommandsPage();
+    String generateAPIReferencePage();
     
     // Utility functions
     String getSystemStatus();
@@ -70,6 +73,7 @@ private:
     String formatBytes(size_t bytes);
     String getConnectionStatus();
     String escapeHtml(const String& input);
+    String escapeJson(const String& input);
     void sendResponse(int code, const String& contentType, const String& content);
     void applyImageSettings();
     void reloadConfiguration();
