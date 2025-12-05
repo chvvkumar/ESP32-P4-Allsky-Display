@@ -157,5 +157,4 @@ coverage.xml
 # Custom project specific ignores
 # Add any project-specific files you want to ignore below
 
-# Build and upload script
-compile-and-upload.ps1
+

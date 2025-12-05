@@ -36,6 +36,7 @@ private:
     void handleDisplayConfig();
     void handleAdvancedConfig();
     void handleSerialCommands();
+    void handleAPIReference();
     void handleStatus();
     void handleSaveConfig();
     void handleAddImageSource();
@@ -49,6 +50,7 @@ private:
     void handleApplyTransform();
     void handleRestart();
     void handleFactoryReset();
+    void handleDeviceInfo();
     void handleNotFound();
     
     // HTML generators
@@ -64,6 +66,7 @@ private:
     String generateAdvancedPage();
     String generateStatusPage();
     String generateSerialCommandsPage();
+    String generateAPIReferencePage();
     
     // Utility functions
     String getSystemStatus();

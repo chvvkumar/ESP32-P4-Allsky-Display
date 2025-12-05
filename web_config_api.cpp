@@ -363,3 +363,94 @@ void WebConfig::reloadConfiguration() {
     randomOrderEnabled = configStorage.getRandomOrder();
     imageSourceCount = configStorage.getImageSourceCount();
 }
+
+void WebConfig::handleDeviceInfo() {
+    String json = "{";
+    
+    // Device identification
+    json += "\"device\":{";
+    json += "\"name\":\"ESP32-P4 AllSky Display\",";
+    json += "\"chipModel\":\"ESP32-P4\",";
+    json += "\"chipRevision\":" + String(ESP.getChipRevision()) + ",";
+    json += "\"cpuCores\":" + String(ESP.getChipCores()) + ",";
+    json += "\"cpuFreqMHz\":" + String(ESP.getCpuFreqMHz()) + ",";
+    json += "\"sdkVersion\":\"" + String(ESP.getSdkVersion()) + "\",";
+    json += "\"arduinoVersion\":\"" + String(ARDUINO) + "\"";
+    json += "},";
+    
+    // Flash information
+    json += "\"flash\":{";
+    json += "\"size\":" + String(ESP.getFlashChipSize()) + ",";
+    json += "\"speed\":" + String(ESP.getFlashChipSpeed()) + ",";
+    json += "\"mode\":" + String(ESP.getFlashChipMode()) + ",";
+    json += "\"sketchSize\":" + String(ESP.getSketchSize()) + ",";
+    json += "\"sketchUsedPercent\":" + String((ESP.getSketchSize() * 100) / ESP.getFlashChipSize()) + ",";
+    json += "\"freeSketchSpace\":" + String(ESP.getFreeSketchSpace()) + ",";
+    json += "\"sketchMD5\":\"" + String(ESP.getSketchMD5()) + "\"";
+    json += "},";
+    
+    // Memory information
+    json += "\"memory\":{";
+    json += "\"heapSize\":" + String(ESP.getHeapSize()) + ",";
+    json += "\"freeHeap\":" + String(ESP.getFreeHeap()) + ",";
+    json += "\"heapUsedPercent\":" + String(100 - (ESP.getFreeHeap() * 100 / ESP.getHeapSize())) + ",";
+    json += "\"minFreeHeap\":" + String(systemMonitor.getMinFreeHeap()) + ",";
+    json += "\"maxAllocHeap\":" + String(ESP.getMaxAllocHeap()) + ",";
+    json += "\"psramSize\":" + String(ESP.getPsramSize()) + ",";
+    json += "\"freePsram\":" + String(ESP.getFreePsram()) + ",";
+    json += "\"psramUsedPercent\":" + String(100 - (ESP.getFreePsram() * 100 / ESP.getPsramSize())) + ",";
+    json += "\"minFreePsram\":" + String(systemMonitor.getMinFreePsram()) + ",";
+    json += "\"maxAllocPsram\":" + String(ESP.getMaxAllocPsram()) + "";
+    json += "},";
+    
+    // Network information
+    json += "\"network\":{";
+    json += "\"connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") + ",";
+    json += "\"ssid\":\"" + WiFi.SSID() + "\",";
+    json += "\"ipAddress\":\"" + WiFi.localIP().toString() + "\",";
+    json += "\"macAddress\":\"" + WiFi.macAddress() + "\",";
+    json += "\"rssi\":" + String(WiFi.RSSI()) + ",";
+    json += "\"gateway\":\"" + WiFi.gatewayIP().toString() + "\",";
+    json += "\"subnetMask\":\"" + WiFi.subnetMask().toString() + "\",";
+    json += "\"dnsIP\":\"" + WiFi.dnsIP().toString() + "\",";
+    json += "\"hostname\":\"" + String(WiFi.getHostname()) + "\"";
+    json += "},";
+    
+    // MQTT information
+    json += "\"mqtt\":{";
+    json += "\"connected\":" + String(mqttManager.isConnected() ? "true" : "false") + ",";
+    json += "\"server\":\"" + configStorage.getMQTTServer() + "\",";
+    json += "\"port\":" + String(configStorage.getMQTTPort()) + ",";
+    json += "\"clientId\":\"" + configStorage.getMQTTClientID() + "\",";
+    json += "\"haDiscoveryEnabled\":" + String(configStorage.getHADiscoveryEnabled() ? "true" : "false") + "";
+    json += "},";
+    
+    // Display information
+    json += "\"display\":{";
+    json += "\"brightness\":" + String(displayManager.getBrightness()) + ",";
+    json += "\"brightnessAutoMode\":" + String(configStorage.getBrightnessAutoMode() ? "true" : "false") + ",";
+    json += "\"width\":" + String(displayManager.getWidth()) + ",";
+    json += "\"height\":" + String(displayManager.getHeight()) + "";
+    json += "},";
+    
+    // Image cycling information
+    json += "\"imageCycling\":{";
+    json += "\"enabled\":" + String(configStorage.getCyclingEnabled() ? "true" : "false") + ",";
+    json += "\"currentIndex\":" + String(configStorage.getCurrentImageIndex()) + ",";
+    json += "\"totalSources\":" + String(configStorage.getImageSourceCount()) + ",";
+    json += "\"cycleIntervalMs\":" + String(configStorage.getCycleInterval()) + ",";
+    json += "\"updateIntervalMs\":" + String(configStorage.getUpdateInterval()) + ",";
+    json += "\"randomOrder\":" + String(configStorage.getRandomOrder() ? "true" : "false") + "";
+    json += "},";
+    
+    // System status
+    json += "\"system\":{";
+    json += "\"uptime\":" + String(millis()) + ",";
+    json += "\"healthy\":" + String(systemMonitor.isSystemHealthy() ? "true" : "false") + ",";
+    json += "\"temperature\":" + String(temperatureRead()) + "";
+    json += "}";
+    
+    json += "}";
+    
+    sendResponse(200, "application/json", json);
+}

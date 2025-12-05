@@ -35,7 +35,7 @@ void ConfigStorage::setDefaults() {
     config.haStateTopic = "allsky_display";
     config.haSensorUpdateInterval = 30; // 30 seconds
     
-    config.imageURL = "http://allskypi5.lan/current/resized/image.jpg";
+    config.imageURL = "https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg";
     
     // Multi-image cycling defaults using external config arrays
     config.cyclingEnabled = DEFAULT_CYCLING_ENABLED;

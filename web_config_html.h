@@ -44,8 +44,8 @@ body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .github-link:hover{background:#475569;border-color:#64748b;transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
 .github-link .github-icon{font-family:'Font Awesome 6 Brands';margin-right:0.4rem}
 .nav{background:#0f172a;padding:0;border-bottom:1px solid #334155;position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);background:rgba(15,23,42,0.95)}
-.nav-content{display:flex;gap:0.5rem;overflow-x:auto;padding:0.5rem 0}
-.nav-item{padding:0.75rem 1.25rem;border-radius:8px;text-decoration:none;color:#94a3b8;white-space:nowrap;transition:all 0.2s ease;font-weight:500;font-size:0.95rem}
+.nav-content{display:flex;gap:0.5rem;flex-wrap:wrap;padding:0.5rem 0}
+.nav-item{padding:0.65rem 1rem;border-radius:8px;text-decoration:none;color:#94a3b8;white-space:nowrap;transition:all 0.2s ease;font-weight:500;font-size:0.9rem}
 .nav-item:hover{background:#1e293b;color:#38bdf8}
 .nav-item.active{background:#1e293b;color:#38bdf8;box-shadow:inset 0 -2px 0 #38bdf8}
 .main{padding:2rem 0;flex:1}

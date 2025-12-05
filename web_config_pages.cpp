@@ -499,3 +499,181 @@ String WebConfig::generateSerialCommandsPage() {
     html += "</div></div>";
     return html;
 }
+
+String WebConfig::generateAPIReferencePage() {
+    String deviceIP = WiFi.localIP().toString();
+    String html = "<div class='main'><div class='container'>";
+    
+    html += "<div class='card'><h2><i class='fas fa-plug'></i> API Reference</h2>";
+    html += "<p class='text-muted'>REST API for programmatic control of the ESP32 AllSky Display. All endpoints accept POST requests.</p>";
+    html += "<div class='info-box' style='margin-top:1rem'>";
+    html += "<p style='margin:0'><strong>Base URL:</strong> <code style='background:#0f172a;padding:4px 8px;border-radius:4px;color:#38bdf8'>http://" + deviceIP + ":8080/api/</code></p>";
+    html += "</div></div>";
+    
+    // Configuration Management
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-cog'></i> Configuration Management</h3>";
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/save</h4>";
+    html += "<p class='text-muted-sm'>Save configuration settings. Changes to WiFi or MQTT may require restart.</p>";
+    html += "<div style='margin-top:1rem'><strong class='text-label'>Parameters:</strong></div>";
+    html += "<ul style='margin:0.5rem 0 0 1.5rem;color:#cbd5e1;font-size:0.9rem'>";
+    html += "<li><code>wifi_ssid</code>, <code>wifi_password</code> - Network credentials</li>";
+    html += "<li><code>mqtt_server</code>, <code>mqtt_port</code>, <code>mqtt_user</code>, <code>mqtt_password</code> - MQTT broker settings</li>";
+    html += "<li><code>default_brightness</code> - Display brightness (0-255)</li>";
+    html += "<li><code>default_scale_x/y</code>, <code>default_offset_x/y</code>, <code>default_rotation</code> - Image transforms</li>";
+    html += "<li><code>cycle_interval</code> - Seconds between images</li>";
+    html += "</ul>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/save -d \"default_brightness=200\"</code>";
+    html += "</div></div></div>";
+    
+    // Image Source Management
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-images'></i> Image Source Management</h3>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/add-source</h4>";
+    html += "<p class='text-muted-sm'>Add a new image source to the cycle.</p>";
+    html += "<div style='margin-top:0.5rem'><strong class='text-label'>Parameters:</strong> <code>url</code> - Image URL</div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/add-source -d \"url=https://example.com/image.jpg\"</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/remove-source</h4>";
+    html += "<p class='text-muted-sm'>Remove an image source by index.</p>";
+    html += "<div style='margin-top:0.5rem'><strong class='text-label'>Parameters:</strong> <code>index</code> - Image index (0-based)</div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/remove-source -d \"index=2\"</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/update-source</h4>";
+    html += "<p class='text-muted-sm'>Update an existing image source URL.</p>";
+    html += "<div style='margin-top:0.5rem'><strong class='text-label'>Parameters:</strong> <code>index</code>, <code>url</code></div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/update-source -d \"index=0&url=https://new.com/image.jpg\"</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/clear-sources</h4>";
+    html += "<p class='text-muted-sm'>Remove all image sources.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/clear-sources</code>";
+    html += "</div></div></div>";
+    
+    // Image Navigation
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-arrows-alt-h'></i> Image Navigation</h3>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/next-image</h4>";
+    html += "<p class='text-muted-sm'>Advance to the next image in the cycle.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/next-image</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/previous-image</h4>";
+    html += "<p class='text-muted-sm'>Go back to the previous image.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/previous-image</code>";
+    html += "</div></div></div>";
+    
+    // Image Transformations
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-vector-square'></i> Image Transformations</h3>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/update-transform</h4>";
+    html += "<p class='text-muted-sm'>Update transformation settings for a specific image.</p>";
+    html += "<div style='margin-top:0.5rem'><strong class='text-label'>Parameters:</strong> <code>index</code>, <code>scale_x</code>, <code>scale_y</code>, <code>offset_x</code>, <code>offset_y</code>, <code>rotation</code></div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/update-transform -d \"index=0&scale_x=1.2&scale_y=1.2\"</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/copy-defaults</h4>";
+    html += "<p class='text-muted-sm'>Copy default transformation settings to a specific image.</p>";
+    html += "<div style='margin-top:0.5rem'><strong class='text-label'>Parameters:</strong> <code>index</code> - Target image index</div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/copy-defaults -d \"index=1\"</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/apply-transform</h4>";
+    html += "<p class='text-muted-sm'>Apply transformation changes and refresh the display immediately.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/apply-transform</code>";
+    html += "</div></div></div>";
+    
+    // System Control
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-power-off'></i> System Control</h3>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/restart</h4>";
+    html += "<p class='text-muted-sm'>Reboot the ESP32 device.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/restart</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/factory-reset</h4>";
+    html += "<p class='text-muted-sm'>Reset all settings to factory defaults and reboot.</p>";
+    html += "<div class='info-box-warn' style='margin-top:0.5rem;margin-bottom:1rem'>";
+    html += "<p style='margin:0;font-size:0.85rem'><i class='fas fa-exclamation-triangle'></i> <strong>Warning:</strong> This will erase all configuration!</p>";
+    html += "</div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/factory-reset</code>";
+    html += "</div></div></div>";
+    
+    // Device Information
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-microchip'></i> Device Information</h3>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>GET /api/device-info</h4>";
+    html += "<p class='text-muted-sm'>Get comprehensive device information including hardware specs, memory usage, flash metrics, network status, and system health.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl http://" + deviceIP + ":8080/api/device-info</code>";
+    html += "</div>";
+    html += "<div style='margin-top:1rem'><strong class='text-label'>Response includes:</strong></div>";
+    html += "<ul style='margin:0.5rem 0 0 1.5rem;color:#cbd5e1;font-size:0.9rem'>";
+    html += "<li><strong>device</strong> - Chip model, revision, CPU cores/frequency, SDK version</li>";
+    html += "<li><strong>flash</strong> - Size, speed, sketch size, usage percentage, free space, MD5</li>";
+    html += "<li><strong>memory</strong> - Heap and PSRAM size, free/used amounts, min free values</li>";
+    html += "<li><strong>network</strong> - WiFi status, SSID, IP, MAC, RSSI, gateway, DNS</li>";
+    html += "<li><strong>mqtt</strong> - Connection status, server, port, client ID, HA discovery</li>";
+    html += "<li><strong>display</strong> - Brightness, auto mode, resolution</li>";
+    html += "<li><strong>imageCycling</strong> - Status, current index, sources, intervals</li>";
+    html += "<li><strong>system</strong> - Uptime, health status, temperature</li>";
+    html += "</ul></div></div>";
+    
+    // Response Format
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-code'></i> Response Format</h3>";
+    html += "<p class='text-muted'>All API endpoints return JSON responses.</p>";
+    
+    html += "<div style='margin-top:1rem'><strong style='color:#10b981'>Success Response:</strong></div>";
+    html += "<pre style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;overflow-x:auto;margin-top:0.5rem'><code style='color:#94a3b8'>{\"status\": \"success\", \"message\": \"Operation completed\"}</code></pre>";
+    
+    html += "<div style='margin-top:1rem'><strong style='color:#ef4444'>Error Response:</strong></div>";
+    html += "<pre style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;overflow-x:auto;margin-top:0.5rem'><code style='color:#94a3b8'>{\"status\": \"error\", \"message\": \"Error description\"}</code></pre>";
+    html += "</div>";
+    
+    // Integration Examples
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-puzzle-piece'></i> Integration Examples</h3>";
+    
+    html += "<div style='margin-bottom:1.5rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.75rem'>Python Script</h4>";
+    html += "<pre style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;overflow-x:auto;font-size:0.85rem'><code style='color:#94a3b8'>import requests\nimport json\n\ndevice_ip = \"" + deviceIP + "\"\nbase_url = f\"http://{device_ip}:8080/api\"\n\n# Get device information\ninfo = requests.get(f\"{base_url}/device-info\").json()\nprint(f\"Device: {info['device']['chipModel']}\")\nprint(f\"Flash used: {info['flash']['sketchUsedPercent']}%\")\nprint(f\"Free heap: {info['memory']['freeHeap']} bytes\")\n\n# Set brightness\nrequests.post(f\"{base_url}/save\", data={\"default_brightness\": 200})\n\n# Add image source\nrequests.post(f\"{base_url}/add-source\", \n              data={\"url\": \"https://example.com/image.jpg\"})\n\n# Next image\nrequests.post(f\"{base_url}/next-image\")</code></pre>";
+    html += "</div>";
+    
+    html += "<div style='margin-bottom:1.5rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.75rem'>Home Assistant Automation</h4>";
+    html += "<pre style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;overflow-x:auto;font-size:0.85rem'><code style='color:#94a3b8'>automation:\n  - alias: \"Next Image at Sunset\"\n    trigger:\n      - platform: sun\n        event: sunset\n    action:\n      - service: rest_command.display_next\n\nrest_command:\n  display_next:\n    url: \"http://" + deviceIP + ":8080/api/next-image\"\n    method: POST</code></pre>";
+    html += "</div>";
+    
+    html += "<div>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.75rem'>cURL Examples</h4>";
+    html += "<pre style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;overflow-x:auto;font-size:0.85rem'><code style='color:#94a3b8'># Windows PowerShell\nInvoke-WebRequest -Method POST -Uri \"http://" + deviceIP + ":8080/api/next-image\"\n\n# Linux/Mac\ncurl -X POST http://" + deviceIP + ":8080/api/next-image\n\n# With parameters\ncurl -X POST http://" + deviceIP + ":8080/api/save \\\n  -d \"default_brightness=200\" \\\n  -d \"cycle_interval=30\"</code></pre>";
+    html += "</div></div>";
+    
+    html += "</div></div>";
+    return html;
+}
