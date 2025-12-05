@@ -85,6 +85,21 @@ body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .error{border-left:4px solid #ef4444}.warning{border-left:4px solid #f59e0b}.success{border-left:4px solid #10b981}
 .image-source-item{background:#0f172a !important;border:1px solid #334155 !important;padding:1.25rem !important}
 .transform-section{background:#1e293b !important;border:1px dashed #475569 !important}
+.text-muted{color:#94a3b8;font-size:0.85rem}
+.text-muted-sm{color:#94a3b8;font-size:0.9rem}
+.text-label{color:#64748b;font-size:0.85rem}
+.text-label-sm{color:#64748b;font-size:0.9rem}
+.text-cyan{color:#38bdf8}
+.text-cyan-sm{color:#38bdf8;font-size:0.9rem}
+.text-cyan-xs{color:#38bdf8;font-size:0.85rem}
+.text-white{color:#e2e8f0}
+.text-warning{color:#f59e0b}
+.text-light{color:#cbd5e1}
+.info-box{background:rgba(14,165,233,0.1);border:1px solid #0ea5e9;border-radius:8px;padding:1rem}
+.info-box-warn{background:rgba(245,158,11,0.1);border:1px solid #f59e0b;border-radius:8px;padding:1rem}
+.stat-info{display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b;border-radius:8px;margin-bottom:1rem}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.75rem;font-size:0.9rem;color:#94a3b8}
+.meta-info{margin-top:0.75rem;font-size:0.9rem;color:#94a3b8}
 )rawliteral";
 
 const char HTML_JAVASCRIPT[] PROGMEM = R"rawliteral(

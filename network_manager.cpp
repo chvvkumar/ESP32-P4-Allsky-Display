@@ -17,7 +17,7 @@ WiFiManager::WiFiManager() :
 bool WiFiManager::begin() {
     // Check WiFi credentials
     if (strlen(WIFI_SSID) == 0) {
-        Serial.println("ERROR: WiFi SSID is empty - please configure in config.cpp!");
+        LOG_PRINTLN("ERROR: WiFi SSID is empty - please configure in config.cpp!");
         if (debugPrintFunc) debugPrintFunc("ERROR: WiFi SSID not configured", COLOR_RED);
         return false;
     }
@@ -61,10 +61,10 @@ void WiFiManager::connectToWiFi() {
     
     if (WiFi.status() == WL_CONNECTED) {
         wifiConnected = true;
-        Serial.printf("WiFi connected! IP: %s\n", WiFi.localIP().toString().c_str());
+        LOG_PRINTF("WiFi connected! IP: %s\n", WiFi.localIP().toString().c_str());
     } else {
         wifiConnected = false;
-        Serial.printf("WiFi failed (status: %d)\n", WiFi.status());
+        LOG_PRINTF("WiFi failed (status: %d)\n", WiFi.status());
         
         // Disconnect to clean up any partial connection state
         WiFi.disconnect();
@@ -82,7 +82,7 @@ void WiFiManager::checkConnection() {
     if (currentStatus != wifiConnected) {
         wifiConnected = currentStatus;
         if (!currentStatus) {
-            Serial.println("WiFi disconnected!");
+            LOG_PRINTLN("WiFi disconnected!");
         }
     }
 }
@@ -125,15 +125,15 @@ void WiFiManager::update() {
 }
 
 void WiFiManager::printConnectionInfo() {
-    Serial.println("=== WiFi Connection Info ===");
-    Serial.printf("Status: %s\n", isConnected() ? "Connected" : "Disconnected");
+    LOG_PRINTLN("=== WiFi Connection Info ===");
+    LOG_PRINTF("Status: %s\n", isConnected() ? "Connected" : "Disconnected");
     if (isConnected()) {
-        Serial.printf("SSID: %s\n", WiFi.SSID().c_str());
-        Serial.printf("IP Address: %s\n", getIPAddress().c_str());
-        Serial.printf("Signal Strength: %d dBm\n", getSignalStrength());
-        Serial.printf("MAC Address: %s\n", getMACAddress().c_str());
-        Serial.printf("Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
-        Serial.printf("DNS: %s\n", WiFi.dnsIP().toString().c_str());
+        LOG_PRINTF("SSID: %s\n", WiFi.SSID().c_str());
+        LOG_PRINTF("IP Address: %s\n", getIPAddress().c_str());
+        LOG_PRINTF("Signal Strength: %d dBm\n", getSignalStrength());
+        LOG_PRINTF("MAC Address: %s\n", getMACAddress().c_str());
+        LOG_PRINTF("Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+        LOG_PRINTF("DNS: %s\n", WiFi.dnsIP().toString().c_str());
     }
-    Serial.println("============================");
+    LOG_PRINTLN("============================");
 }

@@ -159,13 +159,13 @@ void setup() {
     
     // Initialize system monitor
     if (!systemMonitor.begin()) {
-        Serial.println("CRITICAL: System monitor initialization failed!");
+        LOG_PRINTLN("CRITICAL: System monitor initialization failed!");
         while(1) delay(1000);
     }
     
     // Initialize display manager
     if (!displayManager.begin()) {
-        Serial.println("CRITICAL: Display initialization failed!");
+        LOG_PRINTLN("CRITICAL: Display initialization failed!");
         while(1) delay(1000);
     }
     
@@ -405,25 +405,25 @@ void renderFullImage() {
 
 void downloadAndDisplayImage() {
     // Immediate debug output with Serial.println to ensure it shows up
-    Serial.println("=== DOWNLOADANDDISPLAYIMAGE FUNCTION START ===");
+    LOG_PRINTLN("=== DOWNLOADANDDISPLAYIMAGE FUNCTION START ===");
     Serial.flush();
     
     // Reset watchdog at function start
     systemMonitor.forceResetWatchdog();
     
-    Serial.println("DEBUG: Watchdog reset complete");
+    LOG_PRINTLN("DEBUG: Watchdog reset complete");
     Serial.flush();
     
     // Enhanced network connectivity check
     if (!wifiManager.isConnected()) {
-        Serial.println("ERROR: No WiFi connection");
+        LOG_PRINTLN("ERROR: No WiFi connection");
         Serial.flush();
         systemMonitor.forceResetWatchdog();
         return;
     }
     
     // Additional network health check - ping gateway or DNS
-    Serial.println("DEBUG: Performing network health check...");
+    LOG_PRINTLN("DEBUG: Performing network health check...");
     Serial.flush();
     
     // Test network connectivity with a simple ping-like operation
@@ -437,27 +437,27 @@ void downloadAndDisplayImage() {
     if (testClient.connect("8.8.8.8", 53)) {  // Google DNS
         testClient.stop();
         networkHealthy = true;
-        Serial.println("DEBUG: Network health check passed");
+        LOG_PRINTLN("DEBUG: Network health check passed");
     } else {
-        Serial.printf("DEBUG: Network health check failed after %lu ms\n", millis() - networkTestStart);
+        LOG_PRINTF("DEBUG: Network health check failed after %lu ms\n", millis() - networkTestStart);
     }
     
     systemMonitor.forceResetWatchdog();
     
     if (!networkHealthy) {
-        Serial.println("WARNING: Network appears unhealthy, proceeding with caution");
+        LOG_PRINTLN("WARNING: Network appears unhealthy, proceeding with caution");
         debugPrint("WARNING: Network connectivity issues detected", COLOR_YELLOW);
     }
     
-    Serial.println("DEBUG: WiFi connection check passed");
+    LOG_PRINTLN("DEBUG: WiFi connection check passed");
     Serial.flush();
     
     // Get current image URL based on cycling configuration
     String imageURL = getCurrentImageURL();
     
-    Serial.println("DEBUG: About to get current image URL");
+    LOG_PRINTLN("DEBUG: About to get current image URL");
     Serial.flush();
-    Serial.printf("DEBUG: Current image URL: %s\n", imageURL.c_str());
+    LOG_PRINTF("DEBUG: Current image URL: %s\n", imageURL.c_str());
     Serial.flush();
 
     Serial.flush();
@@ -539,8 +539,8 @@ void downloadAndDisplayImage() {
     try {
         httpCode = http.GET();
         // Debug: Print the response code and final URL after redirects
-        Serial.printf("DEBUG: HTTP response code: %d\n", httpCode);
-        Serial.printf("DEBUG: Final URL after redirects: %s\n", http.getLocation().c_str());
+        LOG_PRINTF("DEBUG: HTTP response code: %d\n", httpCode);
+        LOG_PRINTF("DEBUG: Final URL after redirects: %s\n", http.getLocation().c_str());
     } catch (...) {
         debugPrint("ERROR: Exception during HTTP GET", COLOR_RED);
         http.end();
@@ -701,12 +701,12 @@ void downloadAndDisplayImage() {
     http.end();
     systemMonitor.forceResetWatchdog();
     
-    Serial.printf("DEBUG: Download complete - Read %d bytes (expected %d)\n", bytesRead, size);
+    LOG_PRINTF("DEBUG: Download complete - Read %d bytes (expected %d)\n", bytesRead, size);
     
     // Validate download completeness
     if (bytesRead < size) {
         debugPrintf(COLOR_RED, "Incomplete download: %d/%d bytes", bytesRead, size);
-        Serial.printf("ERROR: Incomplete download: %d/%d bytes\n", bytesRead, size);
+        LOG_PRINTF("ERROR: Incomplete download: %d/%d bytes\n", bytesRead, size);
         systemMonitor.forceResetWatchdog();
         return;
     }
@@ -714,12 +714,12 @@ void downloadAndDisplayImage() {
     // Additional validation: ensure we have enough data for JPEG processing
     if (bytesRead < 1024) {  // Minimum reasonable JPEG size
         debugPrintf(COLOR_RED, "Downloaded data too small: %d bytes", bytesRead);
-        Serial.printf("ERROR: Downloaded data too small: %d bytes (minimum 1024)\n", bytesRead);
+        LOG_PRINTF("ERROR: Downloaded data too small: %d bytes (minimum 1024)\n", bytesRead);
         systemMonitor.forceResetWatchdog();
         return;
     }
     
-    Serial.println("DEBUG: Size validation passed");
+    LOG_PRINTLN("DEBUG: Size validation passed");
     
     // Reset watchdog before JPEG processing
     systemMonitor.forceResetWatchdog();
@@ -727,42 +727,42 @@ void downloadAndDisplayImage() {
     // Check JPEG header first
     if (bytesRead < 10) {
         debugPrintf(COLOR_RED, "ERROR: Downloaded data too small: %d bytes", bytesRead);
-        Serial.printf("ERROR: Downloaded data too small for header check: %d bytes\n", bytesRead);
+        LOG_PRINTF("ERROR: Downloaded data too small for header check: %d bytes\n", bytesRead);
         return;
     }
     
-    Serial.printf("DEBUG: Checking image format (first 4 bytes: %02X %02X %02X %02X)...\n",
+    LOG_PRINTF("DEBUG: Checking image format (first 4 bytes: %02X %02X %02X %02X)...\n",
                  imageBuffer[0], imageBuffer[1], imageBuffer[2], imageBuffer[3]);
     
     // Check for PNG magic numbers first
     if (imageBuffer[0] == 0x89 && imageBuffer[1] == 0x50 && imageBuffer[2] == 0x4E && imageBuffer[3] == 0x47) {
         debugPrint("ERROR: PNG format detected - not supported (JPEG only)", COLOR_RED);
-        Serial.println("ERROR: PNG format detected - not supported (JPEG only)");
-        Serial.println("This device only supports JPEG images. Please use a JPEG format image URL.");
+        LOG_PRINTLN("ERROR: PNG format detected - not supported (JPEG only)");
+        LOG_PRINTLN("This device only supports JPEG images. Please use a JPEG format image URL.");
         return;
     }
     
-    Serial.println("DEBUG: Not PNG format, checking for JPEG...");
+    LOG_PRINTLN("DEBUG: Not PNG format, checking for JPEG...");
     
     // Check for JPEG magic numbers
     if (imageBuffer[0] != 0xFF || imageBuffer[1] != 0xD8) {
         debugPrintf(COLOR_RED, "ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)", imageBuffer[0], imageBuffer[1]);
-        Serial.printf("ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)\n", imageBuffer[0], imageBuffer[1]);
+        LOG_PRINTF("ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)\n", imageBuffer[0], imageBuffer[1]);
         return;
     }
     
-    Serial.printf("DEBUG: Opening JPEG in RAM (%d bytes)...\n", bytesRead);
+    LOG_PRINTF("DEBUG: Opening JPEG in RAM (%d bytes)...\n", bytesRead);
     if (jpeg.openRAM(imageBuffer, bytesRead, JPEGDraw)) {
-        Serial.printf("DEBUG: JPEG opened successfully - %dx%d\n", jpeg.getWidth(), jpeg.getHeight());
+        LOG_PRINTF("DEBUG: JPEG opened successfully - %dx%d\n", jpeg.getWidth(), jpeg.getHeight());
         pendingImageWidth = jpeg.getWidth();
         pendingImageHeight = jpeg.getHeight();
         
         // Check if image fits in our pending buffer
         size_t requiredSize = pendingImageWidth * pendingImageHeight * 2;
-        Serial.printf("DEBUG: Image size check - Required: %d bytes, Available: %d bytes\n", requiredSize, fullImageBufferSize);
+        LOG_PRINTF("DEBUG: Image size check - Required: %d bytes, Available: %d bytes\n", requiredSize, fullImageBufferSize);
         
         if (requiredSize <= fullImageBufferSize) {
-            Serial.println("DEBUG: Image fits in buffer, proceeding with decode...");
+            LOG_PRINTLN("DEBUG: Image fits in buffer, proceeding with decode...");
             // Clear the PENDING image buffer
             memset(pendingFullImageBuffer, 0, pendingImageWidth * pendingImageHeight * sizeof(uint16_t));
             
@@ -788,20 +788,20 @@ void downloadAndDisplayImage() {
                 // Mark image as ready to display (but don't display yet - let loop handle it)
                 imageReadyToDisplay = true;
                 debugPrint("DEBUG: Image ready to display - pending buffer prepared", COLOR_GREEN);
-                Serial.println("Image fully decoded and ready for display");
+                LOG_PRINTLN("Image fully decoded and ready for display");
                 
                 // Mark first image as loaded (only once) - happens before actual display
                 if (!firstImageLoaded) {
                     firstImageLoaded = true;
                     displayManager.setFirstImageLoaded(true);
-                    Serial.println("First image loaded successfully - switching to image mode");
+                    LOG_PRINTLN("First image loaded successfully - switching to image mode");
                     debugPrint("DEBUG: First image loaded flag set", COLOR_GREEN);
                 } else {
-                    Serial.println("Image prepared successfully - ready for seamless display");
+                    LOG_PRINTLN("Image prepared successfully - ready for seamless display");
                 }
             } else {
                 debugPrint("ERROR: JPEG decode() function failed!", COLOR_RED);
-                Serial.println("ERROR: JPEG decode() function failed!");
+                LOG_PRINTLN("ERROR: JPEG decode() function failed!");
                 displayManager.resumeDisplay();  // Make sure to resume even on error
             }
             
@@ -810,15 +810,15 @@ void downloadAndDisplayImage() {
         } else {
             debugPrintf(COLOR_RED, "ERROR: Image too large for buffer! Required: %d, Available: %d", 
                        requiredSize, fullImageBufferSize);
-            Serial.printf("ERROR: Image too large for buffer! Required: %d bytes, Available: %d bytes\n", 
+            LOG_PRINTF("ERROR: Image too large for buffer! Required: %d bytes, Available: %d bytes\n", 
                          requiredSize, fullImageBufferSize);
             jpeg.close();
         }
     } else {
         debugPrint("ERROR: JPEG openRAM() failed!", COLOR_RED);
         debugPrintf(COLOR_RED, "Downloaded %d bytes, buffer size: %d", bytesRead, imageBufferSize);
-        Serial.printf("ERROR: JPEG openRAM() failed! Downloaded %d bytes, buffer size: %d\n", bytesRead, imageBufferSize);
-        Serial.printf("First 16 bytes: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+        LOG_PRINTF("ERROR: JPEG openRAM() failed! Downloaded %d bytes, buffer size: %d\n", bytesRead, imageBufferSize);
+        LOG_PRINTF("First 16 bytes: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
                      imageBuffer[0], imageBuffer[1], imageBuffer[2], imageBuffer[3],
                      imageBuffer[4], imageBuffer[5], imageBuffer[6], imageBuffer[7],
                      imageBuffer[8], imageBuffer[9], imageBuffer[10], imageBuffer[11],
@@ -839,7 +839,7 @@ void loadCyclingConfiguration() {
     currentImageIndex = configStorage.getCurrentImageIndex();
     imageSourceCount = configStorage.getImageSourceCount();
     
-    Serial.printf("Cycling config loaded: enabled=%s, interval=%lu ms, random=%s, sources=%d\n",
+    LOG_PRINTF("Cycling config loaded: enabled=%s, interval=%lu ms, random=%s, sources=%d\n",
                   cyclingEnabled ? "true" : "false", currentCycleInterval,
                   randomOrderEnabled ? "true" : "false", imageSourceCount);
 }
@@ -862,7 +862,7 @@ void updateCurrentImageTransformSettings() {
         offsetY = configStorage.getImageOffsetY(index);
         rotationAngle = configStorage.getImageRotation(index);
         
-        Serial.printf("Loaded transform settings for image %d: scale=%.1fx%.1f, offset=%d,%d, rotation=%.0f°\n",
+        LOG_PRINTF("Loaded transform settings for image %d: scale=%.1fx%.1f, offset=%d,%d, rotation=%.0f°\n",
                      index, scaleX, scaleY, offsetX, offsetY, rotationAngle);
     }
 }
@@ -871,7 +871,7 @@ void updateCurrentImageTransformSettings() {
 void advanceToNextImage() {
     // Allow manual advancing even if cycling is disabled
     if (imageSourceCount <= 1) {
-        Serial.println("Cannot advance: only 1 image source configured");
+        LOG_PRINTLN("Cannot advance: only 1 image source configured");
         return;
     }
     
@@ -894,7 +894,7 @@ void advanceToNextImage() {
     // Update transform settings for the new image
     updateCurrentImageTransformSettings();
     
-    Serial.printf("Advanced to image %d/%d: %s\n", 
+    LOG_PRINTF("Advanced to image %d/%d: %s\n", 
                   currentImageIndex + 1, imageSourceCount, getCurrentImageURL().c_str());
 }
 
@@ -924,7 +924,7 @@ void processSerialCommands() {
                 configStorage.setImageScaleY(currentImageIndex, scaleY);
                 configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Scale both: %.1fx%.1f (saved for image %d)\n", scaleX, scaleY, currentImageIndex + 1);
+                LOG_PRINTF("Scale both: %.1fx%.1f (saved for image %d)\n", scaleX, scaleY, currentImageIndex + 1);
                 break;
             case '-':
                 scaleX = constrain(scaleX - SCALE_STEP, MIN_SCALE, MAX_SCALE);
@@ -933,7 +933,7 @@ void processSerialCommands() {
                 configStorage.setImageScaleY(currentImageIndex, scaleY);
                 configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Scale both: %.1fx%.1f (saved for image %d)\n", scaleX, scaleY, currentImageIndex + 1);
+                LOG_PRINTF("Scale both: %.1fx%.1f (saved for image %d)\n", scaleX, scaleY, currentImageIndex + 1);
                 break;
                 
             // Movement commands
@@ -943,7 +943,7 @@ void processSerialCommands() {
                 configStorage.setImageOffsetY(currentImageIndex, offsetY);
                 configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Move up, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
+                LOG_PRINTF("Move up, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
                 break;
             case 'S':
             case 's':
@@ -951,7 +951,7 @@ void processSerialCommands() {
                 configStorage.setImageOffsetY(currentImageIndex, offsetY);
                 configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Move down, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
+                LOG_PRINTF("Move down, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
                 break;
             case 'A':
             case 'a':
@@ -959,7 +959,7 @@ void processSerialCommands() {
                 configStorage.setImageOffsetX(currentImageIndex, offsetX);
                 configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Move left, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
+                LOG_PRINTF("Move left, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
                 break;
             case 'D':
             case 'd':
@@ -967,7 +967,7 @@ void processSerialCommands() {
                 configStorage.setImageOffsetX(currentImageIndex, offsetX);
                 configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Move right, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
+                LOG_PRINTF("Move right, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
                 break;
                 
             // Rotation commands
@@ -978,7 +978,7 @@ void processSerialCommands() {
                 configStorage.setImageRotation(currentImageIndex, rotationAngle);
                 configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Rotate CCW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
+                LOG_PRINTF("Rotate CCW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
                 break;
             case 'E':
             case 'e':
@@ -987,7 +987,7 @@ void processSerialCommands() {
                 configStorage.setImageRotation(currentImageIndex, rotationAngle);
                 configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Rotate CW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
+                LOG_PRINTF("Rotate CW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
                 break;
                 
             // Reset command
@@ -1005,7 +1005,7 @@ void processSerialCommands() {
                 configStorage.setImageRotation(currentImageIndex, rotationAngle);
                 configStorage.saveConfig();
                 renderFullImage();
-                Serial.printf("Reset all transformations (saved for image %d)\n", currentImageIndex + 1);
+                LOG_PRINTF("Reset all transformations (saved for image %d)\n", currentImageIndex + 1);
                 break;
                 
             // Save current transform settings to config for this image
@@ -1017,7 +1017,7 @@ void processSerialCommands() {
                 configStorage.setImageOffsetY(currentImageIndex, offsetY);
                 configStorage.setImageRotation(currentImageIndex, rotationAngle);
                 configStorage.saveConfig();
-                Serial.printf("Saved transform settings for image %d: scale=%.1fx%.1f, offset=%d,%d, rotation=%.0f°\n",
+                LOG_PRINTF("Saved transform settings for image %d: scale=%.1fx%.1f, offset=%d,%d, rotation=%.0f°\n",
                              currentImageIndex + 1, scaleX, scaleY, offsetX, offsetY, rotationAngle);
                 break;
                 
@@ -1025,18 +1025,18 @@ void processSerialCommands() {
             case 'L':
             case 'l':
                 displayManager.setBrightness(min(displayManager.getBrightness() + 10, 100));
-                Serial.printf("Brightness up: %d%%\n", displayManager.getBrightness());
+                LOG_PRINTF("Brightness up: %d%%\n", displayManager.getBrightness());
                 break;
             case 'K':
             case 'k':
                 displayManager.setBrightness(max(displayManager.getBrightness() - 10, 0));
-                Serial.printf("Brightness down: %d%%\n", displayManager.getBrightness());
+                LOG_PRINTF("Brightness down: %d%%\n", displayManager.getBrightness());
                 break;
                 
             // Reboot command
             case 'B':
             case 'b':
-                Serial.println("Rebooting device...");
+                LOG_PRINTLN("Rebooting device...");
                 delay(1000); // Give time for message to be sent
                 ESP.restart();
                 break;
@@ -1045,31 +1045,31 @@ void processSerialCommands() {
             case 'H':
             case 'h':
             case '?':
-                Serial.println("\n=== Image Control Commands ===");
-                Serial.println("Scaling:");
-                Serial.println("  +/- : Scale both axes");
-                Serial.println("Movement:");
-                Serial.println("  W/S : Move up/down");
-                Serial.println("  A/D : Move left/right");
-                Serial.println("Rotation:");
-                Serial.println("  Q/E : Rotate 90° CCW/CW");
-                Serial.println("Reset:");
-                Serial.println("  R   : Reset all transformations");
-                Serial.println("  V   : Save (persist) current transform settings for this image");
-                Serial.println("Brightness:");
-                Serial.println("  L/K : Brightness up/down");
-                Serial.println("System:");
-                Serial.println("  B   : Reboot device");
-                Serial.println("  M   : Memory info");
-                Serial.println("  I   : Network info");
-                Serial.println("  P   : PPA info");
-                Serial.println("  T   : MQTT info");
-                Serial.println("  X   : Web server status/restart");
-                Serial.println("Touch:");
-                Serial.println("  Single tap : Next image");
-                Serial.println("  Double tap : Toggle cycling/single refresh mode");
-                Serial.println("Help:");
-                Serial.println("  H/? : Show this help");
+                LOG_PRINTLN("\n=== Image Control Commands ===");
+                LOG_PRINTLN("Scaling:");
+                LOG_PRINTLN("  +/- : Scale both axes");
+                LOG_PRINTLN("Movement:");
+                LOG_PRINTLN("  W/S : Move up/down");
+                LOG_PRINTLN("  A/D : Move left/right");
+                LOG_PRINTLN("Rotation:");
+                LOG_PRINTLN("  Q/E : Rotate 90° CCW/CW");
+                LOG_PRINTLN("Reset:");
+                LOG_PRINTLN("  R   : Reset all transformations");
+                LOG_PRINTLN("  V   : Save (persist) current transform settings for this image");
+                LOG_PRINTLN("Brightness:");
+                LOG_PRINTLN("  L/K : Brightness up/down");
+                LOG_PRINTLN("System:");
+                LOG_PRINTLN("  B   : Reboot device");
+                LOG_PRINTLN("  M   : Memory info");
+                LOG_PRINTLN("  I   : Network info");
+                LOG_PRINTLN("  P   : PPA info");
+                LOG_PRINTLN("  T   : MQTT info");
+                LOG_PRINTLN("  X   : Web server status/restart");
+                LOG_PRINTLN("Touch:");
+                LOG_PRINTLN("  Single tap : Next image");
+                LOG_PRINTLN("  Double tap : Toggle cycling/single refresh mode");
+                LOG_PRINTLN("Help:");
+                LOG_PRINTLN("  H/? : Show this help");
                 break;
                 
             // System info commands
@@ -1092,25 +1092,25 @@ void processSerialCommands() {
             case 'X':
             case 'x':
                 // Web server status and restart
-                Serial.println("\n=== Web Server Status ===");
-                Serial.printf("WiFi connected: %s\n", wifiManager.isConnected() ? "YES" : "NO");
+                LOG_PRINTLN("\n=== Web Server Status ===");
+                LOG_PRINTF("WiFi connected: %s\n", wifiManager.isConnected() ? "YES" : "NO");
                 if (wifiManager.isConnected()) {
-                    Serial.printf("IP Address: %s\n", WiFi.localIP().toString().c_str());
+                    LOG_PRINTF("IP Address: %s\n", WiFi.localIP().toString().c_str());
                 }
-                Serial.printf("Web server running: %s\n", webConfig.isRunning() ? "YES" : "NO");
+                LOG_PRINTF("Web server running: %s\n", webConfig.isRunning() ? "YES" : "NO");
                 
                 // Try to restart web server
                 if (wifiManager.isConnected()) {
-                    Serial.println("Attempting to restart web server...");
+                    LOG_PRINTLN("Attempting to restart web server...");
                     webConfig.stop();
                     delay(500);
                     if (webConfig.begin(8080)) {
-                        Serial.printf("Web server restarted successfully at: http://%s:8080\n", WiFi.localIP().toString().c_str());
+                        LOG_PRINTF("Web server restarted successfully at: http://%s:8080\n", WiFi.localIP().toString().c_str());
                     } else {
-                        Serial.println("ERROR: Failed to restart web server");
+                        LOG_PRINTLN("ERROR: Failed to restart web server");
                     }
                 } else {
-                    Serial.println("Cannot start web server - WiFi not connected");
+                    LOG_PRINTLN("Cannot start web server - WiFi not connected");
                 }
                 break;
         }
@@ -1139,7 +1139,7 @@ void loop() {
         
         // Log if web server handling takes significant time (may indicate activity)
         if (webHandleTime > 10) {
-            Serial.printf("DEBUG: Web server handling took %lu ms (potential request processed)\n", webHandleTime);
+            LOG_PRINTF("DEBUG: Web server handling took %lu ms (potential request processed)\n", webHandleTime);
         }
     }
     
@@ -1166,16 +1166,16 @@ void loop() {
             
             // Only warn if it takes excessively long (increased threshold)
             if (webHandleTime > 5000) {
-                Serial.printf("WARNING: Web client handling took %lu ms\n", webHandleTime);
+                LOG_PRINTF("WARNING: Web client handling took %lu ms\n", webHandleTime);
             }
         } else {
             // Try to start web server if not running
-            Serial.println("DEBUG: Web server not running, attempting to restart...");
+            LOG_PRINTLN("DEBUG: Web server not running, attempting to restart...");
             systemMonitor.forceResetWatchdog();  // Reset before webConfig.begin
             if (webConfig.begin(8080)) {
-                Serial.printf("Web configuration server restarted at: http://%s:8080\n", WiFi.localIP().toString().c_str());
+                LOG_PRINTF("Web configuration server restarted at: http://%s:8080\n", WiFi.localIP().toString().c_str());
             } else {
-                Serial.println("ERROR: Failed to restart web configuration server");
+                LOG_PRINTLN("ERROR: Failed to restart web configuration server");
             }
             systemMonitor.forceResetWatchdog();  // Reset after attempt
         }
@@ -1189,7 +1189,7 @@ void loop() {
         
         // Check if MQTT update took too long
         if (millis() - mqttStartTime > 2000) {
-            Serial.printf("WARNING: MQTT update took %lu ms\n", millis() - mqttStartTime);
+            LOG_PRINTF("WARNING: MQTT update took %lu ms\n", millis() - mqttStartTime);
         }
         systemMonitor.forceResetWatchdog();
     }
@@ -1201,7 +1201,7 @@ void loop() {
     
     // Check for critical system health issues
     if (!systemMonitor.isSystemHealthy()) {
-        Serial.println("CRITICAL: System health compromised, attempting recovery...");
+        LOG_PRINTLN("CRITICAL: System health compromised, attempting recovery...");
         systemMonitor.forceResetWatchdog();
         systemMonitor.safeDelay(5000);
         systemMonitor.forceResetWatchdog();
@@ -1225,14 +1225,14 @@ void loop() {
     
     // Enhanced stuck image processing detection
     if (imageProcessing && (millis() - lastImageProcessTime > IMAGE_PROCESS_TIMEOUT)) {
-        Serial.printf("WARNING: Image processing timeout detected after %lu ms, resetting...\n", 
+        LOG_PRINTF("WARNING: Image processing timeout detected after %lu ms, resetting...\n", 
                      millis() - lastImageProcessTime);
         imageProcessing = false;
         systemMonitor.forceResetWatchdog();
         
         // Log system state for debugging
-        Serial.printf("DEBUG: Loop has been running for %lu ms\n", millis() - loopStartTime);
-        Serial.printf("DEBUG: Free heap: %d, Free PSRAM: %d\n", 
+        LOG_PRINTF("DEBUG: Loop has been running for %lu ms\n", millis() - loopStartTime);
+        LOG_PRINTF("DEBUG: Free heap: %d, Free PSRAM: %d\n", 
                      systemMonitor.getCurrentFreeHeap(), systemMonitor.getCurrentFreePsram());
     }
     
@@ -1243,7 +1243,7 @@ void loop() {
     // Check for touch-triggered actions
     if (touchTriggeredNextImage) {
         touchTriggeredNextImage = false;
-        Serial.println("Touch: Advancing to next image");
+        LOG_PRINTLN("Touch: Advancing to next image");
         debugPrint("Touch: Next image requested", COLOR_CYAN);
         
         // If cycling is enabled, advance to next image
@@ -1252,7 +1252,7 @@ void loop() {
             // Force immediate image download
             lastUpdate = 0;
         } else {
-            Serial.println("Touch: Cycling not enabled or only one source configured");
+            LOG_PRINTLN("Touch: Cycling not enabled or only one source configured");
             debugPrint("Touch: Single image mode - cannot advance", COLOR_YELLOW);
         }
         systemMonitor.forceResetWatchdog();
@@ -1265,13 +1265,13 @@ void loop() {
         singleImageRefreshMode = !singleImageRefreshMode;
         
         if (singleImageRefreshMode) {
-            Serial.println("Touch: Switched to SINGLE IMAGE REFRESH mode");
+            LOG_PRINTLN("Touch: Switched to SINGLE IMAGE REFRESH mode");
             debugPrint("Mode: Single Image Refresh (no auto-cycling)", COLOR_MAGENTA);
-            Serial.printf("Current image will refresh every %lu minutes\n", currentUpdateInterval / 60000);
+            LOG_PRINTF("Current image will refresh every %lu minutes\n", currentUpdateInterval / 60000);
         } else {
-            Serial.println("Touch: Switched to CYCLING mode");
+            LOG_PRINTLN("Touch: Switched to CYCLING mode");
             debugPrint("Mode: Auto-Cycling Enabled", COLOR_MAGENTA);
-            Serial.printf("Will cycle every %lu minutes, update every %lu minutes\n", 
+            LOG_PRINTF("Will cycle every %lu minutes, update every %lu minutes\n", 
                          currentCycleInterval / 60000, currentUpdateInterval / 60000);
         }
         systemMonitor.forceResetWatchdog();
@@ -1286,7 +1286,7 @@ void loop() {
         if (currentTime - lastCycleTime >= currentCycleInterval || lastCycleTime == 0) {
             shouldCycle = true;
             lastCycleTime = currentTime;
-            Serial.println("DEBUG: Time to cycle to next image source");
+            LOG_PRINTLN("DEBUG: Time to cycle to next image source");
             advanceToNextImage();
         }
     }
@@ -1295,11 +1295,11 @@ void loop() {
     if (!imageProcessing && (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0)) {
         // Pre-download system health check
         if (!wifiManager.isConnected()) {
-            Serial.println("WARNING: WiFi disconnected, skipping image download");
+            LOG_PRINTLN("WARNING: WiFi disconnected, skipping image download");
             lastUpdate = currentTime; // Update timestamp to prevent immediate retry
             systemMonitor.forceResetWatchdog();
         } else {
-            Serial.printf("DEBUG: Starting image download cycle (last update: %lu ms ago)\n", 
+            LOG_PRINTF("DEBUG: Starting image download cycle (last update: %lu ms ago)\n", 
                          currentTime - lastUpdate);
             
             imageProcessing = true;
@@ -1325,7 +1325,7 @@ void loop() {
                 
                 // Check if we're taking too long
                 if (millis() - downloadCheckTime > 1000) {
-                    Serial.printf("DEBUG: Download attempt running for %lu ms\n", millis() - downloadStartTime);
+                    LOG_PRINTF("DEBUG: Download attempt running for %lu ms\n", millis() - downloadStartTime);
                     downloadCheckTime = millis();
                 }
             }
@@ -1333,14 +1333,14 @@ void loop() {
             unsigned long downloadDuration = millis() - downloadStartTime;
             
             if (downloadCompleted) {
-                Serial.printf("DEBUG: Download cycle completed in %lu ms\n", downloadDuration);
+                LOG_PRINTF("DEBUG: Download cycle completed in %lu ms\n", downloadDuration);
                 
                 // Log warning if download took unusually long
                 if (downloadDuration > 15000) {
-                    Serial.printf("WARNING: Download cycle took %lu ms (unusually long)\n", downloadDuration);
+                    LOG_PRINTF("WARNING: Download cycle took %lu ms (unusually long)\n", downloadDuration);
                 }
             } else {
-                Serial.printf("ERROR: Download cycle timed out after %lu ms\n", downloadDuration);
+                LOG_PRINTF("ERROR: Download cycle timed out after %lu ms\n", downloadDuration);
                 debugPrint("ERROR: Download timed out completely", COLOR_RED);
             }
             
@@ -1354,7 +1354,7 @@ void loop() {
     if (imageReadyToDisplay) {
         imageReadyToDisplay = false;  // Clear the flag immediately
         
-        Serial.println("=== SWAPPING IMAGE BUFFERS FOR SEAMLESS DISPLAY ===");
+        LOG_PRINTLN("=== SWAPPING IMAGE BUFFERS FOR SEAMLESS DISPLAY ===");
         systemMonitor.forceResetWatchdog();
         
         // Swap the buffers: move pending->active
@@ -1370,7 +1370,7 @@ void loop() {
         fullImageHeight = pendingImageHeight;
         pendingImageHeight = tempHeight;
         
-        Serial.printf("Buffer swap complete: %dx%d image now active\n", fullImageWidth, fullImageHeight);
+        LOG_PRINTF("Buffer swap complete: %dx%d image now active\n", fullImageWidth, fullImageHeight);
         systemMonitor.forceResetWatchdog();
         
         // Now render the new image to display (single seamless update, no clearing artifacts)
@@ -1378,13 +1378,13 @@ void loop() {
         renderFullImage();
         systemMonitor.forceResetWatchdog();
         
-        Serial.println("Image display completed - no flicker!");
+        LOG_PRINTLN("Image display completed - no flicker!");
     }
     
     // Check total loop time for performance monitoring
     unsigned long loopDuration = millis() - loopStartTime;
     if (loopDuration > 1000) {
-        Serial.printf("WARNING: Loop iteration took %lu ms\n", loopDuration);
+        LOG_PRINTF("WARNING: Loop iteration took %lu ms\n", loopDuration);
     }
     
     // Additional watchdog reset before delay
@@ -1415,15 +1415,15 @@ void initializeTouchController() {
         if (touchHandle != nullptr) {
             touchEnabled = true;
             debugPrint("Touch controller initialized successfully!", COLOR_GREEN);
-            Serial.println("GT911 touch controller ready");
+            LOG_PRINTLN("GT911 touch controller ready");
         } else {
             debugPrint("Touch controller initialization failed", COLOR_RED);
-            Serial.println("Warning: Touch functionality disabled - GT911 init failed");
+            LOG_PRINTLN("Warning: Touch functionality disabled - GT911 init failed");
             touchEnabled = false;
         }
     } catch (...) {
         debugPrint("Touch controller initialization exception", COLOR_RED);
-        Serial.println("Warning: Touch functionality disabled - exception during init");
+        LOG_PRINTLN("Warning: Touch functionality disabled - exception during init");
         touchEnabled = false;
     }
     
@@ -1467,17 +1467,17 @@ void updateTouchState() {
         
         if (touchState == TOUCH_IDLE) {
             touchState = TOUCH_PRESSED;
-            Serial.printf("Touch: Press detected at %lu ms\n", currentTime);
+            LOG_PRINTF("Touch: Press detected at %lu ms\n", currentTime);
         } else if (touchState == TOUCH_WAITING_FOR_SECOND_TAP) {
             // Second tap detected within timeout
             if (currentTime - firstTapTime <= DOUBLE_TAP_TIMEOUT_MS) {
                 touchState = TOUCH_PRESSED;
-                Serial.printf("Touch: Second tap detected at %lu ms (delta: %lu ms)\n", 
+                LOG_PRINTF("Touch: Second tap detected at %lu ms (delta: %lu ms)\n", 
                              currentTime, currentTime - firstTapTime);
             } else {
                 // Timeout exceeded, treat as new first tap
                 touchState = TOUCH_PRESSED;
-                Serial.printf("Touch: Double-tap timeout, treating as new press at %lu ms\n", currentTime);
+                LOG_PRINTF("Touch: Double-tap timeout, treating as new press at %lu ms\n", currentTime);
             }
         }
     }
@@ -1487,7 +1487,7 @@ void updateTouchState() {
         touchReleaseTime = currentTime;
         unsigned long pressDuration = currentTime - touchPressTime;
         
-        Serial.printf("Touch: Release detected at %lu ms (duration: %lu ms)\n", 
+        LOG_PRINTF("Touch: Release detected at %lu ms (duration: %lu ms)\n", 
                      currentTime, pressDuration);
         
         if (touchState == TOUCH_PRESSED) {
@@ -1497,7 +1497,7 @@ void updateTouchState() {
                     // First tap
                     firstTapTime = touchReleaseTime;
                     touchState = TOUCH_WAITING_FOR_SECOND_TAP;
-                    Serial.printf("Touch: First tap completed, waiting for second tap\n");
+                    LOG_PRINTF("Touch: First tap completed, waiting for second tap\n");
                 } else {
                     // Second tap
                     if (currentTime - firstTapTime <= DOUBLE_TAP_TIMEOUT_MS) {
@@ -1505,21 +1505,21 @@ void updateTouchState() {
                         touchTriggeredModeToggle = true;
                         touchState = TOUCH_IDLE;
                         firstTapTime = 0;
-                        Serial.printf("Touch: Double-tap detected! (total time: %lu ms)\n", 
+                        LOG_PRINTF("Touch: Double-tap detected! (total time: %lu ms)\n", 
                                      currentTime - firstTapTime);
                     } else {
                         // Timeout exceeded, treat as single tap
                         touchTriggeredNextImage = true;
                         touchState = TOUCH_IDLE;
                         firstTapTime = 0;
-                        Serial.printf("Touch: Double-tap timeout, treating as single tap\n");
+                        LOG_PRINTF("Touch: Double-tap timeout, treating as single tap\n");
                     }
                 }
             } else {
                 // Invalid tap duration (too short or too long)
                 touchState = TOUCH_IDLE;
                 firstTapTime = 0;
-                Serial.printf("Touch: Invalid tap duration: %lu ms (min: %lu, max: %lu)\n", 
+                LOG_PRINTF("Touch: Invalid tap duration: %lu ms (min: %lu, max: %lu)\n", 
                              pressDuration, MIN_TAP_DURATION_MS, MAX_TAP_DURATION_MS);
             }
         }
@@ -1532,7 +1532,7 @@ void updateTouchState() {
             touchTriggeredNextImage = true;
             touchState = TOUCH_IDLE;
             firstTapTime = 0;
-            Serial.printf("Touch: Double-tap timeout - triggering single tap action\n");
+            LOG_PRINTF("Touch: Double-tap timeout - triggering single tap action\n");
         }
     }
 }
@@ -1544,7 +1544,7 @@ void processTouchGestures() {
 }
 
 void handleSingleTap() {
-    Serial.println("Touch: Single tap - advancing to next image");
+    LOG_PRINTLN("Touch: Single tap - advancing to next image");
     debugPrint("Touch: Single tap detected", COLOR_GREEN);
     
     // Set flag to trigger next image in main loop
@@ -1552,7 +1552,7 @@ void handleSingleTap() {
 }
 
 void handleDoubleTap() {
-    Serial.println("Touch: Double tap - toggling mode");
+    LOG_PRINTLN("Touch: Double tap - toggling mode");
     debugPrint("Touch: Double tap detected", COLOR_GREEN);
     
     // Set flag to trigger mode toggle in main loop

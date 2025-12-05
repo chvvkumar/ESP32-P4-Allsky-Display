@@ -266,7 +266,7 @@ void WebConfig::handleCopyDefaultsToImage() {
             rotationAngle = configStorage.getImageRotation(index);
             
             renderFullImage();
-            Serial.println("Applied global defaults to current image");
+            LOG_PRINTLN("Applied global defaults to current image");
         }
         
         sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Default settings copied to image\"}");
@@ -336,7 +336,7 @@ void WebConfig::applyImageSettings() {
 void WebConfig::reloadConfiguration() {
     extern void updateCyclingVariables();
     
-    Serial.println("Reloading configuration from web interface...");
+    LOG_PRINTLN("Reloading configuration from web interface...");
     updateCyclingVariables();
     
     extern unsigned long currentUpdateInterval;

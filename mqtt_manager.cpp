@@ -88,7 +88,7 @@ void MQTTManager::connect() {
                 // Subscribe to command topic filter
                 String commandFilter = haDiscovery.getCommandTopicFilter();
                 if (!mqttClient.subscribe(commandFilter.c_str())) {
-                    Serial.printf("✗ FAILED to subscribe to HA command topics! MQTT state: %d\n", mqttClient.state());
+                    LOG_PRINTF("✗ FAILED to subscribe to HA command topics! MQTT state: %d\n", mqttClient.state());
                 }
                 
                 // Publish initial state
@@ -106,7 +106,7 @@ void MQTTManager::connect() {
             reconnectBackoff = min((unsigned long)(reconnectBackoff * 1.5), 60000UL);  // Max 1 minute
         }
         
-        Serial.printf("MQTT connection failed, state: %d (attempt %d)\n", mqttClient.state(), reconnectFailures);
+        LOG_PRINTF("MQTT connection failed, state: %d (attempt %d)\n", mqttClient.state(), reconnectFailures);
         if (debugPrintFunc && !firstImageLoaded) {
             debugPrintfFunc(COLOR_RED, "MQTT failed, state: %d", mqttClient.state());
         }
@@ -196,20 +196,20 @@ void MQTTManager::update() {
 }
 
 void MQTTManager::printConnectionInfo() {
-    Serial.println("=== MQTT Connection Info ===");
-    Serial.printf("Status: %s\n", isConnected() ? "Connected" : "Disconnected");
-    Serial.printf("Server: %s:%d\n", configStorage.getMQTTServer().c_str(), configStorage.getMQTTPort());
-    Serial.printf("Client ID: %s\n", configStorage.getMQTTClientID().c_str());
+    LOG_PRINTLN("=== MQTT Connection Info ===");
+    LOG_PRINTF("Status: %s\n", isConnected() ? "Connected" : "Disconnected");
+    LOG_PRINTF("Server: %s:%d\n", configStorage.getMQTTServer().c_str(), configStorage.getMQTTPort());
+    LOG_PRINTF("Client ID: %s\n", configStorage.getMQTTClientID().c_str());
     if (isConnected()) {
         if (configStorage.getHADiscoveryEnabled()) {
-            Serial.println("Home Assistant Discovery: Enabled");
-            Serial.printf("Device Name: %s\n", configStorage.getHADeviceName().c_str());
-            Serial.printf("Base Topic: %s\n", haDiscovery.getCommandTopicFilter().c_str());
+            LOG_PRINTLN("Home Assistant Discovery: Enabled");
+            LOG_PRINTF("Device Name: %s\n", configStorage.getHADeviceName().c_str());
+            LOG_PRINTF("Base Topic: %s\n", haDiscovery.getCommandTopicFilter().c_str());
         } else {
-            Serial.println("Home Assistant Discovery: Disabled");
+            LOG_PRINTLN("Home Assistant Discovery: Disabled");
         }
     }
-    Serial.println("============================");
+    LOG_PRINTLN("============================");
 }
 
 void MQTTManager::logConnectionStatus() {

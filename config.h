@@ -5,6 +5,23 @@
 #include <Arduino.h>
 
 // =============================================================================
+// DEBUG CONFIGURATION
+// =============================================================================
+
+// Set to 0 to disable all debug output and strip debug strings from binary
+#define DEBUG_ENABLED 0
+
+#if DEBUG_ENABLED
+  #define LOG_PRINT(x) Serial.print(x)
+  #define LOG_PRINTLN(x) Serial.println(x)
+  #define LOG_PRINTF(fmt, ...) Serial.printf(fmt, ##__VA_ARGS__)
+#else
+  #define LOG_PRINT(x)
+  #define LOG_PRINTLN(x)
+  #define LOG_PRINTF(fmt, ...)
+#endif
+
+// =============================================================================
 // SYSTEM CONFIGURATION
 // =============================================================================
 
