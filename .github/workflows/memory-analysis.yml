@@ -68,6 +68,69 @@ jobs:
           tail -50 build.log
         fi
     
+    - name: Parse memory usage
+      id: memory
+      run: |
+        # Extract flash usage
+        FLASH_LINE=$(grep "Sketch uses" build.log || echo "")
+        if [ -n "$FLASH_LINE" ]; then
+          FLASH_USED=$(echo "$FLASH_LINE" | grep -oP '\d+' | head -1)
+          FLASH_MAX=$(echo "$FLASH_LINE" | grep -oP '\d+' | tail -1)
+          FLASH_PCT=$(echo "$FLASH_LINE" | grep -oP '\d+%' | sed 's/%//')
+          echo "flash_used=$FLASH_USED" >> $GITHUB_OUTPUT
+          echo "flash_max=$FLASH_MAX" >> $GITHUB_OUTPUT
+          echo "flash_pct=$FLASH_PCT" >> $GITHUB_OUTPUT
+        fi
+        
+        # Extract RAM usage
+        RAM_LINE=$(grep "Global variables" build.log || echo "")
+        if [ -n "$RAM_LINE" ]; then
+          RAM_USED=$(echo "$RAM_LINE" | grep -oP '\d+' | head -1)
+          RAM_MAX=$(echo "$RAM_LINE" | grep -oP '\d+' | tail -1)
+          RAM_PCT=$(echo "$RAM_LINE" | grep -oP '\d+%' | sed 's/%//')
+          echo "ram_used=$RAM_USED" >> $GITHUB_OUTPUT
+          echo "ram_max=$RAM_MAX" >> $GITHUB_OUTPUT
+          echo "ram_pct=$RAM_PCT" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Create memory badges
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Snd'
+      run: |
+        mkdir -p .github/badges
+        
+        # Determine flash color
+        FLASH_PCT=${{ steps.memory.outputs.flash_pct }}
+        if [ "$FLASH_PCT" -ge 95 ]; then
+          FLASH_COLOR="red"
+        elif [ "$FLASH_PCT" -ge 80 ]; then
+          FLASH_COLOR="orange"
+        else
+          FLASH_COLOR="green"
+        fi
+        
+        # Determine RAM color
+        RAM_PCT=${{ steps.memory.outputs.ram_pct }}
+        if [ "$RAM_PCT" -ge 80 ]; then
+          RAM_COLOR="orange"
+        elif [ "$RAM_PCT" -ge 60 ]; then
+          RAM_COLOR="yellow"
+        else
+          RAM_COLOR="green"
+        fi
+        
+        # Create JSON files for shields.io endpoint badges
+        echo "{\"schemaVersion\":1,\"label\":\"Flash\",\"message\":\"$FLASH_PCT% (${{ steps.memory.outputs.flash_used }} / ${{ steps.memory.outputs.flash_max }} bytes)\",\"color\":\"$FLASH_COLOR\"}" > .github/badges/flash.json
+        echo "{\"schemaVersion\":1,\"label\":\"RAM\",\"message\":\"$RAM_PCT% (${{ steps.memory.outputs.ram_used }} / ${{ steps.memory.outputs.ram_max }} bytes)\",\"color\":\"$RAM_COLOR\"}" > .github/badges/ram.json
+    
+    - name: Commit badges
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Snd'
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add .github/badges/*.json || true
+        git diff --staged --quiet || git commit -m "Update memory usage badges [skip ci]"
+        git push || true
+    
     - name: Check for memory warnings
       run: |
         if grep -i "warning.*memory\|overflow" build.log; then
