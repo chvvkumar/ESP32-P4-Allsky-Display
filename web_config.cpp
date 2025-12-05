@@ -47,6 +47,8 @@ bool WebConfig::begin(int port) {
         server->on("/api/apply-transform", HTTP_POST, [this]() { handleApplyTransform(); });
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
+        server->on("/api/save-wifi", HTTP_POST, [this]() { handleSaveWiFi(); });
+        server->on("/api/scan-networks", HTTP_GET, [this]() { handleScanNetworks(); });
         server->on("/api/device-info", HTTP_GET, [this]() { handleDeviceInfo(); });
         server->onNotFound([this]() { handleNotFound(); });
         
@@ -92,11 +94,19 @@ void WebConfig::stop() {
 
 // Route handlers - these call the page generators from web_config_pages.cpp
 void WebConfig::handleRoot() {
-    String html = generateHeader("ESP32 AllSky Display");
-    html += generateNavigation("dashboard");
-    html += generateMainPage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
+    // Check if we're in AP mode - show WiFi config portal
+    if (wifiManager.isInAPMode()) {
+        String html = generateHeader("ESP32 AllSky - WiFi Setup");
+        html += generateWiFiPortalPage();
+        html += generateFooter();
+        sendResponse(200, "text/html", html);
+    } else {
+        String html = generateHeader("ESP32 AllSky Display");
+        html += generateNavigation("dashboard");
+        html += generateMainPage();
+        html += generateFooter();
+        sendResponse(200, "text/html", html);
+    }
 }
 
 void WebConfig::handleNetworkConfig() {

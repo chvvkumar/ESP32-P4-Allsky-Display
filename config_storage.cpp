@@ -18,9 +18,10 @@ bool ConfigStorage::begin() {
 
 void ConfigStorage::setDefaults() {
     // Set hardcoded defaults from original config.cpp
-    // *** IMPORTANT: Edit these with your WiFi credentials before compiling! ***
-    config.wifiSSID = "IoT";
-    config.wifiPassword = "kkkkkkkk";
+    // WiFi credentials are empty by default - device will start in AP mode for configuration
+    config.wifiConfigured = false;
+    config.wifiSSID = "";
+    config.wifiPassword = "";
     
     config.mqttServer = "192.168.1.250";
     config.mqttPort = 1883;
@@ -83,6 +84,7 @@ void ConfigStorage::loadConfig() {
     preferences.begin(NAMESPACE, true); // Read-only mode
     
     if (preferences.isKey("wifi_ssid")) {
+        config.wifiConfigured = preferences.getBool("wifi_configured", false);
         config.wifiSSID = preferences.getString("wifi_ssid", config.wifiSSID);
         config.wifiPassword = preferences.getString("wifi_pwd", config.wifiPassword);
         
@@ -147,6 +149,7 @@ void ConfigStorage::loadConfig() {
 void ConfigStorage::saveConfig() {
     preferences.begin(NAMESPACE, false); // Read-write mode
     
+    preferences.putBool("wifi_configured", config.wifiConfigured);
     preferences.putString("wifi_ssid", config.wifiSSID);
     preferences.putString("wifi_pwd", config.wifiPassword);
     
@@ -221,6 +224,21 @@ bool ConfigStorage::hasStoredConfig() {
     bool hasConfig = preferences.isKey("wifi_ssid");
     preferences.end();
     return hasConfig;
+}
+
+bool ConfigStorage::isWiFiConfigured() {
+    return config.wifiConfigured;
+}
+
+void ConfigStorage::setWiFiConfigured(bool configured) {
+    config.wifiConfigured = configured;
+}
+
+void ConfigStorage::clearWiFiConfig() {
+    config.wifiConfigured = false;
+    config.wifiSSID = "";
+    config.wifiPassword = "";
+    saveConfig();
 }
 
 // Setters

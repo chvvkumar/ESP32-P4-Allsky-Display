@@ -50,6 +50,8 @@ private:
     void handleApplyTransform();
     void handleRestart();
     void handleFactoryReset();
+    void handleSaveWiFi();
+    void handleScanNetworks();
     void handleDeviceInfo();
     void handleNotFound();
     
@@ -58,6 +60,7 @@ private:
     String generateFooter();
     String generateNavigation(const String& currentPage = "");
     String generateMainPage();
+    String generateWiFiPortalPage();
     String generateNetworkPage();
     String generateMQTTPage();
     String generateImagePage();

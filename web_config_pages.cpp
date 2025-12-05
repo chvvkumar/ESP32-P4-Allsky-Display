@@ -8,6 +8,96 @@
 // Page generation functions for the web configuration interface
 // These functions generate the HTML content for each configuration page
 
+String WebConfig::generateWiFiPortalPage() {
+    String html = "<div class='main'><div class='container' style='max-width:600px;margin:2rem auto'>";
+    
+    // Welcome message
+    html += "<div class='card' style='text-align:center;margin-bottom:2rem'>";
+    html += "<h1 style='color:#10b981;margin-bottom:1rem'>🌐 WiFi Configuration</h1>";
+    html += "<p style='color:#9ca3af;font-size:1.1rem'>Welcome to ESP32 AllSky Display setup!</p>";
+    html += "<p style='color:#9ca3af;margin-top:0.5rem'>Please configure your WiFi credentials to get started.</p>";
+    html += "</div>";
+    
+    // Scan results card
+    html += "<div class='card' style='margin-bottom:1.5rem'>";
+    html += "<h2 style='margin-bottom:1rem'>📡 Available Networks</h2>";
+    html += "<div id='networks' style='max-height:200px;overflow-y:auto;border:1px solid #374151;border-radius:0.5rem;padding:0.5rem'>";
+    html += "<p style='color:#9ca3af;text-align:center'>Scanning...</p>";
+    html += "</div>";
+    html += "</div>";
+    
+    // Configuration form
+    html += "<div class='card'>";
+    html += "<h2 style='margin-bottom:1.5rem'>🔧 WiFi Settings</h2>";
+    html += "<form id='wifiForm' onsubmit='return saveWiFi(event)'>";
+    
+    html += "<div class='form-group'>";
+    html += "<label for='ssid'>Network Name (SSID)</label>";
+    html += "<input type='text' id='ssid' name='ssid' class='form-control' required placeholder='Enter WiFi SSID'>";
+    html += "</div>";
+    
+    html += "<div class='form-group'>";
+    html += "<label for='password'>Password</label>";
+    html += "<input type='password' id='password' name='password' class='form-control' placeholder='Enter WiFi password (leave blank for open network)'>";
+    html += "</div>";
+    
+    html += "<button type='submit' class='btn-primary' style='width:100%;padding:0.875rem'>Connect to WiFi</button>";
+    html += "</form>";
+    
+    html += "<div id='message' style='margin-top:1rem;padding:0.75rem;border-radius:0.5rem;display:none'></div>";
+    html += "</div>";
+    
+    html += "</div></div>";
+    
+    // JavaScript for WiFi portal
+    html += "<script>";
+    html += "function scanNetworks(){";
+    html += "  const container=document.getElementById('networks');";
+    html += "  container.innerHTML='<p style=\"color:#9ca3af;text-align:center\">Scanning networks...</p>';";
+    html += "  fetch('/api/scan-networks').then(r=>r.json()).then(data=>{";
+    html += "    if(data.networks && data.networks.length>0){";
+    html += "      let html='';";
+    html += "      data.networks.forEach(net=>{";
+    html += "        const signal=net.rssi>-50?'🟢':net.rssi>-70?'🟡':'🔴';";
+    html += "        const secure=net.encryption!='OPEN'?'🔒':'';";
+    html += "        html+=`<div style='padding:0.5rem;border-bottom:1px solid #374151;cursor:pointer' onclick='selectNetwork(\"${net.ssid}\")'>${signal} ${secure} ${net.ssid} (${net.rssi} dBm)</div>`;";
+    html += "      });";
+    html += "      container.innerHTML=html;";
+    html += "    }else{";
+    html += "      container.innerHTML='<p style=\"color:#9ca3af;text-align:center\">No networks found</p>';";
+    html += "    }";
+    html += "  }).catch(err=>{container.innerHTML='<p style=\"color:#ef4444;text-align:center\">Scan failed</p>';});";
+    html += "}";
+    html += "function selectNetwork(ssid){document.getElementById('ssid').value=ssid;}";
+    html += "function saveWiFi(e){";
+    html += "  e.preventDefault();";
+    html += "  const msg=document.getElementById('message');";
+    html += "  const form=document.getElementById('wifiForm');";
+    html += "  const formData=new FormData(form);";
+    html += "  msg.style.display='block';msg.style.backgroundColor='#1e3a8a';msg.style.color='#60a5fa';";
+    html += "  msg.textContent='Connecting to WiFi...';";
+    html += "  fetch('/api/save-wifi',{method:'POST',body:new URLSearchParams(formData)})";
+    html += "    .then(r=>r.json()).then(data=>{";
+    html += "      if(data.status==='success'){";
+    html += "        msg.style.backgroundColor='#065f46';msg.style.color='#10b981';";
+    html += "        msg.textContent='✓ '+data.message;";
+    html += "        setTimeout(()=>{msg.textContent+=' Restarting...';},2000);";
+    html += "      }else{";
+    html += "        msg.style.backgroundColor='#7f1d1d';msg.style.color='#ef4444';";
+    html += "        msg.textContent='✗ '+data.message;";
+    html += "      }";
+    html += "    }).catch(err=>{";
+    html += "      msg.style.backgroundColor='#7f1d1d';msg.style.color='#ef4444';";
+    html += "      msg.textContent='✗ Connection failed: '+err.message;";
+    html += "    });";
+    html += "  return false;";
+    html += "}";
+    html += "window.onload=function(){scanNetworks();setInterval(scanNetworks,15000);};";
+    html += "</script>";
+    
+    return html;
+}
+
 String WebConfig::generateMainPage() {
     String html = "<div class='main'><div class='container'>";
     

@@ -23,6 +23,9 @@ void WebConfig::handleSaveConfig() {
         if (name == "wifi_ssid") {
             if (configStorage.getWiFiSSID() != value) needsRestart = true;
             configStorage.setWiFiSSID(value);
+            if (!value.isEmpty()) {
+                configStorage.setWiFiConfigured(true);
+            }
         }
         else if (name == "wifi_password") {
             if (configStorage.getWiFiPassword() != value) needsRestart = true;
@@ -319,10 +322,60 @@ void WebConfig::handleApplyTransform() {
     }
 }
 
+void WebConfig::handleSaveWiFi() {
+    // Handle WiFi configuration from portal mode
+    if (server->hasArg("ssid") && server->hasArg("password")) {
+        String ssid = server->arg("ssid");
+        String password = server->arg("password");
+        
+        if (ssid.length() > 0) {
+            // Save WiFi credentials
+            configStorage.setWiFiSSID(ssid);
+            configStorage.setWiFiPassword(password);
+            configStorage.setWiFiConfigured(true);
+            configStorage.saveConfig();
+            
+            displayManager.debugPrint("WiFi configured!", COLOR_GREEN);
+            displayManager.debugPrint("Restarting to connect...", COLOR_YELLOW);
+            
+            sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"WiFi configured. Device will restart and connect to your network.\"}");
+            
+            delay(1000);
+            ESP.restart();
+        } else {
+            sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"SSID cannot be empty\"}");
+        }
+    } else {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"SSID and password parameters required\"}");
+    }
+}
+
+void WebConfig::handleScanNetworks() {
+    // Scan for available WiFi networks
+    int n = WiFi.scanNetworks();
+    
+    String json = "{\"networks\":[";
+    
+    if (n > 0) {
+        for (int i = 0; i < n && i < 20; i++) {  // Limit to 20 networks
+            if (i > 0) json += ",";
+            json += "{";
+            json += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
+            json += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
+            json += "\"encryption\":\"" + String(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "OPEN" : "SECURED") + "\"";
+            json += "}";
+        }
+    }
+    
+    json += "]}";
+    
+    sendResponse(200, "application/json", json);
+}
+
 void WebConfig::handleFactoryReset() {
     configStorage.resetToDefaults();
     
-    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Factory reset completed. Device restarting...\"}");
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Factory reset completed. Device restarting in configuration portal mode...\"}");
     
     displayManager.debugPrint("Factory reset in progress...", COLOR_YELLOW);
     
