@@ -14,15 +14,15 @@ bool WebConfig::begin(int port) {
     if (serverRunning) return true;
     
     try {
-        Serial.printf("Creating WebServer on port %d...\n", port);
+        LOG_PRINTF("Creating WebServer on port %d...\n", port);
         server = new WebServer(port);
         
         if (!server) {
-            Serial.println("ERROR: Failed to allocate WebServer memory!");
+            LOG_PRINTLN("ERROR: Failed to allocate WebServer memory!");
             return false;
         }
         
-        Serial.println("Setting up routes...");
+        LOG_PRINTLN("Setting up routes...");
         
         // Setup routes
         server->on("/", [this]() { handleRoot(); });
@@ -47,23 +47,23 @@ bool WebConfig::begin(int port) {
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
         server->onNotFound([this]() { handleNotFound(); });
         
-        Serial.println("Starting WebServer...");
+        LOG_PRINTLN("Starting WebServer...");
         server->begin();
         
         if (!server) {
-            Serial.println("ERROR: WebServer failed to start!");
+            LOG_PRINTLN("ERROR: WebServer failed to start!");
             return false;
         }
         
         serverRunning = true;
-        Serial.printf("✓ Web configuration server started successfully on port %d\n", port);
+        LOG_PRINTF("✓ Web configuration server started successfully on port %d\n", port);
         return true;
         
     } catch (const std::exception& e) {
-        Serial.printf("ERROR: Exception starting web server: %s\n", e.what());
+        LOG_PRINTF("ERROR: Exception starting web server: %s\n", e.what());
         return false;
     } catch (...) {
-        Serial.println("ERROR: Unknown exception starting web server!");
+        LOG_PRINTLN("ERROR: Unknown exception starting web server!");
         return false;
     }
 }

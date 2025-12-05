@@ -35,7 +35,7 @@ bool DisplayManager::begin() {
         display_cfg.lane_bit_rate);
     
     if (!dsipanel) {
-        Serial.println("ERROR: Failed to create DSI panel!");
+        LOG_PRINTLN("ERROR: Failed to create DSI panel!");
         return false;
     }
     
@@ -50,7 +50,7 @@ bool DisplayManager::begin() {
         display_cfg.init_cmds_size);
     
     if (!gfx) {
-        Serial.println("ERROR: Failed to create display object!");
+        LOG_PRINTLN("ERROR: Failed to create display object!");
         return false;
     }
     
@@ -59,7 +59,7 @@ bool DisplayManager::begin() {
 #endif
 
     if (!gfx->begin()) {
-        Serial.println("ERROR: Display init failed!");
+        LOG_PRINTLN("ERROR: Display init failed!");
         return false;
     }
     

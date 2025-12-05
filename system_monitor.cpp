@@ -25,7 +25,7 @@ bool SystemMonitor::begin() {
     if (result == ESP_ERR_INVALID_STATE) {
         // Watchdog already initialized, that's fine
     } else if (result != ESP_OK) {
-        Serial.printf("Watchdog init failed: %s\n", esp_err_to_name(result));
+        LOG_PRINTF("Watchdog init failed: %s\n", esp_err_to_name(result));
         return false;
     }
     
@@ -34,7 +34,7 @@ bool SystemMonitor::begin() {
     if (result == ESP_ERR_INVALID_ARG) {
         // Task already added, that's fine
     } else if (result != ESP_OK) {
-        Serial.printf("Watchdog add task failed: %s\n", esp_err_to_name(result));
+        LOG_PRINTF("Watchdog add task failed: %s\n", esp_err_to_name(result));
         return false;
     }
     
@@ -74,11 +74,11 @@ void SystemMonitor::checkSystemHealth() {
         
         if (heapCritical || psramCritical) {
             systemHealthy = false;
-            Serial.printf("CRITICAL: Low memory - Heap: %d, PSRAM: %d\n", freeHeap, freePsram);
+            LOG_PRINTF("CRITICAL: Low memory - Heap: %d, PSRAM: %d\n", freeHeap, freePsram);
             
             // Force garbage collection
             if (heapCritical) {
-                Serial.println("Attempting heap cleanup...");
+                LOG_PRINTLN("Attempting heap cleanup...");
                 // Could add specific cleanup here if needed
             }
         } else {
@@ -141,7 +141,7 @@ void SystemMonitor::printMemoryStatus() {
     size_t freeHeap = getCurrentFreeHeap();
     size_t freePsram = getCurrentFreePsram();
     
-    Serial.printf("Current Memory - Heap: %d bytes, PSRAM: %d bytes\n", freeHeap, freePsram);
-    Serial.printf("Minimum Memory - Heap: %d bytes, PSRAM: %d bytes\n", minFreeHeap, minFreePsram);
-    Serial.printf("System Health: %s\n", systemHealthy ? "HEALTHY" : "CRITICAL");
+    LOG_PRINTF("Current Memory - Heap: %d bytes, PSRAM: %d bytes\n", freeHeap, freePsram);
+    LOG_PRINTF("Minimum Memory - Heap: %d bytes, PSRAM: %d bytes\n", minFreeHeap, minFreePsram);
+    LOG_PRINTF("System Health: %s\n", systemHealthy ? "HEALTHY" : "CRITICAL");
 }
