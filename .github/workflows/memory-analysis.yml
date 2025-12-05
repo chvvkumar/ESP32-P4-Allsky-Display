@@ -2,9 +2,9 @@ name: Memory Usage Analysis
 
 on:
   push:
-    branches: [ main, Snd, Dev ]
+    branches: [ main, snd, dev ]
   pull_request:
-    branches: [ main, Snd, Dev ]
+    branches: [ main, snd, dev ]
   workflow_dispatch:
 
 jobs:
@@ -94,7 +94,7 @@ jobs:
         fi
     
     - name: Create memory badges
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Snd'
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/snd'
       run: |
         mkdir -p .github/badges
         
@@ -123,7 +123,7 @@ jobs:
         echo "{\"schemaVersion\":1,\"label\":\"RAM\",\"message\":\"$RAM_PCT% (${{ steps.memory.outputs.ram_used }} / ${{ steps.memory.outputs.ram_max }} bytes)\",\"color\":\"$RAM_COLOR\"}" > .github/badges/ram.json
     
     - name: Commit badges
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Snd'
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/snd'
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
