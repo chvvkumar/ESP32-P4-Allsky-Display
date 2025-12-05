@@ -145,8 +145,39 @@ const char* DEFAULT_IMAGE_SOURCES[] = {
 
 #### 3. Compile and Upload
 
+**Option A: Using Arduino IDE**
 - Click the Upload button in Arduino IDE
 - Monitor serial output for IP address and status
+
+**Option B: Using the PowerShell Script (Windows)**
+
+A convenient PowerShell script is provided for automated compilation and upload:
+
+```powershell
+# Default usage (COM3, 921600 baud)
+.\compile-and-upload.ps1
+
+# Custom COM port
+.\compile-and-upload.ps1 -ComPort COM5
+
+# Custom baud rate
+.\compile-and-upload.ps1 -ComPort COM3 -BaudRate 115200
+
+# Upload only (skip compilation)
+.\compile-and-upload.ps1 -UploadOnly
+```
+
+**Requirements:**
+- [Arduino CLI](https://arduino.github.io/arduino-cli/) must be installed
+- Script auto-detects paths and tool versions
+- Works from any directory with proper ESP32 board package installed
+
+**Features:**
+- Automatic path detection (no hardcoded user paths)
+- Single-line upload progress display
+- Memory usage analysis
+- Colored output for easy monitoring
+- Cross-machine compatible
 
 #### 4. Access Web Interface
 
@@ -241,17 +272,17 @@ The device provides a comprehensive web-based configuration interface accessible
 
 ### Configuration Pages
 
-<img src="images/2025-12-03_10-55-20.png" alt="Web Configuration Main Page">
+#### Dashboard
+<img src="images/Dashboard.jpg" alt="Web Configuration Dashboard">
 
-<img src="images/2025-12-03_10-55-31.png" alt="Image Sources Configuration">
+#### Multi-Image Sources
+<img src="images/Multi-Image.jpg" alt="Multi-Image Sources Configuration">
 
-<img src="images/2025-12-03_10-55-35.png" alt="Display Settings">
+#### Display Settings
+<img src="images/Display-settings.jpg" alt="Display Settings">
 
-<img src="images/2025-12-03_10-55-38.png" alt="Network Configuration">
-
-<img src="images/2025-12-03_10-55-42.png" alt="MQTT Configuration">
-
-<img src="images/2025-12-03_10-55-48.png" alt="System Information">
+#### Network Configuration
+<img src="images/Network.jpg" alt="Network Configuration">
 
 ### Home Assistant Integration
 
@@ -270,6 +301,18 @@ W/S   : Move up/down       L/K   : Brightness
 A/D   : Move left/right    B     : Reboot
 Q/E   : Rotate CCW/CW      M/I/P : System info
 ```
+
+## 🔌 API Reference
+
+The device exposes a comprehensive REST API for programmatic control. For detailed API documentation including all endpoints, parameters, and integration examples, see the [API Reference](API_REFERENCE.md).
+
+**Quick Overview:**
+- Configuration Management (WiFi, MQTT, Display settings)
+- Image Source Management (Add, Remove, Update sources)
+- Image Navigation (Next, Previous)
+- Image Transformations (Scale, Offset, Rotation)
+- System Control (Restart, Factory Reset)
+- Device Information (Hardware, Memory, Network status)
 
 ## 🐛 Troubleshooting
 

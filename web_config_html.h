@@ -44,8 +44,8 @@ body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .github-link:hover{background:#475569;border-color:#64748b;transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
 .github-link .github-icon{font-family:'Font Awesome 6 Brands';margin-right:0.4rem}
 .nav{background:#0f172a;padding:0;border-bottom:1px solid #334155;position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);background:rgba(15,23,42,0.95)}
-.nav-content{display:flex;gap:0.5rem;overflow-x:auto;padding:0.5rem 0}
-.nav-item{padding:0.75rem 1.25rem;border-radius:8px;text-decoration:none;color:#94a3b8;white-space:nowrap;transition:all 0.2s ease;font-weight:500;font-size:0.95rem}
+.nav-content{display:flex;gap:0.5rem;flex-wrap:wrap;padding:0.5rem 0}
+.nav-item{padding:0.65rem 1rem;border-radius:8px;text-decoration:none;color:#94a3b8;white-space:nowrap;transition:all 0.2s ease;font-weight:500;font-size:0.9rem}
 .nav-item:hover{background:#1e293b;color:#38bdf8}
 .nav-item.active{background:#1e293b;color:#38bdf8;box-shadow:inset 0 -2px 0 #38bdf8}
 .main{padding:2rem 0;flex:1}
@@ -126,6 +126,7 @@ function updateImageTransform(index,property,input){const value=input.value;cons
 function copyDefaultsToImage(index,btn){showConfirmModal('📋 Copy Global Defaults','Are you sure you want to copy global default transformation settings to this image?',()=>{showButtonFeedback(btn,'loading','Copying...');const formData=new FormData();formData.append('index',index);fetch('/api/copy-defaults',{method:'POST',body:formData}).then(response=>response.json()).then(data=>{if(data.status==='success'){showButtonFeedback(btn,'success','Copied!');setTimeout(()=>location.reload(),1000)}else{showButtonFeedback(btn,'error','Error')}}).catch(error=>{showButtonFeedback(btn,'error','Failed')})})}
 function applyTransformImmediately(index,btn){showConfirmModal('⚙️ Apply Transform','Apply these transformation settings immediately?',()=>{showButtonFeedback(btn,'loading','Applying...');const formData=new FormData();formData.append('index',index);fetch('/api/apply-transform',{method:'POST',body:formData}).then(response=>response.json()).then(data=>{if(data.status==='success'){showButtonFeedback(btn,'success','Applied!')}else{showButtonFeedback(btn,'error','Error')}}).catch(error=>{showButtonFeedback(btn,'error','Failed')})})}
 function nextImage(btn){showButtonFeedback(btn,'loading','Switching...');fetch('/api/next-image',{method:'POST'}).then(response=>response.json()).then(data=>{if(data.status==='success'){showButtonFeedback(btn,'success','Switched!');setTimeout(()=>location.reload(),2000)}else{showButtonFeedback(btn,'error','Error')}}).catch(error=>{showButtonFeedback(btn,'error','Failed')})}
+function previousImage(btn){showButtonFeedback(btn,'loading','Switching...');fetch('/api/previous-image',{method:'POST'}).then(response=>response.json()).then(data=>{if(data.status==='success'){showButtonFeedback(btn,'success','Switched!');setTimeout(()=>location.reload(),2000)}else{showButtonFeedback(btn,'error','Error')}}).catch(error=>{showButtonFeedback(btn,'error','Failed')})}
 )rawliteral";
 
 const char HTML_MODALS[] PROGMEM = R"rawliteral(

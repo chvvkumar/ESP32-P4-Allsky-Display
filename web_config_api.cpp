@@ -23,6 +23,9 @@ void WebConfig::handleSaveConfig() {
         if (name == "wifi_ssid") {
             if (configStorage.getWiFiSSID() != value) needsRestart = true;
             configStorage.setWiFiSSID(value);
+            if (!value.isEmpty()) {
+                configStorage.setWiFiConfigured(true);
+            }
         }
         else if (name == "wifi_password") {
             if (configStorage.getWiFiPassword() != value) needsRestart = true;
@@ -201,6 +204,18 @@ void WebConfig::handleNextImage() {
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Switched to next image and refreshed display\"}");
 }
 
+void WebConfig::handlePreviousImage() {
+    extern void advanceToPreviousImage();
+    extern void updateCyclingVariables();
+    extern void downloadAndDisplayImage();
+    
+    updateCyclingVariables();
+    advanceToPreviousImage();
+    downloadAndDisplayImage();
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Switched to previous image and refreshed display\"}");
+}
+
 void WebConfig::handleUpdateImageTransform() {
     if (server->hasArg("index") && server->hasArg("property") && server->hasArg("value")) {
         int index = server->arg("index").toInt();
@@ -307,10 +322,60 @@ void WebConfig::handleApplyTransform() {
     }
 }
 
+void WebConfig::handleSaveWiFi() {
+    // Handle WiFi configuration from portal mode
+    if (server->hasArg("ssid") && server->hasArg("password")) {
+        String ssid = server->arg("ssid");
+        String password = server->arg("password");
+        
+        if (ssid.length() > 0) {
+            // Save WiFi credentials
+            configStorage.setWiFiSSID(ssid);
+            configStorage.setWiFiPassword(password);
+            configStorage.setWiFiConfigured(true);
+            configStorage.saveConfig();
+            
+            displayManager.debugPrint("WiFi configured!", COLOR_GREEN);
+            displayManager.debugPrint("Restarting to connect...", COLOR_YELLOW);
+            
+            sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"WiFi configured. Device will restart and connect to your network.\"}");
+            
+            delay(1000);
+            ESP.restart();
+        } else {
+            sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"SSID cannot be empty\"}");
+        }
+    } else {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"SSID and password parameters required\"}");
+    }
+}
+
+void WebConfig::handleScanNetworks() {
+    // Scan for available WiFi networks
+    int n = WiFi.scanNetworks();
+    
+    String json = "{\"networks\":[";
+    
+    if (n > 0) {
+        for (int i = 0; i < n && i < 20; i++) {  // Limit to 20 networks
+            if (i > 0) json += ",";
+            json += "{";
+            json += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
+            json += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
+            json += "\"encryption\":\"" + String(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "OPEN" : "SECURED") + "\"";
+            json += "}";
+        }
+    }
+    
+    json += "]}";
+    
+    sendResponse(200, "application/json", json);
+}
+
 void WebConfig::handleFactoryReset() {
     configStorage.resetToDefaults();
     
-    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Factory reset completed. Device restarting...\"}");
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Factory reset completed. Device restarting in configuration portal mode...\"}");
     
     displayManager.debugPrint("Factory reset in progress...", COLOR_YELLOW);
     
@@ -350,4 +415,95 @@ void WebConfig::reloadConfiguration() {
     cyclingEnabled = configStorage.getCyclingEnabled();
     randomOrderEnabled = configStorage.getRandomOrder();
     imageSourceCount = configStorage.getImageSourceCount();
+}
+
+void WebConfig::handleDeviceInfo() {
+    String json = "{";
+    
+    // Device identification
+    json += "\"device\":{";
+    json += "\"name\":\"ESP32-P4 AllSky Display\",";
+    json += "\"chipModel\":\"ESP32-P4\",";
+    json += "\"chipRevision\":" + String(ESP.getChipRevision()) + ",";
+    json += "\"cpuCores\":" + String(ESP.getChipCores()) + ",";
+    json += "\"cpuFreqMHz\":" + String(ESP.getCpuFreqMHz()) + ",";
+    json += "\"sdkVersion\":\"" + String(ESP.getSdkVersion()) + "\",";
+    json += "\"arduinoVersion\":\"" + String(ARDUINO) + "\"";
+    json += "},";
+    
+    // Flash information
+    json += "\"flash\":{";
+    json += "\"size\":" + String(ESP.getFlashChipSize()) + ",";
+    json += "\"speed\":" + String(ESP.getFlashChipSpeed()) + ",";
+    json += "\"mode\":" + String(ESP.getFlashChipMode()) + ",";
+    json += "\"sketchSize\":" + String(ESP.getSketchSize()) + ",";
+    json += "\"sketchUsedPercent\":" + String((ESP.getSketchSize() * 100) / ESP.getFlashChipSize()) + ",";
+    json += "\"freeSketchSpace\":" + String(ESP.getFreeSketchSpace()) + ",";
+    json += "\"sketchMD5\":\"" + String(ESP.getSketchMD5()) + "\"";
+    json += "},";
+    
+    // Memory information
+    json += "\"memory\":{";
+    json += "\"heapSize\":" + String(ESP.getHeapSize()) + ",";
+    json += "\"freeHeap\":" + String(ESP.getFreeHeap()) + ",";
+    json += "\"heapUsedPercent\":" + String(100 - (ESP.getFreeHeap() * 100 / ESP.getHeapSize())) + ",";
+    json += "\"minFreeHeap\":" + String(systemMonitor.getMinFreeHeap()) + ",";
+    json += "\"maxAllocHeap\":" + String(ESP.getMaxAllocHeap()) + ",";
+    json += "\"psramSize\":" + String(ESP.getPsramSize()) + ",";
+    json += "\"freePsram\":" + String(ESP.getFreePsram()) + ",";
+    json += "\"psramUsedPercent\":" + String(100 - (ESP.getFreePsram() * 100 / ESP.getPsramSize())) + ",";
+    json += "\"minFreePsram\":" + String(systemMonitor.getMinFreePsram()) + ",";
+    json += "\"maxAllocPsram\":" + String(ESP.getMaxAllocPsram()) + "";
+    json += "},";
+    
+    // Network information
+    json += "\"network\":{";
+    json += "\"connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") + ",";
+    json += "\"ssid\":\"" + WiFi.SSID() + "\",";
+    json += "\"ipAddress\":\"" + WiFi.localIP().toString() + "\",";
+    json += "\"macAddress\":\"" + WiFi.macAddress() + "\",";
+    json += "\"rssi\":" + String(WiFi.RSSI()) + ",";
+    json += "\"gateway\":\"" + WiFi.gatewayIP().toString() + "\",";
+    json += "\"subnetMask\":\"" + WiFi.subnetMask().toString() + "\",";
+    json += "\"dnsIP\":\"" + WiFi.dnsIP().toString() + "\",";
+    json += "\"hostname\":\"" + String(WiFi.getHostname()) + "\"";
+    json += "},";
+    
+    // MQTT information
+    json += "\"mqtt\":{";
+    json += "\"connected\":" + String(mqttManager.isConnected() ? "true" : "false") + ",";
+    json += "\"server\":\"" + configStorage.getMQTTServer() + "\",";
+    json += "\"port\":" + String(configStorage.getMQTTPort()) + ",";
+    json += "\"clientId\":\"" + configStorage.getMQTTClientID() + "\",";
+    json += "\"haDiscoveryEnabled\":" + String(configStorage.getHADiscoveryEnabled() ? "true" : "false") + "";
+    json += "},";
+    
+    // Display information
+    json += "\"display\":{";
+    json += "\"brightness\":" + String(displayManager.getBrightness()) + ",";
+    json += "\"brightnessAutoMode\":" + String(configStorage.getBrightnessAutoMode() ? "true" : "false") + ",";
+    json += "\"width\":" + String(displayManager.getWidth()) + ",";
+    json += "\"height\":" + String(displayManager.getHeight()) + "";
+    json += "},";
+    
+    // Image cycling information
+    json += "\"imageCycling\":{";
+    json += "\"enabled\":" + String(configStorage.getCyclingEnabled() ? "true" : "false") + ",";
+    json += "\"currentIndex\":" + String(configStorage.getCurrentImageIndex()) + ",";
+    json += "\"totalSources\":" + String(configStorage.getImageSourceCount()) + ",";
+    json += "\"cycleIntervalMs\":" + String(configStorage.getCycleInterval()) + ",";
+    json += "\"updateIntervalMs\":" + String(configStorage.getUpdateInterval()) + ",";
+    json += "\"randomOrder\":" + String(configStorage.getRandomOrder() ? "true" : "false") + "";
+    json += "},";
+    
+    // System status
+    json += "\"system\":{";
+    json += "\"uptime\":" + String(millis()) + ",";
+    json += "\"healthy\":" + String(systemMonitor.isSystemHealthy() ? "true" : "false") + ",";
+    json += "\"temperature\":" + String(temperatureRead()) + "";
+    json += "}";
+    
+    json += "}";
+    
+    sendResponse(200, "application/json", json);
 }

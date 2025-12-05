@@ -1,14 +1,6 @@
 name: Arduino Compilation Check
 
 on:
-  push:
-    branches: [ main, Snd, Dev ]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'images/**'
-      - '.gitignore'
-      - 'LICENSE'
   pull_request:
     branches: [ main, Snd, Dev ]
     paths-ignore:
