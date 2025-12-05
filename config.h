@@ -9,7 +9,7 @@
 // =============================================================================
 
 // Set to 0 to disable all debug output and strip debug strings from binary
-#define DEBUG_ENABLED 0
+#define DEBUG_ENABLED 1
 
 #if DEBUG_ENABLED
   #define LOG_PRINT(x) Serial.print(x)

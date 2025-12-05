@@ -8,30 +8,192 @@
 // Page generation functions for the web configuration interface
 // These functions generate the HTML content for each configuration page
 
+String WebConfig::generateWiFiPortalPage() {
+    String html = "<div class='main'><div class='container' style='max-width:600px;margin:2rem auto'>";
+    
+    // Welcome message
+    html += "<div class='card' style='text-align:center;margin-bottom:2rem'>";
+    html += "<h1 style='color:#10b981;margin-bottom:1rem'>🌐 WiFi Configuration</h1>";
+    html += "<p style='color:#9ca3af;font-size:1.1rem'>Welcome to ESP32 AllSky Display setup!</p>";
+    html += "<p style='color:#9ca3af;margin-top:0.5rem'>Please configure your WiFi credentials to get started.</p>";
+    html += "</div>";
+    
+    // Scan results card
+    html += "<div class='card' style='margin-bottom:1.5rem'>";
+    html += "<h2 style='margin-bottom:1rem'>📡 Available Networks</h2>";
+    html += "<div id='networks' style='max-height:200px;overflow-y:auto;border:1px solid #374151;border-radius:0.5rem;padding:0.5rem'>";
+    html += "<p style='color:#9ca3af;text-align:center'>Scanning...</p>";
+    html += "</div>";
+    html += "</div>";
+    
+    // Configuration form
+    html += "<div class='card'>";
+    html += "<h2 style='margin-bottom:1.5rem'>🔧 WiFi Settings</h2>";
+    html += "<form id='wifiForm' onsubmit='return saveWiFi(event)'>";
+    
+    html += "<div class='form-group'>";
+    html += "<label for='ssid'>Network Name (SSID)</label>";
+    html += "<input type='text' id='ssid' name='ssid' class='form-control' required placeholder='Enter WiFi SSID'>";
+    html += "</div>";
+    
+    html += "<div class='form-group'>";
+    html += "<label for='password'>Password</label>";
+    html += "<input type='password' id='password' name='password' class='form-control' placeholder='Enter WiFi password (leave blank for open network)'>";
+    html += "</div>";
+    
+    html += "<button type='submit' class='btn-primary' style='width:100%;padding:0.875rem'>Connect to WiFi</button>";
+    html += "</form>";
+    
+    html += "<div id='message' style='margin-top:1rem;padding:0.75rem;border-radius:0.5rem;display:none'></div>";
+    html += "</div>";
+    
+    html += "</div></div>";
+    
+    // JavaScript for WiFi portal
+    html += "<script>";
+    html += "function scanNetworks(){";
+    html += "  const container=document.getElementById('networks');";
+    html += "  container.innerHTML='<p style=\"color:#9ca3af;text-align:center\">Scanning networks...</p>';";
+    html += "  fetch('/api/scan-networks').then(r=>r.json()).then(data=>{";
+    html += "    if(data.networks && data.networks.length>0){";
+    html += "      let html='';";
+    html += "      data.networks.forEach(net=>{";
+    html += "        const signal=net.rssi>-50?'🟢':net.rssi>-70?'🟡':'🔴';";
+    html += "        const secure=net.encryption!='OPEN'?'🔒':'';";
+    html += "        html+=`<div style='padding:0.5rem;border-bottom:1px solid #374151;cursor:pointer' onclick='selectNetwork(\"${net.ssid}\")'>${signal} ${secure} ${net.ssid} (${net.rssi} dBm)</div>`;";
+    html += "      });";
+    html += "      container.innerHTML=html;";
+    html += "    }else{";
+    html += "      container.innerHTML='<p style=\"color:#9ca3af;text-align:center\">No networks found</p>';";
+    html += "    }";
+    html += "  }).catch(err=>{container.innerHTML='<p style=\"color:#ef4444;text-align:center\">Scan failed</p>';});";
+    html += "}";
+    html += "function selectNetwork(ssid){document.getElementById('ssid').value=ssid;}";
+    html += "function saveWiFi(e){";
+    html += "  e.preventDefault();";
+    html += "  const msg=document.getElementById('message');";
+    html += "  const form=document.getElementById('wifiForm');";
+    html += "  const formData=new FormData(form);";
+    html += "  msg.style.display='block';msg.style.backgroundColor='#1e3a8a';msg.style.color='#60a5fa';";
+    html += "  msg.textContent='Connecting to WiFi...';";
+    html += "  fetch('/api/save-wifi',{method:'POST',body:new URLSearchParams(formData)})";
+    html += "    .then(r=>r.json()).then(data=>{";
+    html += "      if(data.status==='success'){";
+    html += "        msg.style.backgroundColor='#065f46';msg.style.color='#10b981';";
+    html += "        msg.textContent='✓ '+data.message;";
+    html += "        setTimeout(()=>{msg.textContent+=' Restarting...';},2000);";
+    html += "      }else{";
+    html += "        msg.style.backgroundColor='#7f1d1d';msg.style.color='#ef4444';";
+    html += "        msg.textContent='✗ '+data.message;";
+    html += "      }";
+    html += "    }).catch(err=>{";
+    html += "      msg.style.backgroundColor='#7f1d1d';msg.style.color='#ef4444';";
+    html += "      msg.textContent='✗ Connection failed: '+err.message;";
+    html += "    });";
+    html += "  return false;";
+    html += "}";
+    html += "window.onload=function(){scanNetworks();setInterval(scanNetworks,15000);};";
+    html += "</script>";
+    
+    return html;
+}
+
 String WebConfig::generateMainPage() {
     String html = "<div class='main'><div class='container'>";
     
-    // System status cards
-    html += "<div class='stats'>";
+    // Calculate usage percentages
+    int heapUsedPercent = 100 - (ESP.getFreeHeap() * 100 / ESP.getHeapSize());
+    int psramUsedPercent = 100 - (ESP.getFreePsram() * 100 / ESP.getPsramSize());
+    int flashUsedPercent = (ESP.getSketchSize() * 100) / ESP.getFlashChipSize();
+    
+    // Get cycling info
+    bool isCycling = configStorage.getCyclingEnabled();
+    unsigned long cycleIntervalMs = configStorage.getCycleInterval();
+    unsigned long cycleIntervalSec = cycleIntervalMs / 1000;  // Convert milliseconds to seconds
+    
+    // Format interval: convert seconds to readable format
+    String cycleIntervalStr;
+    if (cycleIntervalSec >= 3600) {
+        // Hours and minutes
+        int hours = cycleIntervalSec / 3600;
+        int mins = (cycleIntervalSec % 3600) / 60;
+        cycleIntervalStr = String(hours) + "h";
+        if (mins > 0) cycleIntervalStr += " " + String(mins) + "m";
+    } else if (cycleIntervalSec >= 60) {
+        // Minutes and seconds
+        int mins = cycleIntervalSec / 60;
+        int secs = cycleIntervalSec % 60;
+        cycleIntervalStr = String(mins) + "m";
+        if (secs > 0) cycleIntervalStr += " " + String(secs) + "s";
+    } else {
+        // Just seconds
+        cycleIntervalStr = String(cycleIntervalSec) + "s";
+    }
+    
+    // Key metrics in top row - 4 evenly spaced cards
+    html += "<div class='stats' style='grid-template-columns:repeat(4,1fr)'>";
+    
     html += "<div class='stat-card'><i class='fas fa-clock stat-icon'></i>";
     html += "<div class='stat-value'>" + formatUptime(millis()) + "</div>";
     html += "<div class='stat-label'>Uptime</div></div>";
     
-    html += "<div class='stat-card'><i class='fas fa-microchip stat-icon'></i>";
-    html += "<div class='stat-value'>" + formatBytes(systemMonitor.getCurrentFreeHeap()) + "</div>";
-    html += "<div class='stat-label'>Free Heap</div></div>";
-    
-    html += "<div class='stat-card'><i class='fas fa-memory stat-icon'></i>";
-    html += "<div class='stat-value'>" + formatBytes(systemMonitor.getCurrentFreePsram()) + "</div>";
-    html += "<div class='stat-label'>Free PSRAM</div></div>";
-    
     html += "<div class='stat-card'><i class='fas fa-sun stat-icon'></i>";
     html += "<div class='stat-value'>" + String(displayManager.getBrightness()) + "%</div>";
-    html += "<div class='stat-label'>Brightness</div></div>";
+    html += "<div class='stat-label'>Brightness (" + String(configStorage.getBrightnessAutoMode() ? "Auto" : "Manual") + ")</div></div>";
+    
+    html += "<div class='stat-card'><i class='fas fa-image stat-icon'></i>";
+    html += "<div class='stat-value'>" + String(isCycling ? "Multi" : "Single") + "</div>";
+    html += "<div class='stat-label'>Image Mode</div></div>";
+    
+    html += "<div class='stat-card'><i class='fas fa-sync-alt stat-icon'></i>";
+    html += "<div class='stat-value'>" + cycleIntervalStr + "</div>";
+    html += "<div class='stat-label'>Update Frequency</div></div>";
+    
     html += "</div>";
     
-    // Quick status cards
-    html += "<div class='grid'>";
+    // Information cards grid
+    html += "<div class='grid' style='margin-top:2rem'>";
+    
+    // System Information Card - now includes CPU, temp, health
+    html += "<div class='card'><h2>💻 System Information</h2>";
+    html += "<div style='flex:1'>";
+    html += "<div class='stat-grid'>";
+    html += "<div><strong class='text-label'>Chip Model:</strong><br>ESP32-P4 (Rev " + String(ESP.getChipRevision()) + ")</div>";
+    html += "<div><strong class='text-label'>CPU Cores:</strong><br>" + String(ESP.getChipCores()) + " @ " + String(ESP.getCpuFreqMHz()) + " MHz</div>";
+    html += "<div><strong class='text-label'>Temperature:</strong><br>" + String(temperatureRead(), 1) + "°C</div>";
+    html += "<div><strong class='text-label'>SDK Version:</strong><br>" + String(ESP.getSdkVersion()) + "</div>";
+    html += "<div><strong class='text-label'>Flash Size:</strong><br>" + formatBytes(ESP.getFlashChipSize()) + " (" + String(flashUsedPercent) + "% used)</div>";
+    html += "<div><strong class='text-label'>Sketch Size:</strong><br>" + formatBytes(ESP.getSketchSize()) + "</div>";
+    html += "<div><strong class='text-label'>Free Flash:</strong><br>" + formatBytes(ESP.getFreeSketchSpace()) + "</div>";
+    html += "<div><strong class='text-label'>System Health:</strong><br>" + String(systemMonitor.isSystemHealthy() ? "✓ Healthy" : "⚠ Warning") + "</div>";
+    html += "</div></div></div>";
+    
+    // Memory Details Card - now includes heap and PSRAM with percentages
+    html += "<div class='card'><h2>🧠 Memory Details</h2>";
+    html += "<div style='flex:1'>";
+    html += "<h3 style='color:#10b981;font-size:1rem;margin-bottom:0.75rem'>Heap Memory</h3>";
+    html += "<div style='margin-bottom:1.5rem'>";
+    html += "<div style='display:flex;justify-content:space-between;margin-bottom:0.5rem'>";
+    html += "<span class='text-muted-sm'>Used: " + formatBytes(ESP.getHeapSize() - ESP.getFreeHeap()) + " / " + formatBytes(ESP.getHeapSize()) + "</span>";
+    html += "<span class='text-cyan-xs'>" + String(heapUsedPercent) + "%</span>";
+    html += "</div>";
+    html += "<div class='progress'><div class='progress-bar' style='width:" + String(heapUsedPercent) + "%'></div></div>";
+    html += "<p class='text-muted' style='margin-top:0.5rem;font-size:0.85rem'>Free: " + formatBytes(ESP.getFreeHeap()) + " | Min Free: " + formatBytes(systemMonitor.getMinFreeHeap()) + "</p>";
+    html += "</div>";
+    html += "<h3 style='color:#10b981;font-size:1rem;margin-bottom:0.75rem'>PSRAM Memory</h3>";
+    html += "<div>";
+    html += "<div style='display:flex;justify-content:space-between;margin-bottom:0.5rem'>";
+    html += "<span class='text-muted-sm'>Used: " + formatBytes(ESP.getPsramSize() - ESP.getFreePsram()) + " / " + formatBytes(ESP.getPsramSize()) + "</span>";
+    html += "<span class='text-cyan-xs'>" + String(psramUsedPercent) + "%</span>";
+    html += "</div>";
+    html += "<div class='progress'><div class='progress-bar' style='width:" + String(psramUsedPercent) + "%'></div></div>";
+    html += "<p class='text-muted' style='margin-top:0.5rem;font-size:0.85rem'>Free: " + formatBytes(ESP.getFreePsram()) + " | Min Free: " + formatBytes(systemMonitor.getMinFreePsram()) + "</p>";
+    html += "</div></div></div>";
+    
+    html += "</div>";
+    
+    // Status cards grid
+    html += "<div class='grid' style='margin-top:1.5rem'>";
     
     // WiFi Status
     html += "<div class='card'><h2>📡 Network Status</h2>";
@@ -115,6 +277,15 @@ String WebConfig::generateMainPage() {
         html += "<h3 class='text-muted-sm' style='margin-bottom:1rem'>Image Source:</h3>";
         html += "<div class='text-light text-muted-sm' style='padding:0.75rem;background:#1e293b;border-radius:8px;border-left:4px solid #0ea5e9;overflow-wrap:break-word;word-break:break-all;font-family:monospace'>" + escapeHtml(configStorage.getImageURL()) + "</div>";
     }
+    
+    // Add image navigation controls
+    if (configStorage.getCyclingEnabled() && configStorage.getImageSourceCount() > 1) {
+        html += "<div style='margin-top:1.5rem;display:flex;gap:0.75rem;justify-content:center'>";
+        html += "<button type='button' class='btn btn-secondary' onclick='previousImage(this)' style='flex:1;max-width:200px'><i class='fas fa-chevron-left'></i> Previous</button>";
+        html += "<button type='button' class='btn btn-secondary' onclick='nextImage(this)' style='flex:1;max-width:200px'>Next <i class='fas fa-chevron-right'></i></button>";
+        html += "</div>";
+    }
+    
     html += "</div></div></div>";
     
     return html;
@@ -231,7 +402,21 @@ String WebConfig::generateImageSourcesPage() {
     if (sourceCount > 1) {
         html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources(this)' style='margin-left:1rem;'>🗑️ Clear All</button>";
     }
-    html += "</div></div></div></div>";
+    html += "</div>";
+    
+    // Add image navigation controls for multi-image mode
+    if (sourceCount > 1) {
+        html += "<div style='margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid #334155'>";
+        html += "<h3 style='margin-bottom:1rem;color:#cbd5e1'>Manual Navigation</h3>";
+        html += "<div style='display:flex;gap:0.75rem;justify-content:center'>";
+        html += "<button type='button' class='btn btn-secondary' onclick='previousImage(this)' style='flex:1;max-width:200px'><i class='fas fa-chevron-left'></i> Previous Image</button>";
+        html += "<button type='button' class='btn btn-secondary' onclick='nextImage(this)' style='flex:1;max-width:200px'>Next Image <i class='fas fa-chevron-right'></i></button>";
+        html += "</div>";
+        html += "<p class='text-muted-sm' style='margin-top:0.75rem;text-align:center'><i class='fas fa-info-circle' style='margin-right:4px'></i>Manually switch between images without waiting for the cycle interval</p>";
+        html += "</div>";
+    }
+    
+    html += "</div></div></div>";
     return html;
 }
 
@@ -354,6 +539,16 @@ String WebConfig::generateSerialCommandsPage() {
     html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Action</th>";
     html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Description</th></tr></thead><tbody>";
     
+    html += "<tr style='background:#1e3a2e;border-left:4px solid #10b981'><td colspan='3' style='padding:0.75rem;font-weight:bold;color:#10b981;font-size:1.05rem'>🖼️ Image Navigation</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>→ / ↓</td>";
+    html += "<td style='padding:0.75rem'>Next Image</td><td class='text-muted-sm' style='padding:0.75rem'>Switch to the next image (Right or Down arrow keys)</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>← / ↑</td>";
+    html += "<td style='padding:0.75rem'>Previous Image</td><td class='text-muted-sm' style='padding:0.75rem'>Go back to the previous image (Left or Up arrow keys)</td></tr>";
+    
+    html += "<tr style='background:#1e3a2e;border-left:4px solid #10b981'><td colspan='3' style='padding:0.75rem;font-weight:bold;color:#10b981;font-size:1.05rem'>⚙️ Image Transformations</td></tr>";
+    
     html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>+</td>";
     html += "<td style='padding:0.75rem'>Scale Up</td><td class='text-muted-sm' style='padding:0.75rem'>Increase image scale on both axes by 0.1</td></tr>";
     
@@ -461,6 +656,184 @@ String WebConfig::generateSerialCommandsPage() {
     html += "</div>";
     html += "<div class='info-box-warn' style='margin-top:1rem'>";
     html += "<p class='text-warning text-muted-sm' style='margin:0'><i class='fas fa-exclamation-triangle' style='margin-right:8px'></i><strong>Brightness:</strong> L and K commands take effect immediately but are NOT saved. Brightness settings persist only when changed via the web interface or MQTT.</p>";
+    html += "</div></div>";
+    
+    html += "</div></div>";
+    return html;
+}
+
+String WebConfig::generateAPIReferencePage() {
+    String deviceIP = WiFi.localIP().toString();
+    String html = "<div class='main'><div class='container'>";
+    
+    html += "<div class='card'><h2><i class='fas fa-plug'></i> API Reference</h2>";
+    html += "<p class='text-muted'>REST API for programmatic control of the ESP32 AllSky Display. All endpoints accept POST requests.</p>";
+    html += "<div class='info-box' style='margin-top:1rem'>";
+    html += "<p style='margin:0'><strong>Base URL:</strong> <code style='background:#0f172a;padding:4px 8px;border-radius:4px;color:#38bdf8'>http://" + deviceIP + ":8080/api/</code></p>";
+    html += "</div></div>";
+    
+    // Configuration Management
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-cog'></i> Configuration Management</h3>";
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/save</h4>";
+    html += "<p class='text-muted-sm'>Save configuration settings. Changes to WiFi or MQTT may require restart.</p>";
+    html += "<div style='margin-top:1rem'><strong class='text-label'>Parameters:</strong></div>";
+    html += "<ul style='margin:0.5rem 0 0 1.5rem;color:#cbd5e1;font-size:0.9rem'>";
+    html += "<li><code>wifi_ssid</code>, <code>wifi_password</code> - Network credentials</li>";
+    html += "<li><code>mqtt_server</code>, <code>mqtt_port</code>, <code>mqtt_user</code>, <code>mqtt_password</code> - MQTT broker settings</li>";
+    html += "<li><code>default_brightness</code> - Display brightness (0-255)</li>";
+    html += "<li><code>default_scale_x/y</code>, <code>default_offset_x/y</code>, <code>default_rotation</code> - Image transforms</li>";
+    html += "<li><code>cycle_interval</code> - Seconds between images</li>";
+    html += "</ul>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/save -d \"default_brightness=200\"</code>";
+    html += "</div></div></div>";
+    
+    // Image Source Management
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-images'></i> Image Source Management</h3>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/add-source</h4>";
+    html += "<p class='text-muted-sm'>Add a new image source to the cycle.</p>";
+    html += "<div style='margin-top:0.5rem'><strong class='text-label'>Parameters:</strong> <code>url</code> - Image URL</div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/add-source -d \"url=https://example.com/image.jpg\"</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/remove-source</h4>";
+    html += "<p class='text-muted-sm'>Remove an image source by index.</p>";
+    html += "<div style='margin-top:0.5rem'><strong class='text-label'>Parameters:</strong> <code>index</code> - Image index (0-based)</div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/remove-source -d \"index=2\"</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/update-source</h4>";
+    html += "<p class='text-muted-sm'>Update an existing image source URL.</p>";
+    html += "<div style='margin-top:0.5rem'><strong class='text-label'>Parameters:</strong> <code>index</code>, <code>url</code></div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/update-source -d \"index=0&url=https://new.com/image.jpg\"</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/clear-sources</h4>";
+    html += "<p class='text-muted-sm'>Remove all image sources.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/clear-sources</code>";
+    html += "</div></div></div>";
+    
+    // Image Navigation
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-arrows-alt-h'></i> Image Navigation</h3>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/next-image</h4>";
+    html += "<p class='text-muted-sm'>Advance to the next image in the cycle.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/next-image</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/previous-image</h4>";
+    html += "<p class='text-muted-sm'>Go back to the previous image.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/previous-image</code>";
+    html += "</div></div></div>";
+    
+    // Image Transformations
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-vector-square'></i> Image Transformations</h3>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/update-transform</h4>";
+    html += "<p class='text-muted-sm'>Update transformation settings for a specific image.</p>";
+    html += "<div style='margin-top:0.5rem'><strong class='text-label'>Parameters:</strong> <code>index</code>, <code>scale_x</code>, <code>scale_y</code>, <code>offset_x</code>, <code>offset_y</code>, <code>rotation</code></div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/update-transform -d \"index=0&scale_x=1.2&scale_y=1.2\"</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/copy-defaults</h4>";
+    html += "<p class='text-muted-sm'>Copy default transformation settings to a specific image.</p>";
+    html += "<div style='margin-top:0.5rem'><strong class='text-label'>Parameters:</strong> <code>index</code> - Target image index</div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/copy-defaults -d \"index=1\"</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/apply-transform</h4>";
+    html += "<p class='text-muted-sm'>Apply transformation changes and refresh the display immediately.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/apply-transform</code>";
+    html += "</div></div></div>";
+    
+    // System Control
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-power-off'></i> System Control</h3>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/restart</h4>";
+    html += "<p class='text-muted-sm'>Reboot the ESP32 device.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/restart</code>";
+    html += "</div></div>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>POST /api/factory-reset</h4>";
+    html += "<p class='text-muted-sm'>Reset all settings to factory defaults and reboot.</p>";
+    html += "<div class='info-box-warn' style='margin-top:0.5rem;margin-bottom:1rem'>";
+    html += "<p style='margin:0;font-size:0.85rem'><i class='fas fa-exclamation-triangle'></i> <strong>Warning:</strong> This will erase all configuration!</p>";
+    html += "</div>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl -X POST http://" + deviceIP + ":8080/api/factory-reset</code>";
+    html += "</div></div></div>";
+    
+    // Device Information
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-microchip'></i> Device Information</h3>";
+    
+    html += "<div style='background:#0f172a;padding:1.5rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.5rem'>GET /api/device-info</h4>";
+    html += "<p class='text-muted-sm'>Get comprehensive device information including hardware specs, memory usage, flash metrics, network status, and system health.</p>";
+    html += "<div style='margin-top:1rem;background:#1e293b;padding:1rem;border-radius:6px;border-left:3px solid #38bdf8'>";
+    html += "<strong class='text-cyan-xs'>Example:</strong><br><code style='color:#94a3b8;font-size:0.85rem'>curl http://" + deviceIP + ":8080/api/device-info</code>";
+    html += "</div>";
+    html += "<div style='margin-top:1rem'><strong class='text-label'>Response includes:</strong></div>";
+    html += "<ul style='margin:0.5rem 0 0 1.5rem;color:#cbd5e1;font-size:0.9rem'>";
+    html += "<li><strong>device</strong> - Chip model, revision, CPU cores/frequency, SDK version</li>";
+    html += "<li><strong>flash</strong> - Size, speed, sketch size, usage percentage, free space, MD5</li>";
+    html += "<li><strong>memory</strong> - Heap and PSRAM size, free/used amounts, min free values</li>";
+    html += "<li><strong>network</strong> - WiFi status, SSID, IP, MAC, RSSI, gateway, DNS</li>";
+    html += "<li><strong>mqtt</strong> - Connection status, server, port, client ID, HA discovery</li>";
+    html += "<li><strong>display</strong> - Brightness, auto mode, resolution</li>";
+    html += "<li><strong>imageCycling</strong> - Status, current index, sources, intervals</li>";
+    html += "<li><strong>system</strong> - Uptime, health status, temperature</li>";
+    html += "</ul></div></div>";
+    
+    // Response Format
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-code'></i> Response Format</h3>";
+    html += "<p class='text-muted'>All API endpoints return JSON responses.</p>";
+    
+    html += "<div style='margin-top:1rem'><strong style='color:#10b981'>Success Response:</strong></div>";
+    html += "<pre style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;overflow-x:auto;margin-top:0.5rem'><code style='color:#94a3b8'>{\"status\": \"success\", \"message\": \"Operation completed\"}</code></pre>";
+    
+    html += "<div style='margin-top:1rem'><strong style='color:#ef4444'>Error Response:</strong></div>";
+    html += "<pre style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;overflow-x:auto;margin-top:0.5rem'><code style='color:#94a3b8'>{\"status\": \"error\", \"message\": \"Error description\"}</code></pre>";
+    html += "</div>";
+    
+    // Integration Examples
+    html += "<div class='card'><h3 style='color:#38bdf8;margin-bottom:1rem'><i class='fas fa-puzzle-piece'></i> Integration Examples</h3>";
+    
+    html += "<div style='margin-bottom:1.5rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.75rem'>Python Script</h4>";
+    html += "<pre style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;overflow-x:auto;font-size:0.85rem'><code style='color:#94a3b8'>import requests\nimport json\n\ndevice_ip = \"" + deviceIP + "\"\nbase_url = f\"http://{device_ip}:8080/api\"\n\n# Get device information\ninfo = requests.get(f\"{base_url}/device-info\").json()\nprint(f\"Device: {info['device']['chipModel']}\")\nprint(f\"Flash used: {info['flash']['sketchUsedPercent']}%\")\nprint(f\"Free heap: {info['memory']['freeHeap']} bytes\")\n\n# Set brightness\nrequests.post(f\"{base_url}/save\", data={\"default_brightness\": 200})\n\n# Add image source\nrequests.post(f\"{base_url}/add-source\", \n              data={\"url\": \"https://example.com/image.jpg\"})\n\n# Next image\nrequests.post(f\"{base_url}/next-image\")</code></pre>";
+    html += "</div>";
+    
+    html += "<div style='margin-bottom:1.5rem'>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.75rem'>Home Assistant Automation</h4>";
+    html += "<pre style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;overflow-x:auto;font-size:0.85rem'><code style='color:#94a3b8'>automation:\n  - alias: \"Next Image at Sunset\"\n    trigger:\n      - platform: sun\n        event: sunset\n    action:\n      - service: rest_command.display_next\n\nrest_command:\n  display_next:\n    url: \"http://" + deviceIP + ":8080/api/next-image\"\n    method: POST</code></pre>";
+    html += "</div>";
+    
+    html += "<div>";
+    html += "<h4 style='color:#10b981;margin-bottom:0.75rem'>cURL Examples</h4>";
+    html += "<pre style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;overflow-x:auto;font-size:0.85rem'><code style='color:#94a3b8'># Windows PowerShell\nInvoke-WebRequest -Method POST -Uri \"http://" + deviceIP + ":8080/api/next-image\"\n\n# Linux/Mac\ncurl -X POST http://" + deviceIP + ":8080/api/next-image\n\n# With parameters\ncurl -X POST http://" + deviceIP + ":8080/api/save \\\n  -d \"default_brightness=200\" \\\n  -d \"cycle_interval=30\"</code></pre>";
     html += "</div></div>";
     
     html += "</div></div>";

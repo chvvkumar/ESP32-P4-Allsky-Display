@@ -9,6 +9,7 @@
 class WiFiManager {
 private:
     bool wifiConnected;
+    bool isAccessPoint;
     unsigned long lastConnectionAttempt;
     int connectionAttempts;
     
@@ -27,6 +28,10 @@ public:
     void connectToWiFi();
     bool isConnected() const;
     void checkConnection();
+    
+    // Access Point mode for configuration
+    bool startConfigPortal();
+    bool isInAPMode() const;
     
     // Status information
     String getIPAddress() const;

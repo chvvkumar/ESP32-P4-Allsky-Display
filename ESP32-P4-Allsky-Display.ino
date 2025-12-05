@@ -228,28 +228,69 @@ void setup() {
     // Initialize WiFi manager
     if (!wifiManager.begin()) {
         debugPrint("ERROR: WiFi initialization failed!", COLOR_RED);
-        debugPrint("Please configure WiFi in config.cpp", COLOR_YELLOW);
+    }
+    
+    // Check if WiFi has been configured
+    LOG_PRINTF("WiFi config check: isConfigured=%d, SSID='%s'\n", 
+               configStorage.isWiFiConfigured(), 
+               configStorage.getWiFiSSID().c_str());
+    
+    if (!configStorage.isWiFiConfigured() || configStorage.getWiFiSSID().isEmpty()) {
+        // First boot or no WiFi configured - start configuration portal
+        debugPrint("=== WiFi Configuration Required ===", COLOR_CYAN);
+        debugPrint("Starting configuration portal...", COLOR_YELLOW);
+        
+        systemMonitor.forceResetWatchdog();
+        
+        if (wifiManager.startConfigPortal()) {
+            debugPrint("Portal started successfully!", COLOR_GREEN);
+            
+            // Start web server in AP mode for configuration
+            if (!webConfig.begin(80)) {
+                debugPrint("ERROR: Web config server failed to start", COLOR_RED);
+            } else {
+                debugPrint("Visit the IP shown above to configure", COLOR_WHITE);
+            }
+        } else {
+            debugPrint("ERROR: Failed to start portal!", COLOR_RED);
+        }
+        
+        systemMonitor.forceResetWatchdog();
     } else {
-        // Try to connect to WiFi with watchdog protection
+        // WiFi configured - try to connect
+        debugPrint("WiFi configured, connecting...", COLOR_CYAN);
+        
         systemMonitor.forceResetWatchdog();
         wifiManager.connectToWiFi();
-        systemMonitor.forceResetWatchdog();  // Reset after WiFi connect attempt
+        systemMonitor.forceResetWatchdog();
         
-        // Check if WiFi connection failed
-        if (!wifiManager.isConnected()) {
+        if (wifiManager.isConnected()) {
+            debugPrint("WiFi connected successfully!", COLOR_GREEN);
+            debugPrintf(COLOR_WHITE, "IP: %s", wifiManager.getIPAddress().c_str());
+            
+            // Initialize MQTT manager
+            if (!mqttManager.begin()) {
+                debugPrint("ERROR: MQTT initialization failed!", COLOR_RED);
+            }
+            
+            // Start web configuration server
+            if (!webConfig.begin(8080)) {
+                debugPrint("ERROR: Web config server failed to start", COLOR_RED);
+            }
+        } else {
+            debugPrint("WiFi connection failed!", COLOR_RED);
+            debugPrint("Starting portal for reconfiguration...", COLOR_YELLOW);
+            
             systemMonitor.forceResetWatchdog();
-        }
-    }
-    
-    // Initialize MQTT manager
-    if (!mqttManager.begin()) {
-        debugPrint("ERROR: MQTT initialization failed!", COLOR_RED);
-    }
-    
-    // Start web configuration server if WiFi is connected
-    if (wifiManager.isConnected()) {
-        if (!webConfig.begin(8080)) {
-            debugPrint("ERROR: Web config server failed to start", COLOR_RED);
+            
+            // Connection failed - start portal for reconfiguration
+            if (wifiManager.startConfigPortal()) {
+                if (!webConfig.begin(80)) {
+                    debugPrint("ERROR: Web config server failed", COLOR_RED);
+                }
+            }
+            
+            systemMonitor.forceResetWatchdog();
         }
     }
     
@@ -898,6 +939,37 @@ void advanceToNextImage() {
                   currentImageIndex + 1, imageSourceCount, getCurrentImageURL().c_str());
 }
 
+// Go back to previous image in cycling sequence
+void advanceToPreviousImage() {
+    // Allow manual advancing even if cycling is disabled
+    if (imageSourceCount <= 1) {
+        LOG_PRINTLN("Cannot go back: only 1 image source configured");
+        return;
+    }
+    
+    if (randomOrderEnabled) {
+        // Random order: pick a different random image
+        int newIndex;
+        do {
+            newIndex = random(0, imageSourceCount);
+        } while (newIndex == currentImageIndex && imageSourceCount > 1);
+        currentImageIndex = newIndex;
+    } else {
+        // Sequential order: go to previous image
+        currentImageIndex = (currentImageIndex - 1 + imageSourceCount) % imageSourceCount;
+    }
+    
+    // Save the new index to persistent storage
+    configStorage.setCurrentImageIndex(currentImageIndex);
+    configStorage.saveConfig();
+    
+    // Update transform settings for the new image
+    updateCurrentImageTransformSettings();
+    
+    LOG_PRINTF("Went back to image %d/%d: %s\n", 
+                  currentImageIndex + 1, imageSourceCount, getCurrentImageURL().c_str());
+}
+
 // Get current image URL based on cycling configuration
 String getCurrentImageURL() {
     if (cyclingEnabled && imageSourceCount > 0) {
@@ -968,6 +1040,25 @@ void processSerialCommands() {
                 configStorage.saveConfig();
                 renderFullImage();
                 LOG_PRINTF("Move right, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
+                break;
+                
+            // Image navigation commands (Arrow keys)
+            case 27:  // ESC character - start of arrow key sequence
+                if (Serial.available() >= 2) {
+                    char seq1 = Serial.read();
+                    char seq2 = Serial.read();
+                    if (seq1 == '[') {
+                        if (seq2 == 'C' || seq2 == 'B') {  // Right arrow or Down arrow
+                            advanceToNextImage();
+                            downloadAndDisplayImage();
+                            LOG_PRINTF("Next image (arrow key): showing image %d/%d\n", currentImageIndex + 1, imageSourceCount);
+                        } else if (seq2 == 'D' || seq2 == 'A') {  // Left arrow or Up arrow
+                            advanceToPreviousImage();
+                            downloadAndDisplayImage();
+                            LOG_PRINTF("Previous image (arrow key): showing image %d/%d\n", currentImageIndex + 1, imageSourceCount);
+                        }
+                    }
+                }
                 break;
                 
             // Rotation commands
@@ -1046,6 +1137,9 @@ void processSerialCommands() {
             case 'h':
             case '?':
                 LOG_PRINTLN("\n=== Image Control Commands ===");
+                LOG_PRINTLN("Image Navigation:");
+                LOG_PRINTLN("  → ↓ : Next image (Right/Down arrows)");
+                LOG_PRINTLN("  ← ↑ : Previous image (Left/Up arrows)");
                 LOG_PRINTLN("Scaling:");
                 LOG_PRINTLN("  +/- : Scale both axes");
                 LOG_PRINTLN("Movement:");
@@ -1125,6 +1219,21 @@ void processSerialCommands() {
 void loop() {
     // Force watchdog reset at start of each loop iteration
     systemMonitor.forceResetWatchdog();
+    
+    // Check if we're in AP configuration mode
+    if (wifiManager.isInAPMode()) {
+        // In AP mode - only handle web config portal
+        systemMonitor.update();
+        systemMonitor.forceResetWatchdog();
+        
+        if (webConfig.isRunning()) {
+            webConfig.handleClient();
+        }
+        
+        systemMonitor.forceResetWatchdog();
+        delay(10); // Small delay to prevent tight loop
+        return; // Skip all normal operations
+    }
     
     // Process background retry tasks (handles network, MQTT, and image download failures)
     taskRetryHandler.process();

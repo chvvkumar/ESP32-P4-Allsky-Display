@@ -36,6 +36,7 @@ private:
     void handleDisplayConfig();
     void handleAdvancedConfig();
     void handleSerialCommands();
+    void handleAPIReference();
     void handleStatus();
     void handleSaveConfig();
     void handleAddImageSource();
@@ -43,11 +44,15 @@ private:
     void handleUpdateImageSource();
     void handleClearImageSources();
     void handleNextImage();
+    void handlePreviousImage();
     void handleUpdateImageTransform();
     void handleCopyDefaultsToImage();
     void handleApplyTransform();
     void handleRestart();
     void handleFactoryReset();
+    void handleSaveWiFi();
+    void handleScanNetworks();
+    void handleDeviceInfo();
     void handleNotFound();
     
     // HTML generators
@@ -55,6 +60,7 @@ private:
     String generateFooter();
     String generateNavigation(const String& currentPage = "");
     String generateMainPage();
+    String generateWiFiPortalPage();
     String generateNetworkPage();
     String generateMQTTPage();
     String generateImagePage();
@@ -63,6 +69,7 @@ private:
     String generateAdvancedPage();
     String generateStatusPage();
     String generateSerialCommandsPage();
+    String generateAPIReferencePage();
     
     // Utility functions
     String getSystemStatus();

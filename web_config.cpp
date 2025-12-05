@@ -33,6 +33,7 @@ bool WebConfig::begin(int port) {
         server->on("/config/display", [this]() { handleDisplayConfig(); });
         server->on("/config/advanced", [this]() { handleAdvancedConfig(); });
         server->on("/config/commands", [this]() { handleSerialCommands(); });
+        server->on("/config/api", [this]() { handleAPIReference(); });
         server->on("/status", [this]() { handleStatus(); });
         server->on("/api/save", HTTP_POST, [this]() { handleSaveConfig(); });
         server->on("/api/add-source", HTTP_POST, [this]() { handleAddImageSource(); });
@@ -40,11 +41,15 @@ bool WebConfig::begin(int port) {
         server->on("/api/update-source", HTTP_POST, [this]() { handleUpdateImageSource(); });
         server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
         server->on("/api/next-image", HTTP_POST, [this]() { handleNextImage(); });
+        server->on("/api/previous-image", HTTP_POST, [this]() { handlePreviousImage(); });
         server->on("/api/update-transform", HTTP_POST, [this]() { handleUpdateImageTransform(); });
         server->on("/api/copy-defaults", HTTP_POST, [this]() { handleCopyDefaultsToImage(); });
         server->on("/api/apply-transform", HTTP_POST, [this]() { handleApplyTransform(); });
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
+        server->on("/api/save-wifi", HTTP_POST, [this]() { handleSaveWiFi(); });
+        server->on("/api/scan-networks", HTTP_GET, [this]() { handleScanNetworks(); });
+        server->on("/api/device-info", HTTP_GET, [this]() { handleDeviceInfo(); });
         server->onNotFound([this]() { handleNotFound(); });
         
         LOG_PRINTLN("Starting WebServer...");
@@ -89,11 +94,19 @@ void WebConfig::stop() {
 
 // Route handlers - these call the page generators from web_config_pages.cpp
 void WebConfig::handleRoot() {
-    String html = generateHeader("ESP32 AllSky Display");
-    html += generateNavigation("dashboard");
-    html += generateMainPage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
+    // Check if we're in AP mode - show WiFi config portal
+    if (wifiManager.isInAPMode()) {
+        String html = generateHeader("ESP32 AllSky - WiFi Setup");
+        html += generateWiFiPortalPage();
+        html += generateFooter();
+        sendResponse(200, "text/html", html);
+    } else {
+        String html = generateHeader("ESP32 AllSky Display");
+        html += generateNavigation("dashboard");
+        html += generateMainPage();
+        html += generateFooter();
+        sendResponse(200, "text/html", html);
+    }
 }
 
 void WebConfig::handleNetworkConfig() {
@@ -152,6 +165,14 @@ void WebConfig::handleSerialCommands() {
     sendResponse(200, "text/html", html);
 }
 
+void WebConfig::handleAPIReference() {
+    String html = generateHeader("API Reference");
+    html += generateNavigation("api");
+    html += generateAPIReferencePage();
+    html += generateFooter();
+    sendResponse(200, "text/html", html);
+}
+
 void WebConfig::handleStatus() {
     String json = getSystemStatus();
     sendResponse(200, "application/json", json);
@@ -195,11 +216,11 @@ String WebConfig::generateHeader(const String& title) {
 String WebConfig::generateNavigation(const String& currentPage) {
     String html = "<div class='nav'><div class='container'><div class='nav-content'>";
     
-    String pages[] = {"dashboard", "network", "mqtt", "image", "sources", "display", "advanced", "commands"};
-    String labels[] = {"🏠 Dashboard", "📡 Network", "🔗 MQTT", "🖼️ Single Image", "🔄 Multi-Image", "💡 Display", "⚙️ Advanced", "📟 Commands"};
-    String urls[] = {"/", "/config/network", "/config/mqtt", "/config/image", "/config/sources", "/config/display", "/config/advanced", "/config/commands"};
+    String pages[] = {"dashboard", "network", "mqtt", "image", "sources", "display", "advanced", "commands", "api"};
+    String labels[] = {"🏠 Dashboard", "📡 Network", "🔗 MQTT", "🖼️ Single Image", "🔄 Multi-Image", "💡 Display", "⚙️ Advanced", "📟 Commands", "🔌 API"};
+    String urls[] = {"/", "/config/network", "/config/mqtt", "/config/image", "/config/sources", "/config/display", "/config/advanced", "/config/commands", "/config/api"};
     
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 9; i++) {
         String activeClass = (currentPage == pages[i]) ? " active" : "";
         html += "<a href='" + urls[i] + "' class='nav-item" + activeClass + "'>" + labels[i] + "</a>";
     }
