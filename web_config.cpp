@@ -32,6 +32,7 @@ bool WebConfig::begin(int port) {
         server->on("/config/sources", [this]() { handleImageSources(); });
         server->on("/config/display", [this]() { handleDisplayConfig(); });
         server->on("/config/advanced", [this]() { handleAdvancedConfig(); });
+        server->on("/config/commands", [this]() { handleSerialCommands(); });
         server->on("/status", [this]() { handleStatus(); });
         server->on("/api/save", HTTP_POST, [this]() { handleSaveConfig(); });
         server->on("/api/add-source", HTTP_POST, [this]() { handleAddImageSource(); });
@@ -143,6 +144,14 @@ void WebConfig::handleAdvancedConfig() {
     sendResponse(200, "text/html", html);
 }
 
+void WebConfig::handleSerialCommands() {
+    String html = generateHeader("Serial Commands");
+    html += generateNavigation("commands");
+    html += generateSerialCommandsPage();
+    html += generateFooter();
+    sendResponse(200, "text/html", html);
+}
+
 void WebConfig::handleStatus() {
     String json = getSystemStatus();
     sendResponse(200, "application/json", json);
@@ -186,11 +195,11 @@ String WebConfig::generateHeader(const String& title) {
 String WebConfig::generateNavigation(const String& currentPage) {
     String html = "<div class='nav'><div class='container'><div class='nav-content'>";
     
-    String pages[] = {"dashboard", "network", "mqtt", "image", "sources", "display", "advanced"};
-    String labels[] = {"🏠 Dashboard", "📡 Network", "🔗 MQTT", "🖼️ Single Image", "🔄 Multi-Image", "💡 Display", "⚙️ Advanced"};
-    String urls[] = {"/", "/config/network", "/config/mqtt", "/config/image", "/config/sources", "/config/display", "/config/advanced"};
+    String pages[] = {"dashboard", "network", "mqtt", "image", "sources", "display", "advanced", "commands"};
+    String labels[] = {"🏠 Dashboard", "📡 Network", "🔗 MQTT", "🖼️ Single Image", "🔄 Multi-Image", "💡 Display", "⚙️ Advanced", "📟 Commands"};
+    String urls[] = {"/", "/config/network", "/config/mqtt", "/config/image", "/config/sources", "/config/display", "/config/advanced", "/config/commands"};
     
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
         String activeClass = (currentPage == pages[i]) ? " active" : "";
         html += "<a href='" + urls[i] + "' class='nav-item" + activeClass + "'>" + labels[i] + "</a>";
     }

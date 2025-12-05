@@ -272,3 +272,134 @@ String WebConfig::generateStatusPage() {
     html += "<div class='card'><h2>📊 System Status</h2><div id='statusData'>Loading...</div></div></div></div>";
     return html;
 }
+
+String WebConfig::generateSerialCommandsPage() {
+    String html = "<div class='main'><div class='container'>";
+    
+    // Introduction
+    html += "<div class='card'><h2>📟 Serial Commands Reference</h2>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Control your display using serial commands via USB connection. Open the Serial Monitor at 9600 baud to send commands.</p>";
+    html += "<div style='background:rgba(14,165,233,0.1);border:1px solid #0ea5e9;border-radius:8px;padding:1rem;margin-top:1rem'>";
+    html += "<p style='color:#38bdf8;margin:0;font-size:0.9rem'><i class='fas fa-info-circle' style='margin-right:8px'></i><strong>Tip:</strong> Type 'H' or '?' in the Serial Monitor to display this help in your terminal.</p>";
+    html += "</div></div>";
+    
+    // Image Transformation Commands
+    html += "<div class='card'><h2>🔄 Image Transformations</h2>";
+    html += "<table style='width:100%;border-collapse:collapse'>";
+    html += "<thead><tr style='background:#1e293b;border-bottom:2px solid #334155'>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Key</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Action</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Description</th></tr></thead><tbody>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>+</td>";
+    html += "<td style='padding:0.75rem'>Scale Up</td><td style='padding:0.75rem;color:#94a3b8'>Increase image scale on both axes by 0.1</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>-</td>";
+    html += "<td style='padding:0.75rem'>Scale Down</td><td style='padding:0.75rem;color:#94a3b8'>Decrease image scale on both axes by 0.1</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>W</td>";
+    html += "<td style='padding:0.75rem'>Move Up</td><td style='padding:0.75rem;color:#94a3b8'>Move image up by 10 pixels</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>S</td>";
+    html += "<td style='padding:0.75rem'>Move Down</td><td style='padding:0.75rem;color:#94a3b8'>Move image down by 10 pixels</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>A</td>";
+    html += "<td style='padding:0.75rem'>Move Left</td><td style='padding:0.75rem;color:#94a3b8'>Move image left by 10 pixels</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>D</td>";
+    html += "<td style='padding:0.75rem'>Move Right</td><td style='padding:0.75rem;color:#94a3b8'>Move image right by 10 pixels</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>Q</td>";
+    html += "<td style='padding:0.75rem'>Rotate CCW</td><td style='padding:0.75rem;color:#94a3b8'>Rotate image 90° counter-clockwise</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>E</td>";
+    html += "<td style='padding:0.75rem'>Rotate CW</td><td style='padding:0.75rem;color:#94a3b8'>Rotate image 90° clockwise</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>R</td>";
+    html += "<td style='padding:0.75rem'>Reset All</td><td style='padding:0.75rem;color:#94a3b8'>Reset all transformations to defaults</td></tr>";
+    
+    html += "</tbody></table></div>";
+    
+    // Display Control Commands
+    html += "<div class='card'><h2>💡 Display Controls</h2>";
+    html += "<table style='width:100%;border-collapse:collapse'>";
+    html += "<thead><tr style='background:#1e293b;border-bottom:2px solid #334155'>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Key</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Action</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Description</th></tr></thead><tbody>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>L</td>";
+    html += "<td style='padding:0.75rem'>Brightness Up</td><td style='padding:0.75rem;color:#94a3b8'>Increase brightness by 10%</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>K</td>";
+    html += "<td style='padding:0.75rem'>Brightness Down</td><td style='padding:0.75rem;color:#94a3b8'>Decrease brightness by 10%</td></tr>";
+    
+    html += "</tbody></table></div>";
+    
+    // System Commands
+    html += "<div class='card'><h2>⚙️ System Commands</h2>";
+    html += "<table style='width:100%;border-collapse:collapse'>";
+    html += "<thead><tr style='background:#1e293b;border-bottom:2px solid #334155'>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Key</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Action</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Description</th></tr></thead><tbody>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>B</td>";
+    html += "<td style='padding:0.75rem'>Reboot Device</td><td style='padding:0.75rem;color:#94a3b8'>Restart the ESP32 device</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>M</td>";
+    html += "<td style='padding:0.75rem'>Memory Info</td><td style='padding:0.75rem;color:#94a3b8'>Display heap and PSRAM memory status</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>I</td>";
+    html += "<td style='padding:0.75rem'>Network Info</td><td style='padding:0.75rem;color:#94a3b8'>Show WiFi connection details</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>P</td>";
+    html += "<td style='padding:0.75rem'>PPA Info</td><td style='padding:0.75rem;color:#94a3b8'>Display hardware accelerator status</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>T</td>";
+    html += "<td style='padding:0.75rem'>MQTT Info</td><td style='padding:0.75rem;color:#94a3b8'>Show MQTT connection status</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>X</td>";
+    html += "<td style='padding:0.75rem'>Web Server</td><td style='padding:0.75rem;color:#94a3b8'>Show web server status and restart</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;font-family:monospace;color:#10b981'>H / ?</td>";
+    html += "<td style='padding:0.75rem'>Help</td><td style='padding:0.75rem;color:#94a3b8'>Display command reference in Serial Monitor</td></tr>";
+    
+    html += "</tbody></table></div>";
+    
+    // Touch Controls
+    html += "<div class='card'><h2>👆 Touch Controls</h2>";
+    html += "<table style='width:100%;border-collapse:collapse'>";
+    html += "<thead><tr style='background:#1e293b;border-bottom:2px solid #334155'>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Gesture</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Action</th>";
+    html += "<th style='padding:0.75rem;text-align:left;color:#38bdf8'>Description</th></tr></thead><tbody>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;color:#10b981'>Single Tap</td>";
+    html += "<td style='padding:0.75rem'>Next Image</td><td style='padding:0.75rem;color:#94a3b8'>Switch to the next image in cycling mode</td></tr>";
+    
+    html += "<tr style='border-bottom:1px solid #334155'><td style='padding:0.75rem;color:#10b981'>Double Tap</td>";
+    html += "<td style='padding:0.75rem'>Toggle Mode</td><td style='padding:0.75rem;color:#94a3b8'>Switch between cycling and single refresh modes</td></tr>";
+    
+    html += "</tbody></table></div>";
+    
+    // Usage Instructions
+    html += "<div class='card'><h2>🔧 How to Use Serial Commands</h2>";
+    html += "<ol style='color:#94a3b8;line-height:2;margin-left:1.5rem'>";
+    html += "<li>Connect your ESP32 device to your computer via USB</li>";
+    html += "<li>Open Arduino IDE or any serial terminal</li>";
+    html += "<li>Set baud rate to <strong style='color:#38bdf8'>9600</strong></li>";
+    html += "<li>Type a command key and press Enter</li>";
+    html += "<li>Commands are <strong style='color:#38bdf8'>case-insensitive</strong> (W or w both work)</li>";
+    html += "<li>Serial output will confirm the action and show current values</li>";
+    html += "</ol>";
+    html += "<div style='background:rgba(14,165,233,0.1);border:1px solid #0ea5e9;border-radius:8px;padding:1rem;margin-top:1rem'>";
+    html += "<p style='color:#38bdf8;margin:0;font-size:0.9rem'><i class='fas fa-info-circle' style='margin-right:8px'></i><strong>Image Transformations:</strong> Changes made with +, -, W, S, A, D, Q, E, R are automatically saved to configuration for the current image.</p>";
+    html += "</div>";
+    html += "<div style='background:rgba(245,158,11,0.1);border:1px solid #f59e0b;border-radius:8px;padding:1rem;margin-top:1rem'>";
+    html += "<p style='color:#f59e0b;margin:0;font-size:0.9rem'><i class='fas fa-exclamation-triangle' style='margin-right:8px'></i><strong>Brightness:</strong> L and K commands take effect immediately but are NOT saved. Brightness settings persist only when changed via the web interface or MQTT.</p>";
+    html += "</div></div>";
+    
+    html += "</div></div>";
+    return html;
+}

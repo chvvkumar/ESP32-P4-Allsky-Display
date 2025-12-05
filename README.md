@@ -73,7 +73,7 @@ This project makes your ESP32-P4 touch display into an all-sky camera viewer wit
 
 **Optional 3D Printed Case:**
 
-<img src="images/Case.jpg" alt="3D Printed Case" width="400">
+<img src="images/Case.jpg" alt="3D Printed Case" width="600">
 
 [Download from Printables](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
 
