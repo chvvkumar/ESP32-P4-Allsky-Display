@@ -30,29 +30,6 @@ String WebConfig::generateMainPage() {
     html += "<div class='stat-label'>Brightness</div></div>";
     html += "</div>";
     
-    // Brightness control card
-    html += "<div class='card'><h2>💡 Screen Brightness</h2>";
-    html += "<div class='form-group'><label>Control Mode</label>";
-    html += "<div style='margin-top:0.5rem;display:flex;align-items:center'>";
-    html += "<input type='checkbox' id='brightness_auto_mode' name='brightness_auto_mode' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'";
-    if (configStorage.getBrightnessAutoMode()) html += " checked";
-    html += " onchange='updateBrightnessMode(this.checked)'> ";
-    html += "<label for='brightness_auto_mode' style='margin-bottom:0;cursor:pointer'>Auto (MQTT controlled)</label>";
-    html += "</div></div>";
-    
-    html += "<div class='form-group' id='brightness_slider_container' style='";
-    if (configStorage.getBrightnessAutoMode()) html += "opacity:0.5;";
-    html += "'><label for='main_brightness'>Brightness (%)</label>";
-    html += "<input type='range' id='main_brightness' name='default_brightness' class='form-control' style='height:6px;padding:0' value='" + 
-            String(displayManager.getBrightness()) + "' min='0' max='100' oninput='updateMainBrightnessValue(this.value)'";
-    if (configStorage.getBrightnessAutoMode()) html += " disabled";
-    html += "><div style='text-align:center;margin-top:0.5rem;color:#38bdf8;font-weight:bold'><span id='mainBrightnessValue'>" + 
-            String(displayManager.getBrightness()) + "</span>%</div></div>";
-    
-    html += "<button type='button' class='btn btn-primary' onclick='saveMainBrightness(this)'";
-    if (configStorage.getBrightnessAutoMode()) html += " disabled";
-    html += " id='save_brightness_btn'>Apply Brightness</button></div>";
-    
     // Quick status cards
     html += "<div class='grid'>";
     
@@ -60,8 +37,13 @@ String WebConfig::generateMainPage() {
     html += "<div class='card'><h2>📡 Network Status</h2>";
     if (wifiManager.isConnected()) {
         html += "<div style='flex:1'><p><span class='status-indicator status-online'></span>Connected to <strong style='color:#38bdf8'>" + String(WiFi.SSID()) + "</strong></p>";
-        html += "<p style='margin-top:0.5rem;font-size:0.9rem;color:#94a3b8'>IP Address: " + WiFi.localIP().toString() + "</p>";
-        html += "<p style='font-size:0.9rem;color:#94a3b8'>Signal: " + String(WiFi.RSSI()) + " dBm</p></div>";
+        html += "<div style='display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.75rem;font-size:0.9rem;color:#94a3b8'>";
+        html += "<div><strong style='color:#64748b'>IP Address:</strong><br>" + WiFi.localIP().toString() + "</div>";
+        html += "<div><strong style='color:#64748b'>Signal:</strong><br>" + String(WiFi.RSSI()) + " dBm</div>";
+        html += "<div><strong style='color:#64748b'>MAC Address:</strong><br>" + WiFi.macAddress() + "</div>";
+        html += "<div><strong style='color:#64748b'>Gateway:</strong><br>" + WiFi.gatewayIP().toString() + "</div>";
+        html += "<div><strong style='color:#64748b'>DNS:</strong><br>" + WiFi.dnsIP().toString() + "</div>";
+        html += "</div></div>";
     } else {
         html += "<div style='flex:1'><p><span class='status-indicator status-offline'></span>Not connected</p></div>";
     }
@@ -71,25 +53,68 @@ String WebConfig::generateMainPage() {
     html += "<div class='card'><h2>🔗 MQTT Status</h2>";
     if (mqttManager.isConnected()) {
         html += "<div style='flex:1'><p><span class='status-indicator status-online'></span>Connected to broker</p>";
-        html += "<p style='margin-top:0.5rem;font-size:0.9rem;color:#94a3b8'>Server: " + configStorage.getMQTTServer() + ":" + String(configStorage.getMQTTPort()) + "</p></div>";
+        html += "<div style='margin-top:0.75rem;font-size:0.9rem;color:#94a3b8'>";
+        html += "<p style='margin:0.25rem 0'><strong style='color:#64748b'>Server:</strong> " + configStorage.getMQTTServer() + ":" + String(configStorage.getMQTTPort()) + "</p>";
+        html += "<p style='margin:0.25rem 0'><strong style='color:#64748b'>Client ID:</strong> " + escapeHtml(configStorage.getMQTTClientID()) + "</p>";
+        html += "<p style='margin:0.25rem 0'><strong style='color:#64748b'>HA Discovery:</strong> " + String(configStorage.getHADiscoveryEnabled() ? "Enabled" : "Disabled") + "</p>";
+        html += "</div></div>";
     } else {
         html += "<div style='flex:1'><p><span class='status-indicator status-offline'></span>Not connected</p></div>";
     }
     html += "</div>";
+    html += "</div>";
     
-    // Image Status
-    html += "<div class='card'><h2>🖼️ Image Status</h2><div style='flex:1'>";
+    // Image Status - Configured Sources List
+    html += "<div class='card' style='margin-top:1.5rem'><h2>🖼️ Image Status</h2>";
+    
     if (configStorage.getCyclingEnabled()) {
         int sourceCount = configStorage.getImageSourceCount();
         int currentIndex = configStorage.getCurrentImageIndex();
-        html += "<p><strong>Mode:</strong> Cycling (" + String(sourceCount) + " sources)</p>";
-        html += "<p style='word-break:break-all;margin-top:0.5rem;font-size:0.9rem;color:#94a3b8'><strong>Current Source:</strong> [" + String(currentIndex + 1) + "/" + String(sourceCount) + "] " + escapeHtml(configStorage.getCurrentImageURL()) + "</p>";
-        html += "<p style='font-size:0.9rem;color:#94a3b8'><strong>Cycle Interval:</strong> " + String(configStorage.getCycleInterval() / 1000) + " seconds</p>";
+        
+        // Summary info
+        html += "<div style='display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b;border-radius:8px;margin-bottom:1rem'>";
+        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Mode:</strong> Cycling</p></div>";
+        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Active:</strong> [" + String(currentIndex + 1) + "/" + String(sourceCount) + "]</p></div>";
+        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Cycle:</strong> " + String(configStorage.getCycleInterval() / 1000) + "s</p></div>";
+        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Update:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + "m</p></div>";
+        html += "</div>";
+        
+        // Explanation
+        html += "<div style='background:rgba(14,165,233,0.1);border:1px solid #0ea5e9;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
+        html += "<p style='color:#38bdf8;margin:0;font-size:0.85rem;line-height:1.6'><i class='fas fa-info-circle' style='margin-right:8px'></i>";
+        html += "<strong>Cycling Mode:</strong> Display rotates through all configured sources every <strong>" + String(configStorage.getCycleInterval() / 1000) + " seconds</strong>. ";
+        html += "Each source is re-downloaded every <strong>" + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</strong> to fetch fresh content (e.g., updated sky photos). ";
+        html += "Sources appear in order or randomly based on your settings.</p>";
+        html += "</div>";
+        
+        // List all configured sources
+        if (sourceCount > 0) {
+            html += "<h3 style='color:#94a3b8;font-size:1rem;margin-bottom:1rem'>Configured Sources:</h3>";
+            for (int i = 0; i < sourceCount; i++) {
+                String sourceUrl = configStorage.getImageSource(i);
+                String activeIndicator = (i == currentIndex) ? "<span style='color:#10b981;margin-right:8px;font-size:1.2rem'>►</span>" : "<span style='color:#64748b;margin-right:8px'>•</span>";
+                html += "<div style='margin-bottom:0.75rem;padding:0.75rem;background:" + String(i == currentIndex ? "#1e3a2e" : "#1e293b") + ";border-radius:8px;border-left:4px solid " + String(i == currentIndex ? "#10b981" : "#475569") + ";overflow-wrap:break-word;word-break:break-all'>";
+                html += "<div style='font-size:0.85rem;color:#94a3b8;margin-bottom:0.25rem'>" + activeIndicator + "<strong style='color:" + String(i == currentIndex ? "#10b981" : "#64748b") + "'>Source " + String(i + 1) + String(i == currentIndex ? " (Active)" : "") + "</strong></div>";
+                html += "<div style='font-size:0.85rem;color:#cbd5e1;font-family:monospace;padding-left:1.5rem'>" + escapeHtml(sourceUrl) + "</div>";
+                html += "</div>";
+            }
+        }
     } else {
-        html += "<p><strong>Mode:</strong> Single Image</p>";
-        html += "<p style='word-break:break-all;margin-top:0.5rem;font-size:0.9rem;color:#94a3b8'><strong>Source:</strong> " + escapeHtml(configStorage.getImageURL()) + "</p>";
+        html += "<div style='display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b;border-radius:8px;margin-bottom:1rem'>";
+        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Mode:</strong> Single Image</p></div>";
+        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Update:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p></div>";
+        html += "</div>";
+        
+        // Explanation
+        html += "<div style='background:rgba(14,165,233,0.1);border:1px solid #0ea5e9;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
+        html += "<p style='color:#38bdf8;margin:0;font-size:0.85rem;line-height:1.6'><i class='fas fa-info-circle' style='margin-right:8px'></i>";
+        html += "<strong>Single Image Mode:</strong> Display shows only one image source. ";
+        html += "The image is re-downloaded every <strong>" + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</strong> to fetch fresh content.</p>";
+        html += "</div>";
+        
+        html += "<h3 style='color:#94a3b8;font-size:1rem;margin-bottom:1rem'>Image Source:</h3>";
+        html += "<div style='padding:0.75rem;background:#1e293b;border-radius:8px;border-left:4px solid #0ea5e9;overflow-wrap:break-word;word-break:break-all;font-size:0.9rem;color:#cbd5e1;font-family:monospace'>" + escapeHtml(configStorage.getImageURL()) + "</div>";
     }
-    html += "</div><p style='font-size:0.8rem;color:#64748b;margin-top:1rem'><strong>Update Interval:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p></div>";
     html += "</div></div></div>";
     
     return html;
@@ -235,18 +260,56 @@ String WebConfig::generateImagePage() {
 }
 
 String WebConfig::generateDisplayPage() {
-    String html = "<div class='main'><div class='container'><form id='displayForm'><div class='grid'>";
-    html += "<div class='card'><h2>💡 Brightness Control</h2>";
-    html += "<div class='form-group'><label for='default_brightness'>Default Brightness (%)</label>";
+    String html = "<div class='main'><div class='container'>";
+    
+    // Current brightness control - Live adjustment (not saved)
+    html += "<div class='card'><h2>💡 Current Brightness Control</h2>";
+    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1rem'>Adjust screen brightness in real-time. Changes take effect immediately but are not saved.</p>";
+    
+    html += "<div class='form-group'><label>Control Mode</label>";
+    html += "<div style='margin-top:0.5rem;display:flex;align-items:center'>";
+    html += "<input type='checkbox' id='brightness_auto_mode' name='brightness_auto_mode' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'";
+    if (configStorage.getBrightnessAutoMode()) html += " checked";
+    html += " onchange='updateBrightnessMode(this.checked)'> ";
+    html += "<label for='brightness_auto_mode' style='margin-bottom:0;cursor:pointer'>Auto (MQTT controlled)</label>";
+    html += "</div></div>";
+    
+    html += "<div class='form-group' id='brightness_slider_container' style='";
+    if (configStorage.getBrightnessAutoMode()) html += "opacity:0.5;";
+    html += "'><label for='main_brightness'>Current Brightness (%)</label>";
+    html += "<input type='range' id='main_brightness' name='default_brightness' class='form-control' style='height:6px;padding:0' value='" + 
+            String(displayManager.getBrightness()) + "' min='0' max='100' oninput='updateMainBrightnessValue(this.value)'";
+    if (configStorage.getBrightnessAutoMode()) html += " disabled";
+    html += "><div style='text-align:center;margin-top:0.5rem;color:#38bdf8;font-weight:bold'><span id='mainBrightnessValue'>" + 
+            String(displayManager.getBrightness()) + "</span>%</div></div>";
+    
+    html += "<button type='button' class='btn btn-primary' onclick='saveMainBrightness(this)'";
+    if (configStorage.getBrightnessAutoMode()) html += " disabled";
+    html += " id='save_brightness_btn'>Apply Brightness</button></div>";
+    
+    // Display settings form - Saved configuration
+    html += "<form id='displayForm'>";
+    
+    // Brightness Settings Card
+    html += "<div class='card'><h2>⚙️ Brightness Settings</h2>";
+    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1rem'>Configure default brightness and backlight hardware settings. These are saved permanently.</p>";
+    
+    html += "<div class='form-group'><label for='default_brightness'>Default Brightness at Startup (%)</label>";
     html += "<input type='range' id='default_brightness' name='default_brightness' class='form-control' value='" + String(configStorage.getDefaultBrightness()) + "' min='0' max='100' oninput='updateBrightnessValue(this.value)'>";
-    html += "<div style='text-align:center;margin-top:0.5rem;color:#38bdf8;font-weight:bold'><span id='brightnessValue'>" + String(configStorage.getDefaultBrightness()) + "</span>%</div></div></div>";
-    html += "<div class='card'><h2>⚙️ Backlight Settings</h2>";
+    html += "<div style='text-align:center;margin-top:0.5rem;color:#38bdf8;font-weight:bold'><span id='brightnessValue'>" + String(configStorage.getDefaultBrightness()) + "</span>%</div>";
+    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>This brightness will be applied when the device boots up.</p></div>";
+    
     html += "<div class='form-group'><label for='backlight_freq'>PWM Frequency (Hz)</label>";
-    html += "<input type='number' id='backlight_freq' name='backlight_freq' class='form-control' value='" + String(configStorage.getBacklightFreq()) + "' min='1000' max='20000'></div>";
+    html += "<input type='number' id='backlight_freq' name='backlight_freq' class='form-control' value='" + String(configStorage.getBacklightFreq()) + "' min='1000' max='20000'>";
+    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>Higher frequency reduces flicker. Typical: 5000 Hz</p></div>";
+    
     html += "<div class='form-group'><label for='backlight_resolution'>PWM Resolution (bits)</label>";
-    html += "<input type='number' id='backlight_resolution' name='backlight_resolution' class='form-control' value='" + String(configStorage.getBacklightResolution()) + "' min='8' max='16'></div></div>";
-    html += "</div><div class='card' style='margin-top:1.5rem'>";
-    html += "<button type='submit' class='btn btn-primary'>💾 Save Display Settings</button></div></form></div></div>";
+    html += "<input type='number' id='backlight_resolution' name='backlight_resolution' class='form-control' value='" + String(configStorage.getBacklightResolution()) + "' min='8' max='16'>";
+    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>Higher resolution provides smoother brightness control. Typical: 10-12 bits</p></div>";
+    
+    html += "<button type='submit' class='btn btn-primary'>💾 Save Brightness Settings</button></div>";
+    
+    html += "</form></div></div>";
     return html;
 }
 

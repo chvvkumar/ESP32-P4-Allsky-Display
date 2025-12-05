@@ -28,10 +28,12 @@ const char* IMAGE_URL = nullptr;
 // or when the configuration is reset to defaults.
 
 const char* DEFAULT_IMAGE_SOURCES[] = {
-    "http://allskypi5.lan/current/resized/image.jpg"      // Default source 1
+    "https://i.imgur.com/EsstNmc.jpeg",                   // Default source 1
+    "https://i.imgur.com/EtW1eaT.jpeg",                   // Default source 2
+    "https://i.imgur.com/k23xBF5.jpeg",                   // Default source 3
+    "https://i.imgur.com/BysRDbf.jpeg",                   // Default source 4
+    "http://allskypi5.lan/current/resized/image.jpg"      // Default source 5
     // Add more image URLs here as needed (up to MAX_IMAGE_SOURCES = 10)
-    // "https://your-server.com/camera/image4.jpg",
-    // "https://your-server.com/camera/image5.jpg",
 };
 
 const int DEFAULT_IMAGE_SOURCE_COUNT = sizeof(DEFAULT_IMAGE_SOURCES) / sizeof(DEFAULT_IMAGE_SOURCES[0]);
