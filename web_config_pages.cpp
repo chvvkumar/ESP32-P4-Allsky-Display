@@ -600,6 +600,12 @@ String WebConfig::generateAPIReferencePage() {
     html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #10b981;border-radius:8px'>";
     html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#10b981;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>GET</span>/status</h3>";
     html += "<p style='color:#94a3b8;margin-bottom:1rem'>Get quick system status summary (lightweight version of /api/info).</p>";
+    
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Request Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0'>";
+    html += "curl -X GET " + deviceUrl + "/status</pre></div>";
+    
     html += "<div style='margin-bottom:1rem'>";
     html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Fields:</p>";
     html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
