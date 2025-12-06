@@ -179,12 +179,17 @@ void setup() {
     ppaAccelerator.setDebugFunctions(debugPrint, debugPrintf);
     mqttManager.setDebugFunctions(debugPrint, debugPrintf, &firstImageLoaded);
     
-    // Now we can use debugPrint functions
-    debugPrint("=== ESP32 Modular AllSky Display ===", COLOR_CYAN);
-    debugPrint("Display initialized!", COLOR_GREEN);
-    debugPrintf(COLOR_WHITE, "Display: %dx%d pixels", w, h);
-    debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
-    debugPrintf(COLOR_WHITE, "Free PSRAM: %d bytes", systemMonitor.getCurrentFreePsram());
+    // Check if WiFi setup is needed before showing startup messages
+    bool needsWiFiSetup = !configStorage.isWiFiProvisioned();
+    
+    if (!needsWiFiSetup) {
+        // Only show startup banner if WiFi is already configured
+        debugPrint("=== ESP32 Modular AllSky Display ===", COLOR_CYAN);
+        debugPrint("Display initialized!", COLOR_GREEN);
+        debugPrintf(COLOR_WHITE, "Display: %dx%d pixels", w, h);
+        debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
+        debugPrintf(COLOR_WHITE, "Free PSRAM: %d bytes", systemMonitor.getCurrentFreePsram());
+    }
     
     // Allocate image buffer in PSRAM
     imageBufferSize = w * h * IMAGE_BUFFER_MULTIPLIER * 2; // 16-bit color
@@ -228,18 +233,26 @@ void setup() {
     
     // Check if WiFi is provisioned (first boot or after reset)
     if (!configStorage.isWiFiProvisioned()) {
-        debugPrint("WiFi Setup Required", COLOR_YELLOW);
-        debugPrint("====================", COLOR_YELLOW);
-        debugPrint("1. Connect to WiFi:", COLOR_CYAN);
-        debugPrint("   AllSky-Display-Setup", COLOR_WHITE);
+        // Clear screen and show only WiFi setup instructions
+        displayManager.clearScreen();
+        
         debugPrint("", COLOR_WHITE);
-        debugPrint("2. Browser opens automatically", COLOR_CYAN);
-        debugPrint("   If not, visit:", COLOR_CYAN);
+        debugPrint("", COLOR_WHITE);
+        debugPrint("  WiFi Setup Required", COLOR_YELLOW);
+        debugPrint("  ====================", COLOR_YELLOW);
+        debugPrint("", COLOR_WHITE);
+        debugPrint("  1. Connect to WiFi:", COLOR_CYAN);
+        debugPrint("     AllSky-Display-Setup", COLOR_WHITE);
+        debugPrint("", COLOR_WHITE);
+        debugPrint("  2. Browser opens automatically", COLOR_CYAN);
+        debugPrint("     If not, visit:", COLOR_CYAN);
         
         // Start captive portal for WiFi configuration
         if (captivePortal.begin("AllSky-Display-Setup")) {
-            debugPrintf(COLOR_GREEN, "   http://%s", captivePortal.getAPIP().c_str());
-            debugPrint("   or http://192.168.4.1", COLOR_GREEN);
+            debugPrint("     http://192.168.4.1", COLOR_GREEN);
+            debugPrint("", COLOR_WHITE);
+            debugPrint("  3. Select your WiFi network", COLOR_CYAN);
+            debugPrint("     Enter password and connect", COLOR_CYAN);
             
             // Wait for configuration with timeout
             unsigned long portalStartTime = millis();
