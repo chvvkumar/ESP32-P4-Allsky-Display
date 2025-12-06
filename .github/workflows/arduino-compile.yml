@@ -44,7 +44,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4.2.2
       with:
-        fetch-depth: 1
+        fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Check required files exist
@@ -217,6 +217,9 @@ jobs:
       id: version
       if: steps.check_release.outputs.should_release == 'true'
       run: |
+        # Fetch all tags to ensure we have complete tag history
+        git fetch --tags --force
+        
         # Determine branch-specific tag prefix
         BRANCH_NAME="${GITHUB_REF#refs/heads/}"
         echo "Branch: $BRANCH_NAME"
@@ -231,31 +234,43 @@ jobs:
           RELEASE_TYPE="test"
         fi
         
-        # Get the latest tag for this branch
+        # Get all matching tags and find the highest version
+        echo "Looking for tags matching pattern: ${TAG_PATTERN}"
         LATEST_TAG=$(git tag -l "${TAG_PATTERN}" | sort -V | tail -n1)
-        if [ -z "$LATEST_TAG" ]; then
-          LATEST_TAG="${TAG_PREFIX}0.0"
-        fi
-        echo "Latest tag: $LATEST_TAG"
         
-        # Extract version numbers (remove prefix first)
-        VERSION="${LATEST_TAG#${TAG_PREFIX}}"
-        IFS='.' read -ra PARTS <<< "$VERSION"
-        MAJOR=${PARTS[0]:-0}
-        MINOR=${PARTS[1]:-0}
+        if [ -z "$LATEST_TAG" ]; then
+          # No existing tags, start at 0.1
+          MAJOR=0
+          MINOR=0
+          echo "No existing tags found, starting at ${TAG_PREFIX}0.1"
+        else
+          echo "Latest tag: $LATEST_TAG"
+          # Extract version numbers (remove prefix first)
+          VERSION="${LATEST_TAG#${TAG_PREFIX}}"
+          IFS='.' read -ra PARTS <<< "$VERSION"
+          MAJOR=${PARTS[0]:-0}
+          MINOR=${PARTS[1]:-0}
+          echo "Current version: $MAJOR.$MINOR"
+        fi
         
         # Increment minor version by 1 (0.1 increments)
         MINOR=$((MINOR + 1))
         NEW_TAG="${TAG_PREFIX}${MAJOR}.${MINOR}"
         
         # Ensure the new tag doesn't already exist (keep incrementing if it does)
+        ATTEMPTS=0
         while git rev-parse "$NEW_TAG" >/dev/null 2>&1; do
-          echo "Tag $NEW_TAG already exists, incrementing..."
+          echo "⚠️ Tag $NEW_TAG already exists, incrementing..."
           MINOR=$((MINOR + 1))
           NEW_TAG="${TAG_PREFIX}${MAJOR}.${MINOR}"
+          ATTEMPTS=$((ATTEMPTS + 1))
+          if [ $ATTEMPTS -gt 100 ]; then
+            echo "❌ Error: Too many version increment attempts"
+            exit 1
+          fi
         done
         
-        echo "New tag: $NEW_TAG"
+        echo "✅ New tag: $NEW_TAG"
         echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
         echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
         echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
