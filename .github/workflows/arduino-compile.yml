@@ -130,29 +130,62 @@ jobs:
     
     - name: Install required libraries
       run: |
-        if [ ! -d ~/Arduino/libraries/GFX_Library_for_Arduino ]; then
+        # Check and install GFX Library for Arduino 1.6.0
+        if [ -d ~/Arduino/libraries/GFX_Library_for_Arduino ]; then
+          INSTALLED_VERSION=$(arduino-cli lib list | grep "GFX Library for Arduino" | awk '{print $2}')
+          if [ "$INSTALLED_VERSION" = "1.6.0" ]; then
+            echo "✅ GFX Library for Arduino 1.6.0 already installed (cached)"
+          else
+            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 1.6.0"
+            arduino-cli lib install "GFX Library for Arduino@1.6.0"
+          fi
+        else
           arduino-cli lib install "GFX Library for Arduino@1.6.0"
-        else
-          echo "✅ GFX Library already installed (cached)"
         fi
         
-        if [ ! -d ~/Arduino/libraries/JPEGDEC ]; then
+        # Check and install JPEGDEC 1.8.2
+        if [ -d ~/Arduino/libraries/JPEGDEC ]; then
+          INSTALLED_VERSION=$(arduino-cli lib list | grep "JPEGDEC" | awk '{print $2}')
+          if [ "$INSTALLED_VERSION" = "1.8.2" ]; then
+            echo "✅ JPEGDEC 1.8.2 already installed (cached)"
+          else
+            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 1.8.2"
+            arduino-cli lib install "JPEGDEC@1.8.2"
+          fi
+        else
           arduino-cli lib install "JPEGDEC@1.8.2"
-        else
-          echo "✅ JPEGDEC already installed (cached)"
         fi
         
-        if [ ! -d ~/Arduino/libraries/PubSubClient ]; then
-          arduino-cli lib install "PubSubClient"
+        # Check and install PubSubClient 2.8
+        if [ -d ~/Arduino/libraries/PubSubClient ]; then
+          INSTALLED_VERSION=$(arduino-cli lib list | grep "PubSubClient" | awk '{print $2}')
+          if [ "$INSTALLED_VERSION" = "2.8" ] || [ "$INSTALLED_VERSION" = "2.8.0" ]; then
+            echo "✅ PubSubClient 2.8 already installed (cached)"
+          else
+            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 2.8"
+            arduino-cli lib install "PubSubClient@2.8"
+          fi
         else
-          echo "✅ PubSubClient already installed (cached)"
+          arduino-cli lib install "PubSubClient@2.8"
         fi
         
-        if [ ! -d ~/Arduino/libraries/ElegantOTA ]; then
+        # Check and install ElegantOTA 3.1.7
+        if [ -d ~/Arduino/libraries/ElegantOTA ]; then
+          INSTALLED_VERSION=$(arduino-cli lib list | grep "ElegantOTA" | awk '{print $2}')
+          if [ "$INSTALLED_VERSION" = "3.1.7" ]; then
+            echo "✅ ElegantOTA 3.1.7 already installed (cached)"
+          else
+            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 3.1.7"
+            arduino-cli lib install "ElegantOTA@3.1.7"
+          fi
+        else
           arduino-cli lib install "ElegantOTA@3.1.7"
-        else
-          echo "✅ ElegantOTA already installed (cached)"
         fi
+        
+        # Verify installed versions
+        echo ""
+        echo "📦 Final installed library versions:"
+        arduino-cli lib list | grep -E "GFX Library|JPEGDEC|PubSubClient|ElegantOTA"
     
     - name: Patch GFX Library for ESP32-P4 compatibility
       run: |
