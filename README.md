@@ -301,6 +301,26 @@ mkdir -p "${OUTPUT_DIR}"
 
 The device provides a comprehensive web-based configuration interface accessible at `http://[device-ip]:8080/`. All settings can be configured through an intuitive UI without needing to recompile the firmware.
 
+### Modern UI Features
+
+**🎨 Enhanced User Experience:**
+- **Toast Notifications**: Elegant popup notifications for all actions with color-coded feedback
+- **Loading Indicators**: Visual progress spinners for long-running operations (restart, factory reset, image switching)
+- **Mobile Responsive**: Hamburger menu navigation for phones and tablets
+- **Keyboard Shortcuts**: 
+  - `Ctrl+S` / `Cmd+S` - Save current form
+  - `Ctrl+R` / `Cmd+R` - Restart device
+  - `Ctrl+N` / `Cmd+N` - Next image
+- **Client-Side Validation**: Real-time input validation with helpful error messages
+- **Accessibility**: ARIA labels, focus indicators, and keyboard navigation support
+- **Dark Theme**: Easy on the eyes dark blue interface with consistent styling
+
+**🔄 Real-Time Feedback:**
+- Instant visual confirmation for all configuration changes
+- Button state changes (loading → success/error → reset)
+- Input field color coding (green for valid, red for errors)
+- Non-blocking notifications that auto-dismiss after 3 seconds
+
 ### Configuration Pages
 
 #### Main Dashboard

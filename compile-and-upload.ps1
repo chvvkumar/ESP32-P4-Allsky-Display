@@ -5,7 +5,8 @@
 param(
     [string]$ComPort = "COM3",
     [string]$BaudRate = "921600",
-    [string]$OutputFolder = ""
+    [string]$OutputFolder = "",
+    [switch]$SkipUpload
 )
 
 # Auto-detect script directory and sketch path
@@ -40,7 +41,45 @@ if (-not (Test-Path $SKETCH_PATH)) {
     exit 1
 }
 
-Write-Host "[1/5] Checking Arduino CLI..." -ForegroundColor Yellow
+Write-Host "[1/6] Updating build information..." -ForegroundColor Yellow
+
+# Update build_info.h with current git information
+$BUILD_INFO_FILE = Join-Path $SCRIPT_DIR "build_info.h"
+try {
+    $gitHash = (git rev-parse --short HEAD 2>$null) -replace "`n|`r"
+    $gitHashFull = (git rev-parse HEAD 2>$null) -replace "`n|`r"
+    $gitBranch = (git branch --show-current 2>$null) -replace "`n|`r"
+    
+    if (-not $gitHash) { $gitHash = "unknown" }
+    if (-not $gitHashFull) { $gitHashFull = "unknown" }
+    if (-not $gitBranch) { $gitBranch = "unknown" }
+    
+    $buildInfoContent = @"
+// Auto-generated build information
+// This file is updated at compile time by the build script
+
+#ifndef BUILD_INFO_H
+#define BUILD_INFO_H
+
+// Build timestamp
+#define BUILD_DATE __DATE__
+#define BUILD_TIME __TIME__
+
+// Git information (updated by compile script)
+#define GIT_COMMIT_HASH "$gitHash"
+#define GIT_COMMIT_FULL "$gitHashFull"
+#define GIT_BRANCH "$gitBranch"
+
+#endif // BUILD_INFO_H
+"@
+    
+    Set-Content -Path $BUILD_INFO_FILE -Value $buildInfoContent -NoNewline
+    Write-Host "      Build info updated: $gitHash ($gitBranch)" -ForegroundColor Green
+} catch {
+    Write-Host "      Warning: Could not update git info" -ForegroundColor Yellow
+}
+
+Write-Host "`n[2/6] Checking Arduino CLI..." -ForegroundColor Yellow
 
 # Try to use Arduino CLI if available
 $ARDUINO_CLI = $null
@@ -59,7 +98,7 @@ if (Get-Command "arduino-cli" -ErrorAction SilentlyContinue) {
 
 # If Arduino CLI is available, use it (much simpler)
 if ($ARDUINO_CLI) {
-    Write-Host "`n[2/5] Compiling sketch with Arduino CLI..." -ForegroundColor Yellow
+    Write-Host "`n[3/6] Compiling sketch with Arduino CLI..." -ForegroundColor Yellow
     Write-Host "      (This may take a minute...)" -ForegroundColor Gray
     
     # Capture output and show progress
@@ -88,12 +127,12 @@ if ($ARDUINO_CLI) {
         exit 1
     }
     
-    Write-Host "`n[3/5] Compilation successful!" -ForegroundColor Green
+    Write-Host "`n[4/6] Compilation successful!" -ForegroundColor Green
     
     # Show size information - auto-detect ESP32 version and compiler path
     $ELF_FILE = "$BUILD_PATH\$SKETCH_NAME.elf"
     if (Test-Path $ELF_FILE) {
-        Write-Host "`n[4/5] Memory usage:" -ForegroundColor Yellow
+        Write-Host "`n[5/6] Memory usage:" -ForegroundColor Yellow
         
         # Try to find the size tool
         $SIZE_TOOL = $null
@@ -115,7 +154,43 @@ if ($ARDUINO_CLI) {
         }
     }
     
-    Write-Host "`n[5/5] Uploading to $ComPort..." -ForegroundColor Yellow
+    # Check if upload should be skipped
+    if ($SkipUpload) {
+        Write-Host "`n[6/6] Skipping upload (SkipUpload flag set)" -ForegroundColor Yellow
+        
+        # Copy binary to specified output folder or Downloads folder
+        $BIN_FILE = "$BUILD_PATH\$SKETCH_NAME.bin"
+        if (Test-Path $BIN_FILE) {
+            # Determine destination path
+            if ($OutputFolder -and $OutputFolder -ne "") {
+                # Use specified output folder
+                if (-not (Test-Path $OutputFolder)) {
+                    New-Item -ItemType Directory -Path $OutputFolder -Force | Out-Null
+                }
+                $destFile = Join-Path $OutputFolder "ESP32-P4-Allsky-Display.bin"
+            } else {
+                # Default to Downloads folder
+                $downloadsPath = [System.IO.Path]::Combine($env:USERPROFILE, "Downloads")
+                $destFile = Join-Path $downloadsPath "ESP32-P4-Allsky-Display.bin"
+            }
+            
+            Copy-Item $BIN_FILE -Destination $destFile -Force
+            
+            $fileSize = [math]::Round((Get-Item $destFile).Length / 1MB, 2)
+            Write-Host "`n      Binary copied to:" -ForegroundColor Green
+            Write-Host "      $destFile" -ForegroundColor Cyan
+            Write-Host "      Size: $fileSize MB" -ForegroundColor Gray
+            Write-Host "`n      You can upload via:" -ForegroundColor White
+            Write-Host "      - ElegantOTA: http://[device-ip]:8080/update" -ForegroundColor Magenta
+            Write-Host "      - ArduinoOTA from IDE" -ForegroundColor Magenta
+        } else {
+            Write-Host "      WARNING: Binary file not found at $BIN_FILE" -ForegroundColor Yellow
+        }
+        
+        exit 0
+    }
+    
+    Write-Host "`n[6/6] Uploading to $ComPort..." -ForegroundColor Yellow
     
     # Capture upload output and show progress on one line
     $uploadOutput = & $ARDUINO_CLI upload --fqbn $FQBN `
@@ -152,37 +227,6 @@ if ($ARDUINO_CLI) {
     }
     
     Write-Host "`nSUCCESS: Upload completed!" -ForegroundColor Green
-    
-    # Copy binary to output folder if specified
-    if ($OutputFolder) {
-        Write-Host "`n[6/6] Copying binary to output folder..." -ForegroundColor Yellow
-        
-        # Create output folder if it doesn't exist
-        if (-not (Test-Path $OutputFolder)) {
-            New-Item -ItemType Directory -Path $OutputFolder -Force | Out-Null
-            Write-Host "      Created output folder: $OutputFolder" -ForegroundColor Gray
-        }
-        
-        # Copy the main binary file
-        $BIN_FILE = "$BUILD_PATH\$SKETCH_NAME.bin"
-        if (Test-Path $BIN_FILE) {
-            $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-            $outputFileName = "ESP32-P4-Allsky-Display-$timestamp.bin"
-            $outputPath = Join-Path $OutputFolder $outputFileName
-            Copy-Item $BIN_FILE $outputPath -Force
-            Write-Host "      Copied: $outputFileName" -ForegroundColor Green
-            Write-Host "      To: $outputPath" -ForegroundColor Gray
-            
-            # Also copy a "latest" version without timestamp
-            $latestPath = Join-Path $OutputFolder "ESP32-P4-Allsky-Display-latest.bin"
-            Copy-Item $BIN_FILE $latestPath -Force
-            Write-Host "      Copied: ESP32-P4-Allsky-Display-latest.bin" -ForegroundColor Green
-        } else {
-            Write-Host "      WARNING: Binary file not found at $BIN_FILE" -ForegroundColor Yellow
-        }
-    }
-    
-    exit 0
 }
 
 # Fallback: Use esptool directly for upload only
@@ -260,5 +304,4 @@ if ($args -contains "-UploadOnly") {
         exit 1
     }
 }
-
 exit 0

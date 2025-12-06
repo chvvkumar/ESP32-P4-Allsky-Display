@@ -500,3 +500,23 @@ void WebConfig::handleGetAllInfo() {
     
     sendResponse(200, "application/json", json);
 }
+
+void WebConfig::handleCurrentImage() {
+    // Return a simple status indicating the current image URL
+    // Note: We don't return actual image data to avoid memory issues
+    // Instead, return metadata that can be used to display the source
+    String json = "{";
+    json += "\"status\":\"success\",";
+    json += "\"current_url\":\"" + escapeJson(configStorage.getCurrentImageURL()) + "\",";
+    json += "\"cycling_enabled\":" + String(configStorage.getCyclingEnabled() ? "true" : "false") + ",";
+    
+    if (configStorage.getCyclingEnabled()) {
+        json += "\"current_index\":" + String(configStorage.getCurrentImageIndex()) + ",";
+        json += "\"total_sources\":" + String(configStorage.getImageSourceCount()) + ",";
+    }
+    
+    json += "\"message\":\"Image data is displayed on the device. Use the current URL to fetch the source image.\"";
+    json += "}";
+    
+    sendResponse(200, "application/json", json);
+}

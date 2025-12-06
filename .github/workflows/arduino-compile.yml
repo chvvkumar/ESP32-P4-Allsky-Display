@@ -217,6 +217,42 @@ jobs:
         echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
         echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
     
+    - name: Update build information
+      run: |
+        # Get git information
+        GIT_HASH=$(git rev-parse --short HEAD)
+        GIT_HASH_FULL=$(git rev-parse HEAD)
+        GIT_BRANCH="${GITHUB_REF#refs/heads/}"
+        
+        # Determine version to display (tag if releasing, otherwise commit)
+        if [ "${{ steps.check_release.outputs.should_release }}" = "true" ] && [ -n "${{ steps.version.outputs.tag }}" ]; then
+          DISPLAY_VERSION="${{ steps.version.outputs.tag }}"
+        else
+          DISPLAY_VERSION="${GIT_HASH}"
+        fi
+        
+        # Update build_info.h
+        cat > build_info.h << EOF
+        // Auto-generated build information
+        // This file is updated at compile time by the build workflow
+        
+        #ifndef BUILD_INFO_H
+        #define BUILD_INFO_H
+        
+        // Build timestamp - will be populated by compiler
+        #define BUILD_DATE __DATE__
+        #define BUILD_TIME __TIME__
+        
+        // Git information (updated by CI/CD)
+        #define GIT_COMMIT_HASH "${DISPLAY_VERSION}"
+        #define GIT_COMMIT_FULL "${GIT_HASH_FULL}"
+        #define GIT_BRANCH "${GIT_BRANCH}"
+        
+        #endif // BUILD_INFO_H
+        EOF
+        
+        echo "✅ Build info updated with version: ${DISPLAY_VERSION}"
+    
     - name: Compile sketch
       id: compile
       run: |

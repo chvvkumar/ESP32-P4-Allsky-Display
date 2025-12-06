@@ -52,6 +52,7 @@ private:
     void handleNotFound();
     void handleAPIReference();
     void handleGetAllInfo();
+    void handleCurrentImage();
     
     // HTML generators
     String generateHeader(const String& title);
