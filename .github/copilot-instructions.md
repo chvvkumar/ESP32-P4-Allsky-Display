@@ -115,6 +115,8 @@ Each has vendor-specific LCD init commands and DSI timing parameters. **Do not m
 
 **GitHub CI**: `.github/workflows/arduino-compile.yml` runs on PR/push - includes GFX library patch step.
 
+**Build Badges**: Memory usage badges (Flash/RAM) are automatically generated and committed to the `badges` branch after every successful build on `main`. This avoids branch protection conflicts. Badge URLs in README.md point to: `https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/badges/.github/badges/*.json`
+
 **Over-The-Air (OTA) Updates**:
 Two wireless update methods available:
 1. **ElegantOTA** (web-based): Access `http://[device-ip]:8080/update` to upload `.bin` files

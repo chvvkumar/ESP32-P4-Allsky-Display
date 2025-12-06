@@ -389,31 +389,49 @@ jobs:
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         
-        # Create or checkout badges branch
-        git fetch origin badges:badges 2>/dev/null || git checkout --orphan badges
-        if [ $? -eq 0 ]; then
-          # If badges branch exists, check it out
+        # Save current commit SHA and badge files
+        CURRENT_SHA=${{ github.sha }}
+        CURRENT_BRANCH=${{ github.ref_name }}
+        
+        # Copy badge files to temp location
+        mkdir -p /tmp/badges
+        cp .github/badges/*.json /tmp/badges/
+        
+        # Try to fetch badges branch, if it doesn't exist we'll create it
+        if git fetch origin badges 2>/dev/null; then
+          echo "✅ Badges branch exists, checking it out"
           git checkout badges
-        fi
-        
-        # Remove all files except badges directory
-        git rm -rf . 2>/dev/null || true
-        git checkout HEAD -- .github/badges/ 2>/dev/null || mkdir -p .github/badges
-        
-        # Copy badge files from main branch
-        git checkout ${{ github.ref_name }} -- .github/badges/*.json
-        
-        # Commit and push to badges branch
-        git add .github/badges/*.json
-        if git diff --quiet && git diff --staged --quiet; then
-          echo "No changes to badge data"
         else
-          git commit -m "Update memory usage badges from ${{ github.sha }}"
-          git push origin badges
+          echo "📦 Creating new badges branch"
+          git checkout --orphan badges
+          git rm -rf . 2>/dev/null || true
         fi
         
-        # Return to main branch
-        git checkout ${{ github.ref_name }}
+        # Ensure badges directory exists and copy files
+        mkdir -p .github/badges
+        cp /tmp/badges/*.json .github/badges/
+        
+        # Create a simple README for the badges branch
+        cat > README.md << 'EOFREADME'
+        # Badges Branch
+        
+        This branch contains auto-generated badge data for the ESP32-P4 AllSky Display project.
+        
+        Do not manually edit this branch - it is automatically updated by GitHub Actions.
+        EOFREADME
+        
+        # Commit and push changes
+        git add .github/badges/*.json README.md
+        if git diff --quiet && git diff --staged --quiet; then
+          echo "ℹ️ No changes to badge data"
+        else
+          git commit -m "Update memory usage badges from ${CURRENT_SHA:0:7}"
+          git push origin badges
+          echo "✅ Badge data pushed to badges branch"
+        fi
+        
+        # Return to original branch
+        git checkout ${CURRENT_BRANCH}
     
     - name: Prepare release binary
       if: steps.check_release.outputs.should_release == 'true'
