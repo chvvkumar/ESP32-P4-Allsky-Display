@@ -19,6 +19,10 @@ on:
       - 'LICENSE'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   compile:
     runs-on: ubuntu-latest
@@ -26,6 +30,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
     
     - name: Check required files exist
       run: |
@@ -90,20 +96,39 @@ jobs:
         path: |
           ~/.arduino15
           ~/Arduino/libraries
-        key: ${{ runner.os }}-arduino-${{ hashFiles('**/ESP32-P4-Allsky-Display.ino') }}
+        key: ${{ runner.os }}-arduino-esp32-3.3.4-${{ hashFiles('**/*.ino', '**/*.cpp', '**/*.h') }}
         restore-keys: |
+          ${{ runner.os }}-arduino-esp32-3.3.4-
           ${{ runner.os }}-arduino-
     
     - name: Install ESP32 core
       run: |
-        arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-        arduino-cli core install esp32:esp32@3.3.4 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+        if [ ! -d ~/.arduino15/packages/esp32 ]; then
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.4 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+        else
+          echo "✅ ESP32 core already installed (cached)"
+        fi
     
     - name: Install required libraries
       run: |
-        arduino-cli lib install "GFX Library for Arduino"
-        arduino-cli lib install "JPEGDEC"
-        arduino-cli lib install "PubSubClient"
+        if [ ! -d ~/Arduino/libraries/GFX_Library_for_Arduino ]; then
+          arduino-cli lib install "GFX Library for Arduino"
+        else
+          echo "✅ GFX Library already installed (cached)"
+        fi
+        
+        if [ ! -d ~/Arduino/libraries/JPEGDEC ]; then
+          arduino-cli lib install "JPEGDEC"
+        else
+          echo "✅ JPEGDEC already installed (cached)"
+        fi
+        
+        if [ ! -d ~/Arduino/libraries/PubSubClient ]; then
+          arduino-cli lib install "PubSubClient"
+        else
+          echo "✅ PubSubClient already installed (cached)"
+        fi
     
     - name: Patch GFX Library for ESP32-P4 compatibility
       run: |
