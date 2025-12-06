@@ -23,6 +23,7 @@ Check out the video below to see the display in action:
   - [Initial Setup](#initial-setup)
 - [Configuration](#-configuration)
   - [Web Interface](#web-interface)
+  - [OTA (Over-The-Air) Updates](#ota-over-the-air-updates)
   - [Home Assistant MQTT Discovery](#home-assistant-mqtt-discovery)
 - [Image Optimization for AllSky](#-image-optimization-for-allsky)
   - [Automated Image Resizing Script](#automated-image-resizing-script)
@@ -65,9 +66,11 @@ This project makes your ESP32-P4 touch display into an all-sky camera viewer wit
 - **Multi-source image cycling**: Display images from up to 10 different URLs with automatic cycling
 - **Hardware-accelerated processing**: Fast image scaling and rotation using ESP32-P4 PPA
 - **Per-image transformations**: Individual scale, offset, and rotation settings for each image
+- **Captive portal WiFi setup**: Easy first-boot configuration with QR code and automatic provisioning
 - **Web-based configuration**: Complete setup interface accessible via browser
 - **Home Assistant integration**: Native MQTT discovery with full control and monitoring
 - **Touch controls**: Single tap for next image, double tap to toggle modes
+- **OTA updates**: Wireless firmware updates via web interface or Arduino IDE with safe A/B partitioning
 
 ### Interactive Controls
 - **Touch interface**: 
@@ -104,6 +107,7 @@ This project makes your ESP32-P4 touch display into an all-sky camera viewer wit
    - GFX Library for Arduino (1.6.3+)
    - JPEGDEC (1.8.4+)
    - PubSubClient (2.8.0+)
+   - ElegantOTA (latest)
 
 ### Arduino IDE Setup
 
@@ -173,6 +177,49 @@ const char* DEFAULT_IMAGE_SOURCES[] = {
 ### Web Interface
 - Access: `http://[device-ip]:8080/`
 - Configure image sources, display settings, network, and MQTT
+
+### OTA (Over-The-Air) Updates
+
+Update your device wirelessly without USB cable using two convenient methods:
+
+#### Method 1: ElegantOTA Web Interface (Recommended)
+Perfect for end users and production updates.
+
+1. **Compile:** Run `.\compile-and-upload.ps1` or Arduino IDE → Export Compiled Binary
+2. **Access:** Navigate to `http://[device-ip]:8080/update`
+3. **Upload:** Drag & drop or select `.bin` file, click "Update"
+4. **Wait:** Device reboots automatically in ~30-60 seconds
+
+#### Method 2: ArduinoOTA (For Developers)
+Ideal for rapid development cycles.
+
+1. **Select:** Tools → Port → `esp32-allsky-display at [IP]`
+2. **Upload:** Click Upload button (progress shown on device screen)
+3. **Done:** Device reboots automatically with new firmware
+
+#### OTA Features
+✅ Professional ElegantOTA web interface with drag & drop  
+✅ Safe A/B partitioning (automatic rollback on boot failure)  
+✅ Real-time progress display on device screen and serial output  
+✅ Configuration preserved across updates (WiFi, MQTT, image sources)  
+✅ No special software required for web upload  
+✅ Integrated IDE workflow for ArduinoOTA  
+✅ Watchdog protection prevents timeout during long uploads  
+
+#### Partition Scheme
+The device uses **13MB app / 7MB data** partition with OTA support:
+- **OTA_0**: Primary firmware partition (13MB)
+- **OTA_1**: Backup/update partition (13MB)
+- **NVS**: Configuration storage (survives updates)
+- **Auto-rollback**: If new firmware fails to boot, automatically reverts to previous version
+
+**📖 See [OTA_GUIDE.md](OTA_GUIDE.md) for:**
+- Detailed step-by-step instructions with screenshots
+- Comprehensive troubleshooting guide
+- Security considerations and password protection
+- Developer API reference and integration details
+- Partition scheme and rollback mechanism
+- Network configuration and firewall settings
 
 ### Home Assistant MQTT Discovery
 The device automatically integrates with Home Assistant when MQTT discovery is enabled:
@@ -253,6 +300,26 @@ mkdir -p "${OUTPUT_DIR}"
 ## 🖥️ Web Configuration Interface
 
 The device provides a comprehensive web-based configuration interface accessible at `http://[device-ip]:8080/`. All settings can be configured through an intuitive UI without needing to recompile the firmware.
+
+### Modern UI Features
+
+**🎨 Enhanced User Experience:**
+- **Toast Notifications**: Elegant popup notifications for all actions with color-coded feedback
+- **Loading Indicators**: Visual progress spinners for long-running operations (restart, factory reset, image switching)
+- **Mobile Responsive**: Hamburger menu navigation for phones and tablets
+- **Keyboard Shortcuts**: 
+  - `Ctrl+S` / `Cmd+S` - Save current form
+  - `Ctrl+R` / `Cmd+R` - Restart device
+  - `Ctrl+N` / `Cmd+N` - Next image
+- **Client-Side Validation**: Real-time input validation with helpful error messages
+- **Accessibility**: ARIA labels, focus indicators, and keyboard navigation support
+- **Dark Theme**: Easy on the eyes dark blue interface with consistent styling
+
+**🔄 Real-Time Feedback:**
+- Instant visual confirmation for all configuration changes
+- Button state changes (loading → success/error → reset)
+- Input field color coding (green for valid, red for errors)
+- Non-blocking notifications that auto-dismiss after 3 seconds
 
 ### Configuration Pages
 

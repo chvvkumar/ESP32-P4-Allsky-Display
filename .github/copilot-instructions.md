@@ -2,13 +2,14 @@
 
 ## Project Overview
 
-This is an embedded image viewer for ESP32-P4 with DSI displays, targeting AllSky camera displays. The architecture uses hardware-accelerated image processing, flicker-free double-buffering, captive portal WiFi setup, web-based configuration, and full Home Assistant MQTT integration.
+This is an embedded image viewer for ESP32-P4 with DSI displays, targeting AllSky camera displays. The architecture uses hardware-accelerated image processing, flicker-free double-buffering, captive portal WiFi setup, web-based configuration, full Home Assistant MQTT integration, and dual OTA update methods.
 
 **Recent Major Updates:**
 - Captive portal WiFi setup with DNS redirection and auto-configuration
 - Clean display initialization (no debug clutter on first boot if WiFi configured)
 - Cache misalignment fixes for PPA DMA operations
 - Improved first-boot experience with centered WiFi setup instructions
+- ElegantOTA and ArduinoOTA support with A/B partitioning and automatic rollback
 
 ## Critical Architecture Patterns
 
@@ -114,12 +115,20 @@ Each has vendor-specific LCD init commands and DSI timing parameters. **Do not m
 
 **GitHub CI**: `.github/workflows/arduino-compile.yml` runs on PR/push - includes GFX library patch step.
 
+**Over-The-Air (OTA) Updates**:
+Two wireless update methods available:
+1. **ElegantOTA** (web-based): Access `http://[device-ip]:8080/update` to upload `.bin` files
+2. **ArduinoOTA** (IDE-based): Select network port in Arduino IDE (`Tools → Port → esp32-allsky-display at [IP]`)
+
+Both use safe A/B partitioning with automatic rollback. See `OTA_GUIDE.md` for comprehensive documentation.
+
 ### Required Libraries
 
 Install via Arduino Library Manager:
 - GFX Library for Arduino (1.6.3+) - **Needs ESP32-P4 patch in CI/local builds**
 - JPEGDEC (1.8.4+)
 - PubSubClient (2.8.0+)
+- ElegantOTA (latest)
 
 ### Serial Debugging
 
@@ -179,9 +188,51 @@ Express-like routing in `web_config.cpp`:
 - `/images` - Multi-image sources (up to 10)
 - `/display` - Brightness, transforms
 - `/advanced` - Thresholds, intervals
+- `/update` - ElegantOTA firmware update interface
 - `/api/*` - REST endpoints (JSON responses)
 
 Web server runs on port 8080. All pages use a dark blue theme with real-time status updates via `/api/status`.
+
+### Over-The-Air (OTA) Updates
+
+Dual OTA implementation for flexibility:
+
+**ElegantOTA (Web-based)**:
+- Integrated into web server at `/update` endpoint
+- Professional drag & drop interface
+- Callbacks in `web_config.cpp` handle display pause/resume and watchdog resets
+- Progress shown on device screen and serial output
+- No password protection by default (add via ElegantOTA API if needed)
+
+**ArduinoOTA (IDE-based)**:
+- Configured in `network_manager.cpp`
+- Hostname: `esp32-allsky-display` (mDNS)
+- Port: 3232 (default)
+- Password: Disabled by default (uncomment `ArduinoOTA.setPassword()` to enable)
+- Requires `ArduinoOTA.handle()` called every loop iteration
+
+**OTA Manager**:
+- `ota_manager.cpp` provides unified progress tracking API
+- Integrates with display manager to show progress on screen
+- Status tracking: `IDLE`, `IN_PROGRESS`, `SUCCESS`, `FAILED`
+- Watchdog protection: `systemMonitor.forceResetWatchdog()` called during updates
+
+**Partition Scheme**: 13MB app / 7MB data with A/B OTA support:
+- OTA_0: Primary partition (13MB)
+- OTA_1: Update partition (13MB)
+- NVS: Configuration storage (survives OTA)
+- Bootloader validates and performs automatic rollback on boot failure
+
+**Update Process**:
+1. Display paused (`displayManager.pauseDisplay()`)
+2. Watchdog extended/reset periodically
+3. Firmware written to inactive partition
+4. Progress displayed every 10% with color-coded messages
+5. Boot flag updated on success
+6. Automatic rollback if new firmware fails to boot
+7. Display resumed after completion
+
+See `OTA_GUIDE.md` for comprehensive documentation including troubleshooting, security, and developer reference.
 
 ## Project-Specific Conventions
 

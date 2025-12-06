@@ -48,6 +48,10 @@ public:
     bool startAPMode(const char* ssid, const char* password = nullptr);
     void stopAPMode();
     bool isAPMode() const;
+    
+    // ArduinoOTA support
+    void initOTA();
+    void handleOTA();
 };
 
 
