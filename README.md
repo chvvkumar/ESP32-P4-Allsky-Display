@@ -94,29 +94,50 @@ This project makes your ESP32-P4 touch display into an all-sky camera viewer wit
 
 ### Initial Setup
 
-#### 1. Configure WiFi Credentials
+#### 1. Compile and Upload Firmware
 
-**⚠️ IMPORTANT**: Edit WiFi settings **before** first upload.
+- Click the Upload button in Arduino IDE
+- Monitor serial output for status messages
 
-Open [`config_storage.cpp`](config_storage.cpp) and modify:
+#### 2. WiFi Setup via Access Point Mode
 
-````cpp
-void ConfigStorage::setDefaults() {
-    // *** EDIT THESE LINES ***
-    config.wifiSSID = "YOUR_WIFI_SSID";        // Your network name
-    config.wifiPassword = "YOUR_WIFI_PASSWORD"; // Your password
-    
-    // MQTT settings (optional, can configure via web later)
-    config.mqttServer = "192.168.1.250";       // MQTT broker IP
-    config.mqttPort = 1883;
-    config.mqttUser = "";                       // Optional
-    config.mqttPassword = "";                   // Optional
-}
-````
+On first boot, the device automatically creates a WiFi access point for easy configuration:
 
-#### 2. Configure Default Image Source (Optional)
+**Connection Steps:**
 
-In [`config.cpp`](config.cpp), set your default image URLs:
+1. **Find the WiFi Network**
+   - Network Name: `AllSky-Display-Setup`
+   - No password required
+
+2. **Connect to the Network**
+   - Use your phone, tablet, or computer
+   - Connect to `AllSky-Display-Setup` WiFi
+
+3. **Configure WiFi**
+   - A configuration page should open automatically (captive portal)
+   - If not, manually open a browser and go to:
+     - `http://192.168.4.1`
+   - Click "Scan for Networks" to see available WiFi networks
+   - Select your WiFi network from the list
+   - Enter the WiFi password
+   - Click "Connect"
+
+4. **Device Connects and Restarts**
+   - The device will connect to your WiFi network
+   - After successful connection, it will restart
+   - The display will show the assigned IP address
+
+5. **Access Web Interface**
+   - Note the IP address shown on the display
+   - Open a browser and go to `http://[device-ip]:8080/`
+   - Configure additional settings like MQTT, image sources, and display preferences
+
+**Alternative Setup:**
+- If you prefer to manually configure WiFi by editing source code, see [MANUAL_SETUP.md](MANUAL_SETUP.md)
+
+#### 3. Configure Default Image Sources (Optional)
+
+After connecting to WiFi, use the web interface to add image sources, or pre-configure them in [`config.cpp`](config.cpp):
 
 ```cpp
 const char* DEFAULT_IMAGE_SOURCES[] = {
@@ -125,16 +146,6 @@ const char* DEFAULT_IMAGE_SOURCES[] = {
     // Add more as needed
 };
 ```
-
-#### 3. Compile and Upload
-
-- Click the Upload button in Arduino IDE
-- Monitor serial output for IP address and status
-
-#### 4. Access Web Interface
-
-- Open a browser and go to `http://[device-ip]:8080/`
-- Configure additional settings like MQTT and image sources
 
 ## ⚙️ Configuration
 
@@ -224,17 +235,17 @@ The device provides a comprehensive web-based configuration interface accessible
 
 ### Configuration Pages
 
-<img src="images/2025-12-03_10-55-20.png" alt="Web Configuration Main Page">
+#### Main Dashboard
+<img src="images/config-home.png" alt="Web Configuration Main Page">
 
-<img src="images/2025-12-03_10-55-31.png" alt="Image Sources Configuration">
+#### Multi-Image Sources
+<img src="images/config-multi-image.png" alt="Multi-Image Sources Configuration">
 
-<img src="images/2025-12-03_10-55-35.png" alt="Display Settings">
+#### Display Settings
+<img src="images/config-display.png" alt="Display Settings">
 
-<img src="images/2025-12-03_10-55-38.png" alt="Network Configuration">
-
-<img src="images/2025-12-03_10-55-42.png" alt="MQTT Configuration">
-
-<img src="images/2025-12-03_10-55-48.png" alt="System Information">
+#### MQTT Configuration
+<img src="images/config-mqtt.png" alt="MQTT Configuration">
 
 ### Home Assistant Integration
 
