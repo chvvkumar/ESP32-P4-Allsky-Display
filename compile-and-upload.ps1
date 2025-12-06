@@ -22,8 +22,8 @@ $BUILD_PATH = Join-Path $env:LOCALAPPDATA "arduino\sketches\$SKETCH_HASH"
 $ARDUINO15_PATH = "$env:LOCALAPPDATA\Arduino15"
 
 # Board configuration
-# Note: Using custom partitions.csv for OTA support (two 10MB app partitions)
-$FQBN = "esp32:esp32:esp32p4:FlashSize=32M,PSRAM=enabled,EraseFlash=all"
+# Note: Using custom partitions.csv for 13MB app / 7MB data OTA support
+$FQBN = "esp32:esp32:esp32p4:FlashSize=32M,PartitionScheme=app13M_data7M_32MB,PSRAM=enabled"
 $BOARD = "esp32p4"
 $CHIP = "esp32p4"
 

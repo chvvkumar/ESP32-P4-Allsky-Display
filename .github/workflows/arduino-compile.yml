@@ -315,10 +315,7 @@ jobs:
       id: compile
       run: |
         mkdir -p ./build ./release
-        arduino-cli compile --fqbn esp32:esp32:esp32p4:PartitionScheme=app13M_data7M_32MB \
-          --build-property "build.flash_size=32MB" \
-          --build-property "build.psram_type=opi" \
-          --build-property "compiler.cpp.extra_flags=-DBOARD_HAS_PSRAM" \
+        arduino-cli compile --fqbn esp32:esp32:esp32p4:FlashSize=32M,PartitionScheme=app13M_data7M_32MB,PSRAM=enabled \
           --output-dir ./build \
           ESP32-P4-Allsky-Display.ino 2>&1 | tee compile_output.txt
         echo "✅ Compilation successful"
