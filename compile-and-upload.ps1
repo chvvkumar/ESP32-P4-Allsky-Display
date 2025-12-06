@@ -4,7 +4,8 @@
 # Parameters
 param(
     [string]$ComPort = "COM3",
-    [string]$BaudRate = "921600"
+    [string]$BaudRate = "921600",
+    [string]$OutputFolder = ""
 )
 
 # Auto-detect script directory and sketch path
@@ -151,6 +152,36 @@ if ($ARDUINO_CLI) {
     }
     
     Write-Host "`nSUCCESS: Upload completed!" -ForegroundColor Green
+    
+    # Copy binary to output folder if specified
+    if ($OutputFolder) {
+        Write-Host "`n[6/6] Copying binary to output folder..." -ForegroundColor Yellow
+        
+        # Create output folder if it doesn't exist
+        if (-not (Test-Path $OutputFolder)) {
+            New-Item -ItemType Directory -Path $OutputFolder -Force | Out-Null
+            Write-Host "      Created output folder: $OutputFolder" -ForegroundColor Gray
+        }
+        
+        # Copy the main binary file
+        $BIN_FILE = "$BUILD_PATH\$SKETCH_NAME.bin"
+        if (Test-Path $BIN_FILE) {
+            $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+            $outputFileName = "ESP32-P4-Allsky-Display-$timestamp.bin"
+            $outputPath = Join-Path $OutputFolder $outputFileName
+            Copy-Item $BIN_FILE $outputPath -Force
+            Write-Host "      Copied: $outputFileName" -ForegroundColor Green
+            Write-Host "      To: $outputPath" -ForegroundColor Gray
+            
+            # Also copy a "latest" version without timestamp
+            $latestPath = Join-Path $OutputFolder "ESP32-P4-Allsky-Display-latest.bin"
+            Copy-Item $BIN_FILE $latestPath -Force
+            Write-Host "      Copied: ESP32-P4-Allsky-Display-latest.bin" -ForegroundColor Green
+        } else {
+            Write-Host "      WARNING: Binary file not found at $BIN_FILE" -ForegroundColor Yellow
+        }
+    }
+    
     exit 0
 }
 
