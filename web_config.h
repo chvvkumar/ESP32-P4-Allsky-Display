@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include <ElegantOTA.h>
 #include "config_storage.h"
 
 class WebConfig {
@@ -51,6 +52,7 @@ private:
     void handleNotFound();
     void handleAPIReference();
     void handleGetAllInfo();
+    void handleCurrentImage();
     
     // HTML generators
     String generateHeader(const String& title);

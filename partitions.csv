@@ -1,0 +1,8 @@
+# Name,   Type, SubType, Offset,  Size, Flags
+# ESP32-P4 OTA Partition Table for 32MB Flash
+# Two 10MB app partitions for A/B OTA updates
+nvs,      data, nvs,     0x9000,  0x5000,
+otadata,  data, ota,     0xe000,  0x2000,
+app0,     app,  ota_0,   0x10000, 0xA00000,
+app1,     app,  ota_1,   0xA10000,0xA00000,
+data,     data, spiffs,  0x1410000,0xBF0000,

@@ -4,6 +4,10 @@
 #include "network_manager.h"
 #include "mqtt_manager.h"
 #include "display_manager.h"
+#include "ota_manager.h"
+#include <Update.h>
+
+// System monitor is needed for watchdog resets during OTA
 
 // API handler functions for the web configuration interface
 // These functions process POST requests and handle configuration changes
@@ -492,6 +496,26 @@ void WebConfig::handleGetAllInfo() {
     json += "\"critical_psram_threshold\":" + String(configStorage.getCriticalPSRAMThreshold());
     json += "}";
     
+    json += "}";
+    
+    sendResponse(200, "application/json", json);
+}
+
+void WebConfig::handleCurrentImage() {
+    // Return a simple status indicating the current image URL
+    // Note: We don't return actual image data to avoid memory issues
+    // Instead, return metadata that can be used to display the source
+    String json = "{";
+    json += "\"status\":\"success\",";
+    json += "\"current_url\":\"" + escapeJson(configStorage.getCurrentImageURL()) + "\",";
+    json += "\"cycling_enabled\":" + String(configStorage.getCyclingEnabled() ? "true" : "false") + ",";
+    
+    if (configStorage.getCyclingEnabled()) {
+        json += "\"current_index\":" + String(configStorage.getCurrentImageIndex()) + ",";
+        json += "\"total_sources\":" + String(configStorage.getImageSourceCount()) + ",";
+    }
+    
+    json += "\"message\":\"Image data is displayed on the device. Use the current URL to fetch the source image.\"";
     json += "}";
     
     sendResponse(200, "application/json", json);

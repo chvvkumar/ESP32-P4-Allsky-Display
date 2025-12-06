@@ -1,5 +1,6 @@
 #include "web_config.h"
 #include "web_config_html.h"
+#include "build_info.h"
 #include "system_monitor.h"
 #include "network_manager.h"
 #include "mqtt_manager.h"
@@ -46,6 +47,41 @@ bool WebConfig::begin(int port) {
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
         server->on("/api/info", HTTP_GET, [this]() { handleGetAllInfo(); });
+        server->on("/api/current-image", HTTP_GET, [this]() { handleCurrentImage(); });
+        
+        // Initialize ElegantOTA
+        ElegantOTA.begin(server);
+        ElegantOTA.onStart([]() {
+            Serial.println("ElegantOTA: Update started");
+            displayManager.debugPrint("OTA Update starting...", COLOR_YELLOW);
+            displayManager.pauseDisplay();
+            systemMonitor.forceResetWatchdog();
+        });
+        ElegantOTA.onProgress([](size_t current, size_t final) {
+            // Reset watchdog on every progress update to prevent timeout
+            systemMonitor.forceResetWatchdog();
+            
+            static uint8_t lastPercent = 0;
+            uint8_t percent = (current * 100) / final;
+            if (percent != lastPercent && percent % 10 == 0) {
+                Serial.printf("ElegantOTA Progress: %u%%\n", percent);
+                char msg[64];
+                snprintf(msg, sizeof(msg), "OTA Progress: %u%%", percent);
+                displayManager.debugPrint(msg, COLOR_CYAN);
+                lastPercent = percent;
+            }
+        });
+        ElegantOTA.onEnd([](bool success) {
+            systemMonitor.forceResetWatchdog();
+            displayManager.resumeDisplay();
+            if (success) {
+                Serial.println("ElegantOTA: Update successful!");
+                displayManager.debugPrint("OTA Complete! Rebooting...", COLOR_GREEN);
+            } else {
+                Serial.println("ElegantOTA: Update failed!");
+                displayManager.debugPrint("OTA Update Failed", COLOR_RED);
+            }
+        });
         server->on("/api-reference", [this]() { handleAPIReference(); });
         server->onNotFound([this]() { handleNotFound(); });
         
@@ -71,8 +107,9 @@ bool WebConfig::begin(int port) {
 }
 
 void WebConfig::handleClient() {
-    if (serverRunning && server) {
+    if (server && serverRunning) {
         server->handleClient();
+        ElegantOTA.loop();
     }
 }
 
@@ -203,7 +240,9 @@ String WebConfig::generateHeader(const String& title) {
 }
 
 String WebConfig::generateNavigation(const String& currentPage) {
-    String html = "<div class='nav'><div class='container'><div class='nav-content'>";
+    String html = "<div class='nav'><div class='container' style='position:relative'>";
+    html += "<button class='nav-toggle' onclick='toggleNav()' aria-label='Toggle navigation'><i class='fas fa-bars'></i></button>";
+    html += "<div class='nav-content'>";
     
     String pages[] = {"dashboard", "network", "mqtt", "image", "sources", "display", "advanced", "commands", "api"};
     String labels[] = {"🏠 Dashboard", "📡 Network", "🔗 MQTT", "🖼️ Single Image", "🔄 Multi-Image", "💡 Display", "⚙️ Advanced", "📟 Commands", "📚 API"};
@@ -221,7 +260,18 @@ String WebConfig::generateNavigation(const String& currentPage) {
 String WebConfig::generateFooter() {
     String html = "<script>" + String(FPSTR(HTML_JAVASCRIPT)) + "</script>";
     html += String(FPSTR(HTML_MODALS));
-    html += "<div class='footer'><div class='container'><p>ESP32 AllSky Display Configuration Portal</p></div></div>";
+    
+    html += "<div class='footer'><div class='container'>";
+    html += "<p style='margin-bottom:0.5rem'>ESP32 AllSky Display Configuration Portal</p>";
+    html += "<p style='font-size:0.8rem;color:#64748b;margin:0.25rem 0'>";
+    html += "MD5: " + String(ESP.getSketchMD5().substring(0, 8)) + " | ";
+    html += "Build: " + formatBytes(ESP.getSketchSize()) + " | ";
+    html += "Free: " + formatBytes(ESP.getFreeSketchSpace());
+    html += "</p>";
+    html += "<p style='font-size:0.75rem;color:#475569;margin:0.25rem 0'>";
+    html += "Built: " + String(BUILD_DATE) + " " + String(BUILD_TIME) + " | ";
+    html += "Commit: <span style='font-family:monospace'>" + String(GIT_COMMIT_HASH) + "</span> (" + String(GIT_BRANCH) + ")";
+    html += "</p></div></div>";
     html += "</body></html>";
     return html;
 }

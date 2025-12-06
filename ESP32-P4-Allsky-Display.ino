@@ -8,6 +8,7 @@
 #include "display_manager.h"
 #include "ppa_accelerator.h"
 #include "mqtt_manager.h"
+#include "ota_manager.h"
 #include "gt911.h"
 #include "i2c.h"
 #include "task_retry_handler.h"
@@ -175,11 +176,18 @@ int JPEGDrawQR(JPEGDRAW *pDraw) {
 // Display WiFi QR Code on screen (called during WiFi setup)
 // Returns the Y position where text should start
 int16_t displayWiFiQRCode() {
+    // CRITICAL: Reset watchdog immediately - this function takes a long time
+    systemMonitor.forceResetWatchdog();
+    
     int16_t displayWidth = displayManager.getWidth();
     int16_t displayHeight = displayManager.getHeight();
     int16_t textStartY = 200; // Default fallback
     
     Serial.println("DEBUG: Loading WiFi QR code...");
+    
+    // Reset watchdog before system calls
+    systemMonitor.forceResetWatchdog();
+    
     Serial.printf("DEBUG: Free heap before QR: %d bytes\n", systemMonitor.getCurrentFreeHeap());
     Serial.printf("DEBUG: Free PSRAM before QR: %d bytes\n", systemMonitor.getCurrentFreePsram());
     
@@ -191,6 +199,9 @@ int16_t displayWiFiQRCode() {
         Serial.println("ERROR: Failed to open QR code JPEG");
         return textStartY; // Return default position
     }
+    
+    // Reset watchdog after opening JPEG
+    systemMonitor.forceResetWatchdog();
     
     qrCodeWidth = jpeg.getWidth();
     qrCodeHeight = jpeg.getHeight();
@@ -215,6 +226,9 @@ int16_t displayWiFiQRCode() {
     
     Serial.printf("DEBUG: QR buffer allocated: %d bytes\n", qrBufferSize);
     
+    // Reset watchdog after allocation
+    systemMonitor.forceResetWatchdog();
+    
     // Clear buffer
     memset(qrCodeBuffer, 0, qrBufferSize);
     
@@ -227,6 +241,9 @@ int16_t displayWiFiQRCode() {
     // Decode QR code JPEG
     if (jpeg.decode(0, 0, 0)) {
         Serial.println("DEBUG: QR code decoded successfully");
+        
+        // Reset watchdog after decode
+        systemMonitor.forceResetWatchdog();
         
         // Resume display before drawing
         displayManager.resumeDisplay();
@@ -241,16 +258,25 @@ int16_t displayWiFiQRCode() {
         size_t scaledSize = scaledWidth * scaledHeight * sizeof(uint16_t);
         uint16_t* scaledQR = (uint16_t*)ps_malloc(scaledSize);
         
+        // Reset watchdog after allocation
+        systemMonitor.forceResetWatchdog();
+        
         if (scaledQR) {
             Serial.printf("DEBUG: Scaling QR from %dx%d to %dx%d\n", qrCodeWidth, qrCodeHeight, scaledWidth, scaledHeight);
             
             // Clear buffer before scaling
             memset(scaledQR, 0, scaledSize);
             
+            // Reset watchdog before PPA scaling
+            systemMonitor.forceResetWatchdog();
+            
             // Use PPA to scale down
             if (ppaAccelerator.scaleImage(qrCodeBuffer, qrCodeWidth, qrCodeHeight,
                                          scaledQR, scaledWidth, scaledHeight)) {
                 Serial.println("DEBUG: QR code scaled successfully");
+                
+                // Reset watchdog after scaling
+                systemMonitor.forceResetWatchdog();
                 
                 // Position at top-center of screen with margin
                 int16_t qrX = (displayWidth - scaledWidth) / 2;
@@ -341,15 +367,61 @@ void setup() {
         while(1) delay(1000);
     }
     
-    // Initialize display manager
+    // Pre-allocate all PSRAM buffers BEFORE display init to ensure enough contiguous memory
+    // Display needs ~1.28MB contiguous for frame buffer (800x800x2), so we allocate our buffers first
+    Serial.println("Pre-allocating PSRAM buffers before display initialization...");
+    Serial.printf("Free PSRAM before allocation: %d bytes\n", ESP.getFreePsram());
+    
+    // Calculate buffer sizes based on expected display dimensions (800x800)
+    const int16_t w = 800;  // Will be verified after display init
+    const int16_t h = 800;
+    
+    imageBufferSize = w * h * IMAGE_BUFFER_MULTIPLIER * 2;
+    imageBuffer = (uint8_t*)ps_malloc(imageBufferSize);
+    if (!imageBuffer) {
+        Serial.printf("CRITICAL: Image buffer pre-allocation failed! Size: %d bytes\n", imageBufferSize);
+        while(1) delay(1000);
+    }
+    Serial.printf("✓ Image buffer allocated: %d bytes\n", imageBufferSize);
+    
+    fullImageBufferSize = FULL_IMAGE_BUFFER_SIZE;
+    fullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
+    if (!fullImageBuffer) {
+        Serial.printf("CRITICAL: Full image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
+        while(1) delay(1000);
+    }
+    Serial.printf("✓ Full image buffer allocated: %d bytes\n", fullImageBufferSize);
+    
+    pendingFullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
+    if (!pendingFullImageBuffer) {
+        Serial.printf("CRITICAL: Pending image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
+        while(1) delay(1000);
+    }
+    Serial.printf("✓ Pending image buffer allocated: %d bytes\n", fullImageBufferSize);
+    
+    scaledBufferSize = w * h * SCALED_BUFFER_MULTIPLIER * 2;
+    scaledBuffer = (uint16_t*)ps_malloc(scaledBufferSize);
+    if (!scaledBuffer) {
+        Serial.printf("CRITICAL: Scaled buffer pre-allocation failed! Size: %d bytes\n", scaledBufferSize);
+        while(1) delay(1000);
+    }
+    Serial.printf("✓ Scaled buffer allocated: %d bytes\n", scaledBufferSize);
+    
+    Serial.printf("PSRAM pre-allocation complete - Free PSRAM remaining: %d bytes\n", ESP.getFreePsram());
+    
+    // NOW initialize display - it should have plenty of contiguous PSRAM remaining
     if (!displayManager.begin()) {
         Serial.println("CRITICAL: Display initialization failed!");
+        Serial.printf("Free PSRAM at failure: %d bytes\n", ESP.getFreePsram());
         while(1) delay(1000);
     }
     
-    // Get display dimensions
-    int16_t w = displayManager.getWidth();
-    int16_t h = displayManager.getHeight();
+    // Verify display dimensions match our pre-allocated buffer assumptions
+    if (displayManager.getWidth() != w || displayManager.getHeight() != h) {
+        Serial.printf("WARNING: Display dimensions mismatch! Expected %dx%d, got %dx%d\n",
+                     w, h, displayManager.getWidth(), displayManager.getHeight());
+        Serial.println("Buffer sizes may be incorrect - please update CURRENT_SCREEN define");
+    }
     
     // Setup debug functions for other modules
     wifiManager.setDebugFunctions(debugPrint, debugPrintf, &firstImageLoaded);
@@ -368,41 +440,7 @@ void setup() {
         debugPrintf(COLOR_WHITE, "Free PSRAM: %d bytes", systemMonitor.getCurrentFreePsram());
     }
     
-    // Allocate image buffer in PSRAM
-    imageBufferSize = w * h * IMAGE_BUFFER_MULTIPLIER * 2; // 16-bit color
-    
-    imageBuffer = (uint8_t*)ps_malloc(imageBufferSize);
-    if (!imageBuffer) {
-        debugPrint("ERROR: Memory allocation failed!", COLOR_RED);
-        while(1) delay(1000);
-    }
-    
-    // Allocate full image buffer for smooth rendering
-    fullImageBufferSize = FULL_IMAGE_BUFFER_SIZE;
-    
-    fullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
-    if (!fullImageBuffer) {
-        debugPrint("ERROR: Full image buffer allocation failed!", COLOR_RED);
-        while(1) delay(1000);
-    }
-    
-    // Allocate pending image buffer (for seamless transitions without flicker)
-    pendingFullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
-    if (!pendingFullImageBuffer) {
-        debugPrint("ERROR: Pending image buffer allocation failed!", COLOR_RED);
-        while(1) delay(1000);
-    }
-    
-    // Allocate scaling buffer for transformed images
-    scaledBufferSize = w * h * SCALED_BUFFER_MULTIPLIER * 2;
-    
-    scaledBuffer = (uint16_t*)ps_malloc(scaledBufferSize);
-    if (!scaledBuffer) {
-        debugPrint("ERROR: Scaling buffer allocation failed!", COLOR_RED);
-        while(1) delay(1000);
-    }
-    
-    // Initialize PPA hardware acceleration
+    // Buffers already allocated before display init - just initialize PPA hardware acceleration
     ppaAccelerator.begin(w, h);
     
     // Initialize brightness control
@@ -415,8 +453,14 @@ void setup() {
         
         // Start captive portal for WiFi configuration
         if (captivePortal.begin("AllSky-Display-Setup")) {
+            // Reset watchdog before QR code display
+            systemMonitor.forceResetWatchdog();
+            
             // Display QR code first (at top/center) and get text start position
             int16_t textY = displayWiFiQRCode();
+            
+            // Reset watchdog after QR code display
+            systemMonitor.forceResetWatchdog();
             
             // Reset debug Y position to place text below QR code
             displayManager.setDebugY(textY);
@@ -478,11 +522,18 @@ void setup() {
         debugPrint("ERROR: MQTT initialization failed!", COLOR_RED);
     }
     
+    // Initialize OTA manager
+    otaManager.begin();
+    otaManager.setDebugFunction(debugPrint);
+    
     // Start web configuration server if WiFi is connected
     if (wifiManager.isConnected()) {
         if (!webConfig.begin(8080)) {
             debugPrint("ERROR: Web config server failed to start", COLOR_RED);
         }
+        
+        // Initialize ArduinoOTA for network updates
+        wifiManager.initOTA();
     }
     
     // Load cycling configuration after all modules are initialized
@@ -1383,6 +1434,12 @@ void loop() {
     
     wifiManager.update();
     systemMonitor.forceResetWatchdog();
+    
+    // Handle OTA updates if WiFi is connected
+    if (wifiManager.isConnected()) {
+        wifiManager.handleOTA();
+        systemMonitor.forceResetWatchdog();
+    }
     
     // Handle web configuration server with better error handling
     if (wifiManager.isConnected()) {

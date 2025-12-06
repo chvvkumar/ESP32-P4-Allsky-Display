@@ -1,5 +1,8 @@
 #include "network_manager.h"
 #include "system_monitor.h"
+#include "display_manager.h"
+#include "ota_manager.h"
+#include <ArduinoOTA.h>
 
 // Global instance
 WiFiManager wifiManager;
@@ -164,4 +167,96 @@ void WiFiManager::stopAPMode() {
 
 bool WiFiManager::isAPMode() const {
     return (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA);
+}
+
+void WiFiManager::initOTA() {
+    // Set OTA hostname
+    ArduinoOTA.setHostname("esp32-allsky-display");
+    
+    // Set OTA port (default is 3232)
+    ArduinoOTA.setPort(3232);
+    
+    // Optional: Set OTA password
+    // ArduinoOTA.setPassword("admin");
+    
+    // OTA callbacks
+    ArduinoOTA.onStart([]() {
+        String type;
+        if (ArduinoOTA.getCommand() == U_FLASH) {
+            type = "sketch";
+        } else { // U_SPIFFS
+            type = "filesystem";
+        }
+        
+        Serial.println("Start OTA updating " + type);
+        displayManager.debugPrint(("OTA Update: " + type).c_str(), COLOR_YELLOW);
+        
+        // Pause display during OTA
+        displayManager.pauseDisplay();
+        
+        otaManager.setStatus(OTA_UPDATE_IN_PROGRESS, "Starting OTA update...");
+    });
+    
+    ArduinoOTA.onEnd([]() {
+        Serial.println("\nOTA Update Complete");
+        displayManager.debugPrint("OTA Complete! Rebooting...", COLOR_GREEN);
+        
+        otaManager.setStatus(OTA_UPDATE_SUCCESS, "OTA update successful");
+        
+        // Resume display
+        displayManager.resumeDisplay();
+    });
+    
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        uint8_t percent = (progress * 100) / total;
+        
+        // Update progress every 10%
+        static uint8_t lastPercent = 0;
+        if (percent != lastPercent && percent % 10 == 0) {
+            Serial.printf("OTA Progress: %u%%\n", percent);
+            
+            char msg[64];
+            snprintf(msg, sizeof(msg), "OTA Progress: %u%%", percent);
+            displayManager.debugPrint(msg, COLOR_CYAN);
+            
+            otaManager.setProgress(percent);
+            lastPercent = percent;
+        }
+    });
+    
+    ArduinoOTA.onError([](ota_error_t error) {
+        Serial.printf("OTA Error[%u]: ", error);
+        String errorMsg = "OTA Error: ";
+        
+        if (error == OTA_AUTH_ERROR) {
+            errorMsg += "Auth Failed";
+            Serial.println("Auth Failed");
+        } else if (error == OTA_BEGIN_ERROR) {
+            errorMsg += "Begin Failed";
+            Serial.println("Begin Failed");
+        } else if (error == OTA_CONNECT_ERROR) {
+            errorMsg += "Connect Failed";
+            Serial.println("Connect Failed");
+        } else if (error == OTA_RECEIVE_ERROR) {
+            errorMsg += "Receive Failed";
+            Serial.println("Receive Failed");
+        } else if (error == OTA_END_ERROR) {
+            errorMsg += "End Failed";
+            Serial.println("End Failed");
+        }
+        
+        displayManager.debugPrint(errorMsg.c_str(), COLOR_RED);
+        otaManager.setStatus(OTA_UPDATE_FAILED, errorMsg.c_str());
+        
+        // Resume display
+        displayManager.resumeDisplay();
+    });
+    
+    ArduinoOTA.begin();
+    Serial.println("ArduinoOTA initialized");
+    if (debugPrintFunc) debugPrintFunc("ArduinoOTA ready", COLOR_GREEN);
+}
+
+void WiFiManager::handleOTA() {
+    ArduinoOTA.handle();
 }

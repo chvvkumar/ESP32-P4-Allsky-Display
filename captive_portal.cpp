@@ -18,13 +18,18 @@ CaptivePortal::CaptivePortal() :
 bool CaptivePortal::begin(const char* apSSID, const char* apPassword) {
     Serial.println("\n=== Starting WiFi Captive Portal ===");
     
+    // Reset watchdog before potentially long operations
+    esp_task_wdt_reset();
+    
     // Stop any existing WiFi connection
     WiFi.disconnect(true);
     delay(100);
+    esp_task_wdt_reset();
     
     // Start WiFi in AP mode
     WiFi.mode(WIFI_AP);
     delay(100);
+    esp_task_wdt_reset();
     
     bool apStarted;
     if (apPassword && strlen(apPassword) > 0) {
@@ -41,6 +46,7 @@ bool CaptivePortal::begin(const char* apSSID, const char* apPassword) {
     }
     
     delay(500); // Give AP time to start
+    esp_task_wdt_reset(); // Reset after AP startup delay
     
     IPAddress apIP = WiFi.softAPIP();
     Serial.printf("AP IP address: %s\n", apIP.toString().c_str());
@@ -50,6 +56,7 @@ bool CaptivePortal::begin(const char* apSSID, const char* apPassword) {
     dnsServer = new DNSServer();
     dnsServer->start(DNS_PORT, "*", apIP);
     Serial.println("DNS server started for captive portal");
+    esp_task_wdt_reset(); // Reset after DNS startup
     
     // Start web server
     server = new WebServer(80);
@@ -62,6 +69,7 @@ bool CaptivePortal::begin(const char* apSSID, const char* apPassword) {
     
     server->begin();
     Serial.println("Web server started on port 80");
+    esp_task_wdt_reset(); // Reset after web server startup
     
     // Don't auto-scan on startup - let user initiate scan
     // scanNetworks();
@@ -70,6 +78,7 @@ bool CaptivePortal::begin(const char* apSSID, const char* apPassword) {
     configured = false;
     
     Serial.println("=== Captive Portal Ready ===");
+    esp_task_wdt_reset(); // Final reset before returning
     Serial.printf("Connect to WiFi network: %s\n", apSSID);
     Serial.println("Configuration page should open automatically");
     Serial.printf("If not, open browser and go to: http://%s\n", apIP.toString().c_str());

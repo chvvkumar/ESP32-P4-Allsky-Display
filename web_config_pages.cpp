@@ -132,11 +132,11 @@ String WebConfig::generateMainPage() {
         int currentIndex = configStorage.getCurrentImageIndex();
         
         // Summary info
-        html += "<div style='display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b;border-radius:8px;margin-bottom:1rem'>";
-        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Mode:</strong> Cycling</p></div>";
-        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Active:</strong> [" + String(currentIndex + 1) + "/" + String(sourceCount) + "]</p></div>";
-        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Cycle:</strong> " + String(configStorage.getCycleInterval() / 1000) + "s</p></div>";
-        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Update:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + "m</p></div>";
+        html += "<div id='imageStatusSummary' style='display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b;border-radius:8px;margin-bottom:1rem'>";
+        html += "<div id='imgMode'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Mode:</strong> Cycling</p></div>";
+        html += "<div id='imgActive'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Active:</strong> [" + String(currentIndex + 1) + "/" + String(sourceCount) + "]</p></div>";
+        html += "<div id='imgCycle'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Cycle:</strong> " + String(configStorage.getCycleInterval() / 1000) + "s</p></div>";
+        html += "<div id='imgUpdate'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Update:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + "m</p></div>";
         html += "</div>";
         
         // Explanation
@@ -153,16 +153,16 @@ String WebConfig::generateMainPage() {
             for (int i = 0; i < sourceCount; i++) {
                 String sourceUrl = configStorage.getImageSource(i);
                 String activeIndicator = (i == currentIndex) ? "<span style='color:#10b981;margin-right:8px;font-size:1.2rem'>►</span>" : "<span style='color:#64748b;margin-right:8px'>•</span>";
-                html += "<div style='margin-bottom:0.75rem;padding:0.75rem;background:" + String(i == currentIndex ? "#1e3a2e" : "#1e293b") + ";border-radius:8px;border-left:4px solid " + String(i == currentIndex ? "#10b981" : "#475569") + ";overflow-wrap:break-word;word-break:break-all'>";
-                html += "<div style='font-size:0.85rem;color:#94a3b8;margin-bottom:0.25rem'>" + activeIndicator + "<strong style='color:" + String(i == currentIndex ? "#10b981" : "#64748b") + "'>Source " + String(i + 1) + String(i == currentIndex ? " (Active)" : "") + "</strong></div>";
+                html += "<div id='source-" + String(i) + "' style='margin-bottom:0.75rem;padding:0.75rem;background:" + String(i == currentIndex ? "#1e3a2e" : "#1e293b") + ";border-radius:8px;border-left:4px solid " + String(i == currentIndex ? "#10b981" : "#475569") + ";overflow-wrap:break-word;word-break:break-all'>";
+                html += "<div id='source-label-" + String(i) + "' style='font-size:0.85rem;color:#94a3b8;margin-bottom:0.25rem'>" + activeIndicator + "<strong style='color:" + String(i == currentIndex ? "#10b981" : "#64748b") + "'>Source " + String(i + 1) + String(i == currentIndex ? " (Active)" : "") + "</strong></div>";
                 html += "<div style='font-size:0.85rem;color:#cbd5e1;font-family:monospace;padding-left:1.5rem'>" + escapeHtml(sourceUrl) + "</div>";
                 html += "</div>";
             }
         }
     } else {
-        html += "<div style='display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b;border-radius:8px;margin-bottom:1rem'>";
-        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Mode:</strong> Single Image</p></div>";
-        html += "<div><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Update:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p></div>";
+        html += "<div id='imageStatusSummary' style='display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b;border-radius:8px;margin-bottom:1rem'>";
+        html += "<div id='imgMode'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Mode:</strong> Single Image</p></div>";
+        html += "<div id='imgUpdate'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Update:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p></div>";
         html += "</div>";
         
         // Explanation
@@ -393,7 +393,16 @@ String WebConfig::generateAdvancedPage() {
     html += "<div class='form-group'><label for='critical_psram_threshold'>Critical PSRAM Threshold (bytes)</label>";
     html += "<input type='number' id='critical_psram_threshold' name='critical_psram_threshold' class='form-control' value='" + String(configStorage.getCriticalPSRAMThreshold()) + "' min='10000' max='10000000'></div></div>";
     html += "</div><div class='card' style='margin-top:1.5rem'>";
-    html += "<button type='submit' class='btn btn-primary'>💾 Save Advanced Settings</button></div></form></div></div>";
+    html += "<button type='submit' class='btn btn-primary'>💾 Save Advanced Settings</button></div></form>";
+    
+    // OTA Firmware Update Section
+    html += "<div class='card' style='margin-top:1.5rem'><h2>📦 Firmware Update (OTA)</h2>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Upload new firmware over-the-air using ElegantOTA. The device will automatically restart after a successful update.</p>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'><strong>Note:</strong> To clear settings after OTA update, use the Factory Reset button before updating, or use the serial command 'F' after the update.</p>";
+    html += "<div style='margin-top:1rem'><a href='/update' class='btn btn-primary' style='text-decoration:none;display:inline-block'>🚀 Open OTA Update Page</a></div>";
+    html += "</div>";
+    
+    html += "</div></div>";
     return html;
 }
 
@@ -591,6 +600,12 @@ String WebConfig::generateAPIReferencePage() {
     html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #10b981;border-radius:8px'>";
     html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#10b981;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>GET</span>/status</h3>";
     html += "<p style='color:#94a3b8;margin-bottom:1rem'>Get quick system status summary (lightweight version of /api/info).</p>";
+    
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Request Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0'>";
+    html += "curl -X GET " + deviceUrl + "/status</pre></div>";
+    
     html += "<div style='margin-bottom:1rem'>";
     html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Fields:</p>";
     html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";

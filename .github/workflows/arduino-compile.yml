@@ -1,4 +1,4 @@
-name: Arduino Compilation Check
+name: Build and Release
 
 on:
   push:
@@ -18,22 +18,33 @@ on:
       - '.gitignore'
       - 'LICENSE'
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a release'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  compile:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: self-hosted
     permissions:
       contents: write
+    outputs:
+      should_release: ${{ steps.check_release.outputs.should_release }}
+      tag: ${{ steps.version.outputs.tag }}
+      release_type: ${{ steps.version.outputs.release_type }}
+      branch: ${{ steps.version.outputs.branch }}
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v4.2.2
       with:
-        fetch-depth: 1
+        fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Check required files exist
@@ -91,10 +102,14 @@ jobs:
         fi
     
     - name: Setup Arduino CLI
-      uses: arduino/setup-arduino-cli@v1
+      uses: arduino/setup-arduino-cli@v2.0.0
+      with:
+        version: 1.3.1
     
     - name: Cache Arduino CLI dependencies
-      uses: actions/cache@v4
+      # Skip cache for self-hosted runners (files persist locally, no need to download 2.8GB cache)
+      if: ${{ runner.name != 'git01' }}
+      uses: actions/cache@v4.2.0
       with:
         path: |
           ~/.arduino15
@@ -115,23 +130,62 @@ jobs:
     
     - name: Install required libraries
       run: |
-        if [ ! -d ~/Arduino/libraries/GFX_Library_for_Arduino ]; then
-          arduino-cli lib install "GFX Library for Arduino"
+        # Check and install GFX Library for Arduino 1.6.0
+        if [ -d ~/Arduino/libraries/GFX_Library_for_Arduino ]; then
+          INSTALLED_VERSION=$(arduino-cli lib list | grep "GFX Library for Arduino" | awk '{print $2}')
+          if [ "$INSTALLED_VERSION" = "1.6.0" ]; then
+            echo "✅ GFX Library for Arduino 1.6.0 already installed (cached)"
+          else
+            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 1.6.0"
+            arduino-cli lib install "GFX Library for Arduino@1.6.0"
+          fi
         else
-          echo "✅ GFX Library already installed (cached)"
+          arduino-cli lib install "GFX Library for Arduino@1.6.0"
         fi
         
-        if [ ! -d ~/Arduino/libraries/JPEGDEC ]; then
-          arduino-cli lib install "JPEGDEC"
+        # Check and install JPEGDEC 1.8.2
+        if [ -d ~/Arduino/libraries/JPEGDEC ]; then
+          INSTALLED_VERSION=$(arduino-cli lib list | grep "JPEGDEC" | awk '{print $2}')
+          if [ "$INSTALLED_VERSION" = "1.8.2" ]; then
+            echo "✅ JPEGDEC 1.8.2 already installed (cached)"
+          else
+            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 1.8.2"
+            arduino-cli lib install "JPEGDEC@1.8.2"
+          fi
         else
-          echo "✅ JPEGDEC already installed (cached)"
+          arduino-cli lib install "JPEGDEC@1.8.2"
         fi
         
-        if [ ! -d ~/Arduino/libraries/PubSubClient ]; then
-          arduino-cli lib install "PubSubClient"
+        # Check and install PubSubClient 2.8
+        if [ -d ~/Arduino/libraries/PubSubClient ]; then
+          INSTALLED_VERSION=$(arduino-cli lib list | grep "PubSubClient" | awk '{print $2}')
+          if [ "$INSTALLED_VERSION" = "2.8" ] || [ "$INSTALLED_VERSION" = "2.8.0" ]; then
+            echo "✅ PubSubClient 2.8 already installed (cached)"
+          else
+            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 2.8"
+            arduino-cli lib install "PubSubClient@2.8"
+          fi
         else
-          echo "✅ PubSubClient already installed (cached)"
+          arduino-cli lib install "PubSubClient@2.8"
         fi
+        
+        # Check and install ElegantOTA 3.1.7
+        if [ -d ~/Arduino/libraries/ElegantOTA ]; then
+          INSTALLED_VERSION=$(arduino-cli lib list | grep "ElegantOTA" | awk '{print $2}')
+          if [ "$INSTALLED_VERSION" = "3.1.7" ]; then
+            echo "✅ ElegantOTA 3.1.7 already installed (cached)"
+          else
+            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 3.1.7"
+            arduino-cli lib install "ElegantOTA@3.1.7"
+          fi
+        else
+          arduino-cli lib install "ElegantOTA@3.1.7"
+        fi
+        
+        # Verify installed versions
+        echo ""
+        echo "📦 Final installed library versions:"
+        arduino-cli lib list | grep -E "GFX Library|JPEGDEC|PubSubClient|ElegantOTA"
     
     - name: Patch GFX Library for ESP32-P4 compatibility
       run: |
@@ -139,13 +193,130 @@ jobs:
         sed -i 's/.phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT,/.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_PLL_F20M, \/\/MIPI_DSI_PHY_CLK_SRC_DEFAULT,/' ~/Arduino/libraries/GFX_Library_for_Arduino/src/databus/Arduino_ESP32DSIPanel.cpp
         echo "✅ GFX Library patched for ESP32-P4"
     
+    - name: Determine if release should be created
+      id: check_release
+      run: |
+        # Create release if:
+        # 1. Manually triggered with create_release=true
+        # 2. Push to main or snd branch (not PR)
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.create_release }}" = "true" ]; then
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "📦 Release will be created (manual trigger)"
+        elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "📦 Release will be created (push to main)"
+        elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/snd" ]; then
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "📦 Test release will be created (push to snd)"
+        else
+          echo "should_release=false" >> $GITHUB_OUTPUT
+          echo "🔨 Build only (no release)"
+        fi
+    
+    - name: Get version tag for release
+      id: version
+      if: steps.check_release.outputs.should_release == 'true'
+      run: |
+        # Fetch all tags to ensure we have complete tag history
+        git fetch --tags --force
+        
+        # Determine branch-specific tag prefix
+        BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+        echo "Branch: $BRANCH_NAME"
+        
+        if [ "$BRANCH_NAME" = "main" ]; then
+          TAG_PREFIX="v"
+          TAG_PATTERN="v[0-9]*.[0-9]*"
+          RELEASE_TYPE="stable"
+        else
+          TAG_PREFIX="v-${BRANCH_NAME}-"
+          TAG_PATTERN="v-${BRANCH_NAME}-[0-9]*.[0-9]*"
+          RELEASE_TYPE="test"
+        fi
+        
+        # Get all matching tags and find the highest version
+        echo "Looking for tags matching pattern: ${TAG_PATTERN}"
+        LATEST_TAG=$(git tag -l "${TAG_PATTERN}" | sort -V | tail -n1)
+        
+        if [ -z "$LATEST_TAG" ]; then
+          # No existing tags, start at 0.1
+          MAJOR=0
+          MINOR=0
+          echo "No existing tags found, starting at ${TAG_PREFIX}0.1"
+        else
+          echo "Latest tag: $LATEST_TAG"
+          # Extract version numbers (remove prefix first)
+          VERSION="${LATEST_TAG#${TAG_PREFIX}}"
+          IFS='.' read -ra PARTS <<< "$VERSION"
+          MAJOR=${PARTS[0]:-0}
+          MINOR=${PARTS[1]:-0}
+          echo "Current version: $MAJOR.$MINOR"
+        fi
+        
+        # Increment minor version by 1 (0.1 increments)
+        MINOR=$((MINOR + 1))
+        NEW_TAG="${TAG_PREFIX}${MAJOR}.${MINOR}"
+        
+        # Ensure the new tag doesn't already exist (keep incrementing if it does)
+        ATTEMPTS=0
+        while git rev-parse "$NEW_TAG" >/dev/null 2>&1; do
+          echo "⚠️ Tag $NEW_TAG already exists, incrementing..."
+          MINOR=$((MINOR + 1))
+          NEW_TAG="${TAG_PREFIX}${MAJOR}.${MINOR}"
+          ATTEMPTS=$((ATTEMPTS + 1))
+          if [ $ATTEMPTS -gt 100 ]; then
+            echo "❌ Error: Too many version increment attempts"
+            exit 1
+          fi
+        done
+        
+        echo "✅ New tag: $NEW_TAG"
+        echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+        echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+        echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+    
+    - name: Update build information
+      run: |
+        # Get git information
+        GIT_HASH=$(git rev-parse --short HEAD)
+        GIT_HASH_FULL=$(git rev-parse HEAD)
+        GIT_BRANCH="${GITHUB_REF#refs/heads/}"
+        
+        # Determine version to display (tag if releasing, otherwise commit)
+        if [ "${{ steps.check_release.outputs.should_release }}" = "true" ] && [ -n "${{ steps.version.outputs.tag }}" ]; then
+          DISPLAY_VERSION="${{ steps.version.outputs.tag }}"
+        else
+          DISPLAY_VERSION="${GIT_HASH}"
+        fi
+        
+        # Update build_info.h
+        cat > build_info.h << EOF
+        // Auto-generated build information
+        // This file is updated at compile time by the build workflow
+        
+        #ifndef BUILD_INFO_H
+        #define BUILD_INFO_H
+        
+        // Build timestamp - will be populated by compiler
+        #define BUILD_DATE __DATE__
+        #define BUILD_TIME __TIME__
+        
+        // Git information (updated by CI/CD)
+        #define GIT_COMMIT_HASH "${DISPLAY_VERSION}"
+        #define GIT_COMMIT_FULL "${GIT_HASH_FULL}"
+        #define GIT_BRANCH "${GIT_BRANCH}"
+        
+        #endif // BUILD_INFO_H
+        EOF
+        
+        echo "✅ Build info updated with version: ${DISPLAY_VERSION}"
+    
     - name: Compile sketch
       id: compile
       run: |
-        arduino-cli compile --fqbn esp32:esp32:esp32p4:PartitionScheme=app13M_data7M_32MB \
-          --build-property "build.flash_size=32MB" \
-          --build-property "build.psram_type=opi" \
-          --build-property "compiler.cpp.extra_flags=-DBOARD_HAS_PSRAM" \
+        mkdir -p ./build ./release
+        arduino-cli compile --fqbn esp32:esp32:esp32p4:FlashSize=32M,PartitionScheme=app13M_data7M_32MB,PSRAM=enabled \
+          --output-dir ./build \
           ESP32-P4-Allsky-Display.ino 2>&1 | tee compile_output.txt
         echo "✅ Compilation successful"
     
@@ -219,3 +390,137 @@ jobs:
         git add .github/badges/*.json
         git diff --quiet && git diff --staged --quiet || git commit -m "Update memory usage badges [skip ci]"
         git push
+    
+    - name: Prepare release binary
+      if: steps.check_release.outputs.should_release == 'true'
+      run: |
+        # List build directory contents
+        echo "Build directory contents:"
+        ls -lh ./build/
+        
+        # Find and copy bin file with branch identifier
+        BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+        if [ "$BRANCH_NAME" = "main" ]; then
+          BIN_NAME="ESP32-P4-Allsky-Display-OTA.bin"
+        else
+          BIN_NAME="ESP32-P4-Allsky-Display-OTA-${BRANCH_NAME}.bin"
+        fi
+        
+        # Find the main firmware .bin file (exclude bootloader and partitions)
+        BIN_FILE=$(find ./build -name "ESP32-P4-Allsky-Display.ino.bin" -type f)
+        if [ -z "$BIN_FILE" ]; then
+          echo "❌ Error: ESP32-P4-Allsky-Display.ino.bin not found in build directory"
+          echo "Available .bin files:"
+          find ./build -name "*.bin" -type f
+          exit 1
+        fi
+        
+        echo "Found bin file: $BIN_FILE ($(du -h "$BIN_FILE" | cut -f1))"
+        cp "$BIN_FILE" "release/$BIN_NAME"
+        
+        # Display build info
+        ls -lh release/
+        echo "✅ OTA-ready firmware prepared: $BIN_NAME"
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4.6.0
+      with:
+        name: firmware-${{ github.sha }}
+        path: release/*.bin
+        retention-days: 30
+  
+  release:
+    needs: build
+    if: needs.build.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4.2.2
+      with:
+        fetch-depth: 0
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4.1.8
+      with:
+        name: firmware-${{ github.sha }}
+        path: release/
+    
+    - name: Create and push tag
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Check if tag exists (should not happen due to version increment logic)
+        if git rev-parse "${{ needs.build.outputs.tag }}" >/dev/null 2>&1; then
+          echo "❌ Error: Tag ${{ needs.build.outputs.tag }} already exists"
+          echo "This should not happen - version increment logic failed"
+          exit 1
+        else
+          git tag ${{ needs.build.outputs.tag }}
+          git push origin ${{ needs.build.outputs.tag }}
+          echo "✅ Created and pushed tag ${{ needs.build.outputs.tag }}"
+        fi
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ needs.build.outputs.tag }}
+        name: ${{ needs.build.outputs.release_type == 'test' && format('🧪 Test Release {0} ({1} branch)', needs.build.outputs.tag, needs.build.outputs.branch) || format('Release {0}', needs.build.outputs.tag) }}
+        prerelease: ${{ needs.build.outputs.release_type == 'test' }}
+        files: |
+          release/*.bin
+          README.md
+          OTA_GUIDE.md
+        body: |
+          ${{ needs.build.outputs.release_type == 'test' && '## 🧪 Test Release' || '## 📦 ESP32-P4 AllSky Display' }} ${{ needs.build.outputs.tag }}
+          
+          ${{ needs.build.outputs.release_type == 'test' && format('⚠️ **This is a pre-release test build from the `{0}` branch.**', needs.build.outputs.branch) || '' }}
+          ${{ needs.build.outputs.release_type == 'test' && '**Use for testing purposes only. For stable releases, use builds from the main branch.**' || '' }}
+          ${{ needs.build.outputs.release_type == 'test' && '' || '' }}
+          
+          ### 🚀 Installation Methods
+          
+          #### Initial Installation (USB)
+          1. Download the `.bin` file below
+          2. Flash using esptool or Arduino IDE
+          3. Configure WiFi via captive portal (device creates `AllSky-Display-Setup` network)
+          
+          #### OTA Update (Wireless) ✨
+          **Already have a previous version installed? Update wirelessly!**
+          
+          **Method 1: ElegantOTA (Recommended)**
+          1. Navigate to `http://[device-ip]:8080/update`
+          2. Upload the `.bin` file from this release
+          3. Device reboots automatically with new firmware
+          
+          **Method 2: ArduinoOTA (For Developers)**
+          1. Select network port in Arduino IDE: `Tools → Port → esp32-allsky-display at [IP]`
+          2. Click Upload button
+          
+          ### ✨ Features
+          - ✅ **OTA Updates**: Update wirelessly via web interface or Arduino IDE
+          - ✅ **Safe A/B Partitioning**: Automatic rollback if update fails
+          - ✅ **Configuration Preserved**: WiFi, MQTT, and image settings survive updates
+          - ✅ **Multi-Image Cycling**: Display from up to 10 image sources
+          - ✅ **Home Assistant Integration**: Full MQTT discovery support
+          - ✅ **Touch Controls**: Single/double tap gestures
+          - ✅ **Hardware Acceleration**: ESP32-P4 PPA for fast image processing
+          
+          ### 📖 Documentation
+          - [README.md](README.md) - Complete setup and features
+          - [OTA_GUIDE.md](OTA_GUIDE.md) - Detailed OTA update instructions
+          
+          ### 🔧 Technical Details
+          - **Partition Scheme**: 13MB app / 7MB data with A/B OTA support
+          - **Flash Size**: 32MB
+          - **PSRAM**: Required (OPI mode)
+          - **Supported Displays**: Waveshare ESP32-P4 3.4" & 4.0" DSI touch displays
+          ${{ needs.build.outputs.release_type == 'test' && format('- **Branch**: {0}', needs.build.outputs.branch) || '' }}
+          
+          ### 📝 What's Changed
+          See commit history for detailed changes in this release.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

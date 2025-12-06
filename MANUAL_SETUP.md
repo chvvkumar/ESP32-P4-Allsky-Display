@@ -79,8 +79,17 @@ const char* DEFAULT_IMAGE_SOURCES[] = {
 
 ### 4. Compile and Upload
 
+**Initial Upload (USB):**
 1. **Arduino IDE**: Click the Upload button (→) in the toolbar
 2. **PlatformIO**: Run `pio run --target upload`
+3. **PowerShell Script**: `.\compile-and-upload.ps1 -ComPort COM3`
+
+**Subsequent Updates (OTA):**
+After initial USB upload, you can update wirelessly:
+1. **ElegantOTA**: Navigate to `http://[device-ip]:8080/update` and upload `.bin` file
+2. **ArduinoOTA**: Select network port in Arduino IDE and click Upload
+
+See [OTA_GUIDE.md](OTA_GUIDE.md) for detailed OTA update instructions.
 
 ### 5. Monitor Serial Output
 
