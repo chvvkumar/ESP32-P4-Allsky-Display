@@ -116,23 +116,29 @@ bool PPAAccelerator::scaleRotateImage(uint16_t* srcPixels, int16_t srcWidth, int
         return false; // Invalid rotation angle
     }
     
-    // Check if source and destination fit in PPA buffers
+    // Calculate actual buffer sizes
     size_t srcSize = srcWidth * srcHeight * sizeof(uint16_t);
     size_t dstSize = dstWidth * dstHeight * sizeof(uint16_t);
     
-    if (!validateBufferSizes(srcSize, dstSize)) {
+    // CRITICAL: Align to cache line boundaries (64 bytes) for DMA operations
+    size_t srcSizeAligned = (srcSize + 63) & ~63;
+    size_t dstSizeAligned = (dstSize + 63) & ~63;
+    
+    // Validate buffer sizes match our pre-allocated DMA buffers
+    if (!validateBufferSizes(srcSizeAligned, dstSizeAligned)) {
+        Serial.printf("ERROR: Buffer size validation failed - src:%zu dst:%zu (need src:%zu dst:%zu)\n", 
+                     srcSizeAligned, dstSizeAligned, ppa_src_buffer_size, ppa_dst_buffer_size);
         return false;
     }
     
-    Serial.printf("DEBUG: PPA scale+rotate %dx%d -> %dx%d (%.1f°, src:%d dst:%d bytes)\n", 
-                 srcWidth, srcHeight, dstWidth, dstHeight, rotation, srcSize, dstSize);
+    Serial.printf("DEBUG: PPA scale+rotate %dx%d -> %dx%d (%.1f°, src:%zu dst:%zu bytes)\n", 
+                 srcWidth, srcHeight, dstWidth, dstHeight, rotation, srcSizeAligned, dstSizeAligned);
     
-    // Copy source data to DMA-aligned buffer
+    // Copy source data to DMA buffer
     memcpy(ppa_src_buffer, srcPixels, srcSize);
     
-    // Ensure cache coherency for DMA operations
-    // Size must be aligned to cache line size (64 bytes)
-    size_t srcSizeAligned = (srcSize + 63) & ~63;
+    // CRITICAL: Flush cache to memory (write-back) with aligned size
+    // This ensures the PPA DMA engine sees the correct data
     esp_cache_msync(ppa_src_buffer, srcSizeAligned, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
     
     // Configure PPA scaling and rotation operation
@@ -178,16 +184,15 @@ bool PPAAccelerator::scaleRotateImage(uint16_t* srcPixels, int16_t srcWidth, int
     Serial.printf("DEBUG: PPA scale factors: x=%.3f, y=%.3f, rotation=%d\n", 
                  srm_oper_config.scale_x, srm_oper_config.scale_y, (int)ppa_rotation);
     
-    // Perform the scaling and rotation operation
+    // Execute PPA hardware operation
     esp_err_t ret = ppa_do_scale_rotate_mirror(ppa_scaling_handle, &srm_oper_config);
     if (ret != ESP_OK) {
         Serial.printf("PPA scale+rotate operation failed: %s (0x%x)\n", esp_err_to_name(ret), ret);
         return false;
     }
     
-    // Ensure cache coherency for reading results
-    // Size must be aligned to cache line size (64 bytes)
-    size_t dstSizeAligned = (dstSize + 63) & ~63;
+    // CRITICAL: Invalidate cache (read from memory) with aligned size
+    // This ensures we read the PPA's output from memory, not stale cache
     esp_cache_msync(ppa_dst_buffer, dstSizeAligned, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
     
     // Copy result to destination buffer
