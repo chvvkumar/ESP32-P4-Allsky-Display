@@ -1,4 +1,4 @@
-name: Arduino Compilation Check
+name: Build and Release
 
 on:
   push:
@@ -18,16 +18,27 @@ on:
       - '.gitignore'
       - 'LICENSE'
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a release'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  compile:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      should_release: ${{ steps.check_release.outputs.should_release }}
+      tag: ${{ steps.version.outputs.tag }}
+      release_type: ${{ steps.version.outputs.release_type }}
+      branch: ${{ steps.version.outputs.branch }}
     
     steps:
     - name: Checkout code
@@ -145,15 +156,76 @@ jobs:
         sed -i 's/.phy_clk_src = MIPI_DSI_PHY_CLK_SRC_DEFAULT,/.phy_clk_src = MIPI_DSI_PHY_PLLREF_CLK_SRC_PLL_F20M, \/\/MIPI_DSI_PHY_CLK_SRC_DEFAULT,/' ~/Arduino/libraries/GFX_Library_for_Arduino/src/databus/Arduino_ESP32DSIPanel.cpp
         echo "✅ GFX Library patched for ESP32-P4"
     
+    - name: Determine if release should be created
+      id: check_release
+      run: |
+        # Create release if:
+        # 1. Manually triggered with create_release=true
+        # 2. Push to main or snd branch (not PR)
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.create_release }}" = "true" ]; then
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "📦 Release will be created (manual trigger)"
+        elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "📦 Release will be created (push to main)"
+        elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/snd" ]; then
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "📦 Test release will be created (push to snd)"
+        else
+          echo "should_release=false" >> $GITHUB_OUTPUT
+          echo "🔨 Build only (no release)"
+        fi
+    
+    - name: Get version tag for release
+      id: version
+      if: steps.check_release.outputs.should_release == 'true'
+      run: |
+        # Determine branch-specific tag prefix
+        BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+        echo "Branch: $BRANCH_NAME"
+        
+        if [ "$BRANCH_NAME" = "main" ]; then
+          TAG_PREFIX="v"
+          TAG_PATTERN="v[0-9]*.[0-9]*.[0-9]*"
+          RELEASE_TYPE="stable"
+        else
+          TAG_PREFIX="v-${BRANCH_NAME}-"
+          TAG_PATTERN="v-${BRANCH_NAME}-[0-9]*.[0-9]*.[0-9]*"
+          RELEASE_TYPE="test"
+        fi
+        
+        # Get the latest tag for this branch
+        LATEST_TAG=$(git tag -l "${TAG_PATTERN}" | sort -V | tail -n1)
+        if [ -z "$LATEST_TAG" ]; then
+          LATEST_TAG="${TAG_PREFIX}0.0.0"
+        fi
+        echo "Latest tag: $LATEST_TAG"
+        
+        # Extract version numbers (remove prefix first)
+        VERSION="${LATEST_TAG#${TAG_PREFIX}}"
+        IFS='.' read -ra PARTS <<< "$VERSION"
+        MAJOR=${PARTS[0]:-0}
+        MINOR=${PARTS[1]:-0}
+        PATCH=${PARTS[2]:-0}
+        
+        # Increment patch version
+        PATCH=$((PATCH + 1))
+        NEW_TAG="${TAG_PREFIX}${MAJOR}.${MINOR}.${PATCH}"
+        
+        echo "New tag: $NEW_TAG"
+        echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+        echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+        echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+    
     - name: Compile sketch
       id: compile
       run: |
-        arduino-cli compile --fqbn esp32:esp32:esp32p4 \
+        mkdir -p ./build ./release
+        arduino-cli compile --fqbn esp32:esp32:esp32p4:PartitionScheme=app13M_data7M_32MB \
           --build-property "build.flash_size=32MB" \
           --build-property "build.psram_type=opi" \
-          --build-property "build.partitions=partitions" \
-          --build-property "upload.maximum_size=10485760" \
           --build-property "compiler.cpp.extra_flags=-DBOARD_HAS_PSRAM" \
+          --output-dir ./build \
           ESP32-P4-Allsky-Display.ino 2>&1 | tee compile_output.txt
         echo "✅ Compilation successful"
     
@@ -227,3 +299,133 @@ jobs:
         git add .github/badges/*.json
         git diff --quiet && git diff --staged --quiet || git commit -m "Update memory usage badges [skip ci]"
         git push
+    
+    - name: Prepare release binary
+      if: steps.check_release.outputs.should_release == 'true'
+      run: |
+        # List build directory contents
+        echo "Build directory contents:"
+        ls -lh ./build/
+        
+        # Find and copy bin file with branch identifier
+        BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+        if [ "$BRANCH_NAME" = "main" ]; then
+          BIN_NAME="ESP32-P4-Allsky-Display-OTA.bin"
+        else
+          BIN_NAME="ESP32-P4-Allsky-Display-OTA-${BRANCH_NAME}.bin"
+        fi
+        
+        # Find the .bin file
+        BIN_FILE=$(find ./build -name "*.bin" -type f | head -n 1)
+        if [ -z "$BIN_FILE" ]; then
+          echo "❌ Error: No .bin file found in build directory"
+          exit 1
+        fi
+        
+        echo "Found bin file: $BIN_FILE"
+        cp "$BIN_FILE" "release/$BIN_NAME"
+        
+        # Display build info
+        ls -lh release/
+        echo "✅ OTA-ready firmware prepared: $BIN_NAME"
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: firmware-${{ github.sha }}
+        path: release/*.bin
+        retention-days: 30
+  
+  release:
+    needs: build
+    if: needs.build.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: firmware-${{ github.sha }}
+        path: release/
+    
+    - name: Create and push tag
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Check if tag exists
+        if git rev-parse "${{ needs.build.outputs.tag }}" >/dev/null 2>&1; then
+          echo "Tag ${{ needs.build.outputs.tag }} already exists"
+        else
+          git tag ${{ needs.build.outputs.tag }}
+          git push origin ${{ needs.build.outputs.tag }}
+          echo "✅ Created and pushed tag ${{ needs.build.outputs.tag }}"
+        fi
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ needs.build.outputs.tag }}
+        name: ${{ needs.build.outputs.release_type == 'test' && format('🧪 Test Release {0} ({1} branch)', needs.build.outputs.tag, needs.build.outputs.branch) || format('Release {0}', needs.build.outputs.tag) }}
+        prerelease: ${{ needs.build.outputs.release_type == 'test' }}
+        files: |
+          release/*.bin
+          README.md
+          OTA_GUIDE.md
+        body: |
+          ${{ needs.build.outputs.release_type == 'test' && '## 🧪 Test Release' || '## 📦 ESP32-P4 AllSky Display' }} ${{ needs.build.outputs.tag }}
+          
+          ${{ needs.build.outputs.release_type == 'test' && format('⚠️ **This is a pre-release test build from the `{0}` branch.**', needs.build.outputs.branch) || '' }}
+          ${{ needs.build.outputs.release_type == 'test' && '**Use for testing purposes only. For stable releases, use builds from the main branch.**' || '' }}
+          ${{ needs.build.outputs.release_type == 'test' && '' || '' }}
+          
+          ### 🚀 Installation Methods
+          
+          #### Initial Installation (USB)
+          1. Download the `.bin` file below
+          2. Flash using esptool or Arduino IDE
+          3. Configure WiFi via captive portal (device creates `AllSky-Display-Setup` network)
+          
+          #### OTA Update (Wireless) ✨
+          **Already have a previous version installed? Update wirelessly!**
+          
+          **Method 1: ElegantOTA (Recommended)**
+          1. Navigate to `http://[device-ip]:8080/update`
+          2. Upload the `.bin` file from this release
+          3. Device reboots automatically with new firmware
+          
+          **Method 2: ArduinoOTA (For Developers)**
+          1. Select network port in Arduino IDE: `Tools → Port → esp32-allsky-display at [IP]`
+          2. Click Upload button
+          
+          ### ✨ Features
+          - ✅ **OTA Updates**: Update wirelessly via web interface or Arduino IDE
+          - ✅ **Safe A/B Partitioning**: Automatic rollback if update fails
+          - ✅ **Configuration Preserved**: WiFi, MQTT, and image settings survive updates
+          - ✅ **Multi-Image Cycling**: Display from up to 10 image sources
+          - ✅ **Home Assistant Integration**: Full MQTT discovery support
+          - ✅ **Touch Controls**: Single/double tap gestures
+          - ✅ **Hardware Acceleration**: ESP32-P4 PPA for fast image processing
+          
+          ### 📖 Documentation
+          - [README.md](README.md) - Complete setup and features
+          - [OTA_GUIDE.md](OTA_GUIDE.md) - Detailed OTA update instructions
+          
+          ### 🔧 Technical Details
+          - **Partition Scheme**: 13MB app / 7MB data with A/B OTA support
+          - **Flash Size**: 32MB
+          - **PSRAM**: Required (OPI mode)
+          - **Supported Displays**: Waveshare ESP32-P4 3.4" & 4.0" DSI touch displays
+          ${{ needs.build.outputs.release_type == 'test' && format('- **Branch**: {0}', needs.build.outputs.branch) || '' }}
+          
+          ### 📝 What's Changed
+          See commit history for detailed changes in this release.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
