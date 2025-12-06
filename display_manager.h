@@ -49,6 +49,7 @@ public:
     void debugPrintf(uint16_t color, const char* format, ...);
     void clearDebugArea();
     void setFirstImageLoaded(bool loaded);
+    void setDebugY(int y);
     
     // Screen operations
     void clearScreen(uint16_t color = COLOR_BLACK);
