@@ -18,9 +18,10 @@ bool ConfigStorage::begin() {
 
 void ConfigStorage::setDefaults() {
     // Set hardcoded defaults from original config.cpp
-    // *** IMPORTANT: Edit these with your WiFi credentials before compiling! ***
-    config.wifiSSID = "IoT";
-    config.wifiPassword = "kkkkkkkk";
+    // WiFi credentials are intentionally empty - device will start captive portal on first boot
+    config.wifiProvisioned = false;
+    config.wifiSSID = "";
+    config.wifiPassword = "";
     
     config.mqttServer = "192.168.1.250";
     config.mqttPort = 1883;
@@ -83,6 +84,7 @@ void ConfigStorage::loadConfig() {
     preferences.begin(NAMESPACE, true); // Read-only mode
     
     if (preferences.isKey("wifi_ssid")) {
+        config.wifiProvisioned = preferences.getBool("wifi_prov", config.wifiProvisioned);
         config.wifiSSID = preferences.getString("wifi_ssid", config.wifiSSID);
         config.wifiPassword = preferences.getString("wifi_pwd", config.wifiPassword);
         
@@ -147,6 +149,7 @@ void ConfigStorage::loadConfig() {
 void ConfigStorage::saveConfig() {
     preferences.begin(NAMESPACE, false); // Read-write mode
     
+    preferences.putBool("wifi_prov", config.wifiProvisioned);
     preferences.putString("wifi_ssid", config.wifiSSID);
     preferences.putString("wifi_pwd", config.wifiPassword);
     
@@ -224,6 +227,8 @@ bool ConfigStorage::hasStoredConfig() {
 }
 
 // Setters
+bool ConfigStorage::isWiFiProvisioned() { return config.wifiProvisioned; }
+void ConfigStorage::setWiFiProvisioned(bool provisioned) { config.wifiProvisioned = provisioned; }
 void ConfigStorage::setWiFiSSID(const String& ssid) { config.wifiSSID = ssid; }
 void ConfigStorage::setWiFiPassword(const String& password) { config.wifiPassword = password; }
 void ConfigStorage::setMQTTServer(const String& server) { config.mqttServer = server; }

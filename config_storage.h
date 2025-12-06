@@ -125,6 +125,10 @@ public:
     
     // Check if configuration exists
     bool hasStoredConfig();
+    
+    // WiFi provisioning status
+    bool isWiFiProvisioned();
+    void setWiFiProvisioned(bool provisioned);
 
 private:
     Preferences preferences;
@@ -142,6 +146,7 @@ private:
     // Configuration structure
     struct Config {
         // Network settings
+        bool wifiProvisioned;
         String wifiSSID;
         String wifiPassword;
         

@@ -4,6 +4,7 @@
 #include "web_config.h"
 #include "system_monitor.h"
 #include "network_manager.h"
+#include "captive_portal.h"
 #include "display_manager.h"
 #include "ppa_accelerator.h"
 #include "mqtt_manager.h"
@@ -224,6 +225,46 @@ void setup() {
     
     // Initialize brightness control
     displayManager.initBrightness();
+    
+    // Check if WiFi is provisioned (first boot or after reset)
+    if (!configStorage.isWiFiProvisioned()) {
+        debugPrint("WiFi Setup Required", COLOR_YELLOW);
+        debugPrint("====================", COLOR_YELLOW);
+        debugPrint("1. Connect to WiFi:", COLOR_CYAN);
+        debugPrint("   AllSky-Display-Setup", COLOR_WHITE);
+        debugPrint("", COLOR_WHITE);
+        debugPrint("2. Browser opens automatically", COLOR_CYAN);
+        debugPrint("   If not, visit:", COLOR_CYAN);
+        
+        // Start captive portal for WiFi configuration
+        if (captivePortal.begin("AllSky-Display-Setup")) {
+            debugPrintf(COLOR_GREEN, "   http://%s", captivePortal.getAPIP().c_str());
+            debugPrint("   or http://192.168.4.1", COLOR_GREEN);
+            
+            // Wait for configuration with timeout
+            unsigned long portalStartTime = millis();
+            const unsigned long PORTAL_TIMEOUT = 300000; // 5 minutes timeout
+            
+            while (!captivePortal.isConfigured() && (millis() - portalStartTime) < PORTAL_TIMEOUT) {
+                captivePortal.handleClient();
+                systemMonitor.forceResetWatchdog();
+                delay(10);
+            }
+            
+            if (captivePortal.isConfigured()) {
+                debugPrint("WiFi configured successfully!", COLOR_GREEN);
+                debugPrint("Restarting device...", COLOR_YELLOW);
+                captivePortal.stop();
+                delay(2000);
+                ESP.restart();
+            } else {
+                debugPrint("Configuration timeout - continuing without WiFi", COLOR_RED);
+                captivePortal.stop();
+            }
+        } else {
+            debugPrint("ERROR: Failed to start captive portal", COLOR_RED);
+        }
+    }
     
     // Initialize WiFi manager
     if (!wifiManager.begin()) {

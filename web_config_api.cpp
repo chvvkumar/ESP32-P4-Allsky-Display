@@ -310,9 +310,16 @@ void WebConfig::handleApplyTransform() {
 void WebConfig::handleFactoryReset() {
     configStorage.resetToDefaults();
     
-    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Factory reset completed. Device restarting...\"}");
+    // Clear WiFi credentials and provisioning flag to trigger captive portal on next boot
+    configStorage.setWiFiSSID("");
+    configStorage.setWiFiPassword("");
+    configStorage.setWiFiProvisioned(false);
+    configStorage.saveConfig();
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Factory reset completed. WiFi setup will run on next boot. Device restarting...\"}");
     
     displayManager.debugPrint("Factory reset in progress...", COLOR_YELLOW);
+    displayManager.debugPrint("WiFi setup portal will run on restart", COLOR_CYAN);
     
     delay(500);
     ESP.restart();
