@@ -2,7 +2,7 @@ name: File Structure Validation
 
 on:
   push:
-    branches: [ main, Snd, Dev ]
+    branches: [ main ]
   pull_request:
     branches: [ main, Snd, Dev ]
   workflow_dispatch:
