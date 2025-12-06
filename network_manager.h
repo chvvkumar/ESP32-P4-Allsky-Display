@@ -43,6 +43,11 @@ public:
     
     // Print connection info
     void printConnectionInfo();
+    
+    // AP mode support
+    bool startAPMode(const char* ssid, const char* password = nullptr);
+    void stopAPMode();
+    bool isAPMode() const;
 };
 
 

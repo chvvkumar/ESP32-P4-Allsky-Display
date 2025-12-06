@@ -184,6 +184,13 @@ String WebConfig::generateNetworkPage() {
     String html = "<div class='main'><div class='container'>";
     html += "<form id='networkForm'><div class='card'>";
     html += "<h2>📡 WiFi Configuration</h2>";
+    
+    // Info box
+    html += "<div style='background:rgba(56,189,248,0.1);border:1px solid #38bdf8;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
+    html += "<p style='color:#38bdf8;margin:0;font-size:0.9rem'><i class='fas fa-info-circle' style='margin-right:8px'></i>";
+    html += "<strong>WiFi Setup Mode:</strong> To reconfigure WiFi from scratch (with network scanning), use Factory Reset which will trigger the WiFi setup portal on next boot.</p>";
+    html += "</div>";
+    
     html += "<div class='form-group'><label for='wifi_ssid'>Network Name (SSID)</label>";
     html += "<input type='text' id='wifi_ssid' name='wifi_ssid' class='form-control' value='" + escapeHtml(configStorage.getWiFiSSID()) + "' required></div>";
     html += "<div class='form-group'><label for='wifi_password'>Password</label>";
