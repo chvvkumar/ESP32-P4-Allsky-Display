@@ -26,12 +26,15 @@ concurrency:
 jobs:
   compile:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         fetch-depth: 1
+        token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Check required files exist
       run: |
