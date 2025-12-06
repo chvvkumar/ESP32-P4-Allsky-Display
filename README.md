@@ -12,24 +12,41 @@ Check out the video below to see the display in action:
 
 ## 📋 Table of Contents
 
-- [Build Status](#build-status)
-- [Overview](#overview)
-- [Features](#features)
-- [Hardware Requirements](#hardware-requirements)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Image Optimization for AllSky](#image-optimization-for-allsky)
-- [Web Configuration Interface](#web-configuration-interface)
-- [Troubleshooting](#troubleshooting)
+- [Demo](#-demo)
+- [Build Status](#-build-status)
+- [Overview](#-overview)
+- [Features](#-features)
+- [Hardware Requirements](#-hardware-requirements)
+- [Installation](#-installation)
+  - [Prerequisites](#prerequisites)
+  - [Arduino IDE Setup](#arduino-ide-setup)
+  - [Initial Setup](#initial-setup)
+- [Configuration](#-configuration)
+  - [Web Interface](#web-interface)
+  - [Home Assistant MQTT Discovery](#home-assistant-mqtt-discovery)
+- [Image Optimization for AllSky](#-image-optimization-for-allsky)
+  - [Automated Image Resizing Script](#automated-image-resizing-script)
+  - [Setup Options](#setup-options)
+- [Web Configuration Interface](#-web-configuration-interface)
+  - [Configuration Pages](#configuration-pages)
+  - [Home Assistant Integration](#home-assistant-integration)
+  - [Touch Controls](#touch-controls)
+  - [Serial Commands](#serial-commands)
+- [Troubleshooting](#-troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Debug Information](#debug-information)
 - [Contributing](#contributing)
 - [License](#license)
 - [Support](#support)
 
 ## 🚀 Build Status
 
-[![Arduino Compilation Check](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml/badge.svg)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml)
-[![Create Release](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/release.yml/badge.svg)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/release.yml)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/chvvkumar/ESP32-P4-Allsky-Display)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
+[![Arduino Compilation Check](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml/badge.svg?labelColor=1a1a2e)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml)
+[![Create Release](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/release.yml/badge.svg?labelColor=1a1a2e)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/release.yml)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/chvvkumar/ESP32-P4-Allsky-Display?labelColor=1a1a2e&color=16537e)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
+
+![Flash Usage](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/main/.github/badges/flash-usage.json&query=$.message&label=Flash&labelColor=1a1a2e&color=16537e)
+![RAM Usage](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/main/.github/badges/ram-usage.json&query=$.message&label=RAM&labelColor=1a1a2e&color=16537e)
 
 ## 🌟 Overview
 
@@ -112,8 +129,12 @@ On first boot, the device automatically creates a WiFi access point for easy con
 2. **Connect to the Network**
    - Use your phone, tablet, or computer
    - Connect to `AllSky-Display-Setup` WiFi
+   - The display shows a QR code and connection instructions:
+
+   <img src="images/config-qr-ap-setup.jpg" alt="WiFi Setup Screen with QR Code" width="400">
 
 3. **Configure WiFi**
+   - Scan the QR code on the display with your phone, or
    - A configuration page should open automatically (captive portal)
    - If not, manually open a browser and go to:
      - `http://192.168.4.1`

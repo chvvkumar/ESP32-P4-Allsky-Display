@@ -1,4 +1,5 @@
 #include "captive_portal.h"
+#include <esp_task_wdt.h>
 
 // Global instance
 CaptivePortal captivePortal;
@@ -166,43 +167,47 @@ void CaptivePortal::handleConnect() {
     
     Serial.println("WiFi credentials saved to configuration");
     
+    // Send response immediately before attempting connection
+    String response = "{\"status\":\"success\",\"message\":\"WiFi credentials saved. Device will reboot in 3 seconds to apply changes.\"}";
+    server->send(200, "application/json", response);
+    
+    // Give time for response to be sent
+    delay(500);
+    
+    // Reset watchdog before attempting connection
+    esp_task_wdt_reset();
+    
     // Try to connect to verify credentials
     WiFi.mode(WIFI_AP_STA); // Keep AP running while testing connection
     WiFi.begin(ssid.c_str(), password.c_str());
     
-    // Wait up to 15 seconds for connection
+    // Wait up to 10 seconds for connection with watchdog resets
     int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
         delay(500);
         Serial.print(".");
+        esp_task_wdt_reset(); // Reset watchdog during connection
         attempts++;
     }
     Serial.println();
     
+    // Always reboot after configuration attempt for clean startup
     if (WiFi.status() == WL_CONNECTED) {
         Serial.println("WiFi connection successful!");
         Serial.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
-        
-        String response = "{\"status\":\"success\",\"message\":\"Connected successfully! Device will restart in 3 seconds.\",\"ip\":\"" + WiFi.localIP().toString() + "\"}";
-        server->send(200, "application/json", response);
-        
+        Serial.println("Rebooting to apply configuration...");
         configured = true;
-        
-        // Give time for response to be sent
-        delay(100);
     } else {
         Serial.println("WiFi connection failed!");
-        
-        // Clear the saved credentials since they don't work
-        configStorage.setWiFiProvisioned(false);
-        configStorage.saveConfig();
-        
-        WiFi.disconnect();
-        WiFi.mode(WIFI_AP); // Return to AP-only mode
-        
-        String response = "{\"status\":\"error\",\"message\":\"Failed to connect. Please check your password and try again.\"}";
-        server->send(200, "application/json", response);
+        Serial.println("Rebooting to retry with saved credentials...");
+        // Keep credentials saved - device will retry on boot
     }
+    
+    // Wait for HTTP response to be fully sent
+    delay(2000);
+    
+    // Clean reboot
+    ESP.restart();
 }
 
 void CaptivePortal::handleNotFound() {
