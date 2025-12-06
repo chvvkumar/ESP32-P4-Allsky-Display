@@ -1,7 +1,9 @@
 # Web UI Improvements Summary
 
+> **Note:** This is a developer reference document. For user-facing features, see main [README](README.md).
+
 ## Overview
-This document details the comprehensive web UI improvements implemented to enhance user experience, accessibility, and mobile responsiveness for the ESP32-P4 AllSky Display configuration interface.
+Technical implementation details for web UI improvements: toast notifications, loading indicators, mobile responsiveness, keyboard shortcuts, validation, and accessibility features.
 
 ## Implemented Features
 

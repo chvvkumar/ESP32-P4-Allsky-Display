@@ -1,179 +1,114 @@
-# Manual WiFi Configuration
+# Manual Setup Guide
 
-This guide explains how to manually configure WiFi credentials by editing the source code before compilation. This method is only recommended for advanced users or special deployment scenarios.
+**When to use this:** Compiling from source, hardcoded WiFi credentials, advanced deployments
 
-**⚠️ NOTE**: For normal use, it's recommended to use the automatic WiFi setup via Access Point mode (see main [README](README.md)).
+**Recommended for most users:** Flash pre-compiled binary and use captive portal (see [README](README.md))
 
-## Prerequisites
+---
 
-- Arduino IDE or PlatformIO installed
-- ESP32-P4 board support configured
-- Source code downloaded
+## Compiling From Source
 
-## Configuration Steps
+### Prerequisites
 
-### 1. Edit Default WiFi Credentials
+- **Arduino IDE** 1.8.19+ or **PlatformIO**
+- **ESP32 Arduino Core** 3.3.4+
+- **Required Libraries:** GFX Library for Arduino (1.6.3+), JPEGDEC (1.8.4+), PubSubClient (2.8.0+), ElegantOTA
 
-Open [`config_storage.cpp`](config_storage.cpp) and locate the `setDefaults()` function:
+### Arduino IDE Setup
 
-```cpp
-void ConfigStorage::setDefaults() {
-    // Set hardcoded defaults from original config.cpp
-    // WiFi credentials are intentionally empty - device will start captive portal on first boot
-    config.wifiProvisioned = false;
-    config.wifiSSID = "";        // ← Edit this line
-    config.wifiPassword = "";    // ← Edit this line
-    
-    config.mqttServer = "192.168.1.250";
-    config.mqttPort = 1883;
-    config.mqttUser = "";
-    config.mqttPassword = "";
-    config.mqttClientID = "ESP32_Allsky_Display";
-    // ... rest of configuration
-}
+<img src="images/ArduinoIDE.jpg" alt="Arduino IDE Configuration" width="500">
+
+**Board Settings:**
+- Board: ESP32-P4-Function-EV-Board
+- Flash Size: 32MB
+- Partition Scheme: 13MB app / 7MB data (32MB)
+- PSRAM: **Enabled** (required)
+
+### Compile & Upload
+
+**Option 1 - PowerShell Script:**
+```powershell
+.\compile-and-upload.ps1 -ComPort COM3
 ```
 
-**Replace the empty strings with your WiFi credentials:**
+**Option 2 - Arduino IDE:**
+Click Upload button (→) or press Ctrl+U
+
+**Option 3 - Export Binary Only:**
+```powershell
+.\compile-and-upload.ps1 -SkipUpload
+```
+Binary saved to Downloads folder for later flashing.
+
+---
+
+## Hardcoded WiFi Configuration
+
+**When to use:** Factory provisioning, multiple devices with same credentials, closed deployments
+
+### Edit WiFi Credentials
+
+**File:** `config_storage.cpp` → `setDefaults()` function
 
 ```cpp
-config.wifiSSID = "YOUR_WIFI_SSID";        // Your network name
-config.wifiPassword = "YOUR_WIFI_PASSWORD"; // Your network password
+config.wifiProvisioned = true;           // Enable manual mode
+config.wifiSSID = "YOUR_WIFI_SSID";      // Your network name
+config.wifiPassword = "YOUR_PASSWORD";   // Your network password
 ```
 
-### 2. Configure MQTT Settings (Optional)
+### Optional: Pre-configure Settings
 
-While in the same function, you can also pre-configure MQTT settings:
-
+**MQTT** (same file):
 ```cpp
-config.mqttServer = "192.168.1.250";       // MQTT broker IP or hostname
-config.mqttPort = 1883;                    // MQTT port (usually 1883)
-config.mqttUser = "";                      // MQTT username (if required)
-config.mqttPassword = "";                  // MQTT password (if required)
-config.mqttClientID = "ESP32_Allsky_Display"; // Unique client ID
+config.mqttServer = "192.168.1.250";
+config.mqttPort = 1883;
+config.mqttUser = "";
+config.mqttPassword = "";
 ```
 
-### 3. Configure Default Image Sources (Optional)
-
-Open [`config.cpp`](config.cpp) and locate the `DEFAULT_IMAGE_SOURCES` array:
-
-```cpp
-const char* DEFAULT_IMAGE_SOURCES[] = {
-    "https://i.imgur.com/EsstNmc.jpeg",                   // Default source 1
-    "https://i.imgur.com/EtW1eaT.jpeg",                   // Default source 2
-    "https://i.imgur.com/k23xBF5.jpeg",                   // Default source 3
-    "https://i.imgur.com/BysRDbf.jpeg",                   // Default source 4
-    "http://allskypi5.lan/current/resized/image.jpg"      // Default source 5
-    // Add more image URLs here as needed (up to MAX_IMAGE_SOURCES = 10)
-};
-```
-
-**Replace these with your own image URLs:**
-
+**Image Sources** (`config.cpp`):
 ```cpp
 const char* DEFAULT_IMAGE_SOURCES[] = {
     "http://your-allsky-server.com/resized/image.jpg",
-    "http://your-camera2.com/image.jpg",
-    // Add up to 10 total sources
+    "http://camera2.com/image.jpg",
+    // Up to 10 sources
 };
 ```
 
-### 4. Compile and Upload
+### Compile & Upload
 
-**Initial Upload (USB):**
-1. **Arduino IDE**: Click the Upload button (→) in the toolbar
-2. **PlatformIO**: Run `pio run --target upload`
-3. **PowerShell Script**: `.\compile-and-upload.ps1 -ComPort COM3`
+After editing configuration, compile and upload using methods described in "Compiling From Source" section above.
 
-**Subsequent Updates (OTA):**
-After initial USB upload, you can update wirelessly:
-1. **ElegantOTA**: Navigate to `http://[device-ip]:8080/update` and upload `.bin` file
-2. **ArduinoOTA**: Select network port in Arduino IDE and click Upload
+### Verify Connection
 
-See [OTA_GUIDE.md](OTA_GUIDE.md) for detailed OTA update instructions.
+Serial monitor (9600 baud) shows IP address. Access web UI at `http://[device-ip]:8080/`
 
-### 5. Monitor Serial Output
-
-Open the Serial Monitor (115200 baud) to see:
-- WiFi connection status
-- Assigned IP address
-- Configuration loading status
-- System information
-
-### 6. Access Web Interface
-
-Once connected, the device will display its IP address in the serial output. Access the web interface at:
-
-```
-http://[device-ip]:8080/
-```
-
-From here you can modify all settings without recompiling.
+---
 
 ## Important Notes
 
-### First Boot Behavior
+**Security Warning:** Don't commit credentials to version control. Use for:
+- Automated factory provisioning
+- Closed-source deployments
+- Multiple devices with same network
 
-- If `config.wifiSSID` is empty, the device will start in Access Point mode
-- If `config.wifiSSID` is set, the device will attempt to connect to that network
-- After successful configuration via web interface, these hardcoded values are overridden by stored settings
+**Normal users:** Use captive portal (default) - see [README](README.md)
 
-### Resetting to Manual Configuration
-
-To reset the device back to using your hardcoded credentials:
-
-1. Use the Factory Reset button in the web interface, OR
-2. Use the reset function in the web API, OR
-3. Erase flash memory using `esptool.py erase_flash`
-
-After reset, the device will use the credentials you set in `config_storage.cpp`.
-
-### Security Considerations
-
-**⚠️ WARNING**: Storing WiFi credentials in source code is not recommended for:
-- Shared code repositories (credentials will be visible in version control)
-- Multi-device deployments with different networks
-- Production environments
-
-For these scenarios, use the Access Point mode (default behavior) to configure each device individually.
+---
 
 ## Troubleshooting
 
-### Device Won't Connect to WiFi
+| Issue | Solution |
+|-------|----------|
+| Won't connect | Verify SSID/password case-sensitive, check 2.4GHz network |
+| No IP shown | Check router DHCP list, serial monitor, or `http://allskyesp32.lan:8080/` |
+| Need to change WiFi | Use web interface or factory reset to trigger AP mode |
 
-1. Verify SSID and password are correct (case-sensitive)
-2. Check that WiFi network is 2.4GHz (ESP32-P4 may not support 5GHz on all models)
-3. Ensure network is in range and operational
-4. Monitor serial output for connection errors
+---
 
-### Can't Find IP Address
+## Reset to Defaults
 
-1. Check your router's DHCP client list
-2. Look for device named "ESP32_Allsky_Display" or similar
-3. Serial monitor will display the IP address on successful connection
-4. Try accessing via mDNS: `http://allskyesp32.lan:8080/` (if supported by your network)
-
-### Need to Reconfigure WiFi
-
-If you need to change WiFi settings after deployment:
-
-**Option 1**: Use the web interface (Network settings page)
-
-**Option 2**: Factory reset and trigger Access Point mode:
-1. Access web interface
-2. Go to System settings
-3. Click "Factory Reset"
-4. Device will restart in AP mode for reconfiguration
-
-## Alternative: Access Point Mode (Recommended)
-
-Instead of manual configuration, consider using the automatic Access Point mode:
-
-1. Leave `config.wifiSSID` empty in `config_storage.cpp`
-2. Compile and upload firmware
-3. Device creates WiFi network: **AllSky-Display-Setup**
-4. Connect your phone/computer to this network
-5. Captive portal opens automatically
-6. Select your WiFi network and enter password
-7. Device connects and saves credentials
-
-See main [README](README.md) for detailed instructions on Access Point mode.
+To return to captive portal mode:
+1. Web interface → Factory Reset, OR
+2. Serial command `F`, OR
+3. `esptool.py erase_flash`
