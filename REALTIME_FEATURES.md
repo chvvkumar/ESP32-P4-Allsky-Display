@@ -1,7 +1,9 @@
 # Real-Time Features Implementation
 
+> **Note:** This is a developer reference document. For user-facing features, see main [README](README.md).
+
 ## Overview
-This document details the real-time status updates and image preview features added to the web UI.
+Technical implementation details for real-time status updates and image preview features in the web UI.
 
 ## Implemented Features
 
