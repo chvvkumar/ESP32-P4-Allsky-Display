@@ -218,6 +218,9 @@ int16_t displayWiFiQRCode() {
     const size_t qrBufferSize = qrCodeWidth * qrCodeHeight * sizeof(uint16_t);
     const size_t qrBufferSizeAligned = (qrBufferSize + 63) & ~63;
     
+    Serial.printf("DEBUG: QR buffer size calculation - raw:%zu aligned:%zu (padding:%zu bytes)\n", 
+                 qrBufferSize, qrBufferSizeAligned, qrBufferSizeAligned - qrBufferSize);
+    
     // Allocate buffer with cache alignment for DMA operations
     qrCodeBuffer = (uint16_t*)heap_caps_aligned_alloc(64, qrBufferSizeAligned, 
                                                        MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
@@ -230,6 +233,8 @@ int16_t displayWiFiQRCode() {
     }
     
     Serial.printf("DEBUG: QR buffer allocated: %zu bytes (aligned: %zu)\n", qrBufferSize, qrBufferSizeAligned);
+    Serial.printf("DEBUG: QR buffer address: 0x%08x (64-byte aligned: %s)\n", 
+                 (uint32_t)qrCodeBuffer, ((uint32_t)qrCodeBuffer % 64 == 0) ? "YES" : "NO");
     
     // Reset watchdog after allocation
     systemMonitor.forceResetWatchdog();
@@ -263,6 +268,9 @@ int16_t displayWiFiQRCode() {
         size_t scaledSize = scaledWidth * scaledHeight * sizeof(uint16_t);
         size_t scaledSizeAligned = (scaledSize + 63) & ~63;
         
+        Serial.printf("DEBUG: Scaled buffer size - raw:%zu aligned:%zu (padding:%zu bytes)\n", 
+                     scaledSize, scaledSizeAligned, scaledSizeAligned - scaledSize);
+        
         // Allocate scaled buffer with cache alignment
         uint16_t* scaledQR = (uint16_t*)heap_caps_aligned_alloc(64, scaledSizeAligned,
                                                                  MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
@@ -271,6 +279,8 @@ int16_t displayWiFiQRCode() {
         systemMonitor.forceResetWatchdog();
         
         if (scaledQR) {
+            Serial.printf("DEBUG: Scaled buffer allocated at 0x%08x (64-byte aligned: %s)\n", 
+                         (uint32_t)scaledQR, ((uint32_t)scaledQR % 64 == 0) ? "YES" : "NO");
             Serial.printf("DEBUG: Scaling QR from %dx%d to %dx%d\n", qrCodeWidth, qrCodeHeight, scaledWidth, scaledHeight);
             
             // Clear buffer before scaling
@@ -280,6 +290,7 @@ int16_t displayWiFiQRCode() {
             systemMonitor.forceResetWatchdog();
             
             // CRITICAL: Flush cache to memory before PPA operation
+            Serial.printf("DEBUG: Cache flush (C2M) - buffer:0x%08x size:%zu\n", (uint32_t)qrCodeBuffer, qrBufferSizeAligned);
             esp_cache_msync(qrCodeBuffer, qrBufferSizeAligned, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
             
             // Use PPA hardware acceleration to scale down
@@ -288,6 +299,7 @@ int16_t displayWiFiQRCode() {
                 Serial.println("DEBUG: QR code scaled successfully");
                 
                 // CRITICAL: Invalidate cache after PPA operation
+                Serial.printf("DEBUG: Cache invalidate (M2C) - buffer:0x%08x size:%zu\n", (uint32_t)scaledQR, scaledSizeAligned);
                 esp_cache_msync(scaledQR, scaledSizeAligned, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
                 
                 // Reset watchdog after scaling
@@ -331,7 +343,12 @@ int16_t displayWiFiQRCode() {
             scaledQR = nullptr;
             Serial.println("DEBUG: Scaled QR buffer freed");
         } else {
-            Serial.println("WARNING: Could not allocate scaled buffer, drawing original");
+            Serial.println("ERROR: Failed to allocate scaled buffer!");
+            Serial.printf("ERROR: Requested %zu bytes (aligned: %zu) for %dx%d scaled image\n", 
+                         scaledSize, scaledSizeAligned, scaledWidth, scaledHeight);
+            Serial.printf("ERROR: Free heap: %d bytes, Free PSRAM: %d bytes\n", 
+                         systemMonitor.getCurrentFreeHeap(), systemMonitor.getCurrentFreePsram());
+            Serial.println("WARNING: Falling back to original size QR code");
             int16_t qrX = (displayWidth - qrCodeWidth) / 2;
             int16_t qrY = 50;
             
