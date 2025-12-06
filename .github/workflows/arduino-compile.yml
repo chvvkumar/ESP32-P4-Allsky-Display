@@ -186,18 +186,18 @@ jobs:
         
         if [ "$BRANCH_NAME" = "main" ]; then
           TAG_PREFIX="v"
-          TAG_PATTERN="v[0-9]*.[0-9]*.[0-9]*"
+          TAG_PATTERN="v[0-9]*.[0-9]*"
           RELEASE_TYPE="stable"
         else
           TAG_PREFIX="v-${BRANCH_NAME}-"
-          TAG_PATTERN="v-${BRANCH_NAME}-[0-9]*.[0-9]*.[0-9]*"
+          TAG_PATTERN="v-${BRANCH_NAME}-[0-9]*.[0-9]*"
           RELEASE_TYPE="test"
         fi
         
         # Get the latest tag for this branch
         LATEST_TAG=$(git tag -l "${TAG_PATTERN}" | sort -V | tail -n1)
         if [ -z "$LATEST_TAG" ]; then
-          LATEST_TAG="${TAG_PREFIX}0.0.0"
+          LATEST_TAG="${TAG_PREFIX}0.0"
         fi
         echo "Latest tag: $LATEST_TAG"
         
@@ -206,11 +206,17 @@ jobs:
         IFS='.' read -ra PARTS <<< "$VERSION"
         MAJOR=${PARTS[0]:-0}
         MINOR=${PARTS[1]:-0}
-        PATCH=${PARTS[2]:-0}
         
-        # Increment patch version
-        PATCH=$((PATCH + 1))
-        NEW_TAG="${TAG_PREFIX}${MAJOR}.${MINOR}.${PATCH}"
+        # Increment minor version by 1 (0.1 increments)
+        MINOR=$((MINOR + 1))
+        NEW_TAG="${TAG_PREFIX}${MAJOR}.${MINOR}"
+        
+        # Ensure the new tag doesn't already exist (keep incrementing if it does)
+        while git rev-parse "$NEW_TAG" >/dev/null 2>&1; do
+          echo "Tag $NEW_TAG already exists, incrementing..."
+          MINOR=$((MINOR + 1))
+          NEW_TAG="${TAG_PREFIX}${MAJOR}.${MINOR}"
+        done
         
         echo "New tag: $NEW_TAG"
         echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
@@ -396,9 +402,11 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
-        # Check if tag exists
+        # Check if tag exists (should not happen due to version increment logic)
         if git rev-parse "${{ needs.build.outputs.tag }}" >/dev/null 2>&1; then
-          echo "Tag ${{ needs.build.outputs.tag }} already exists"
+          echo "❌ Error: Tag ${{ needs.build.outputs.tag }} already exists"
+          echo "This should not happen - version increment logic failed"
+          exit 1
         else
           git tag ${{ needs.build.outputs.tag }}
           git push origin ${{ needs.build.outputs.tag }}
