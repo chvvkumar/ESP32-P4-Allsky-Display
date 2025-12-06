@@ -55,9 +55,14 @@ Transform your ESP32-P4 display into a powerful all-sky camera viewer with multi
 
 ### 1. Flash Pre-Compiled Firmware
 
+**⚠️ Display Compatibility Notice:**
+- Pre-compiled `.bin` files are configured for the **3.4" display (800×800)** only
+- **4.0" display (720×720) users:** Must compile from source (see [MANUAL_SETUP.md](MANUAL_SETUP.md))
+- Display configuration is set at compile time in `displays_config.h`
+
 **Download Latest Release:**
 - Go to [Releases](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
-- Download `ESP32-P4-Allsky-Display.bin`
+- Download `ESP32-P4-Allsky-Display.bin` (for 3.4" display only)
 
 **Flash Using esptool:**
 ```powershell
@@ -69,7 +74,7 @@ esptool.py --chip esp32p4 --port COM3 --baud 921600 write_flash 0x0 ESP32-P4-All
 2. Select ESP32-P4, load .bin file at address 0x0
 3. Click Start
 
-**Advanced:** To compile from source, see [MANUAL_SETUP.md](MANUAL_SETUP.md)
+**4.0" Display Users:** See [MANUAL_SETUP.md](MANUAL_SETUP.md) for compilation instructions with display selection
 
 ### 3. WiFi Setup (First Boot)
 
