@@ -397,6 +397,9 @@ jobs:
         mkdir -p /tmp/badges
         cp .github/badges/*.json /tmp/badges/
         
+        # Stash any local changes to avoid checkout conflicts
+        git stash push -u -m "Stash build artifacts before badges branch checkout"
+        
         # Try to fetch badges branch, if it doesn't exist we'll create it
         if git fetch origin badges 2>/dev/null; then
           echo "✅ Badges branch exists, checking it out"
@@ -432,6 +435,9 @@ jobs:
         
         # Return to original branch
         git checkout ${CURRENT_BRANCH}
+        
+        # Restore stashed changes
+        git stash pop || echo "ℹ️ No stash to restore"
     
     - name: Prepare release binary
       if: steps.check_release.outputs.should_release == 'true'
