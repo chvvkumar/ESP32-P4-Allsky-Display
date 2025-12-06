@@ -120,14 +120,27 @@ jobs:
           --output-dir ./build \
           ESP32-P4-Allsky-Display.ino
         
-        # Copy and rename bin file with branch identifier
+        # List build directory contents for debugging
+        echo "Build directory contents:"
+        ls -lh ./build/
+        
+        # Find and copy bin file with branch identifier
         BRANCH_NAME="${GITHUB_REF#refs/heads/}"
         if [ "$BRANCH_NAME" = "main" ]; then
           BIN_NAME="ESP32-P4-Allsky-Display-OTA.bin"
         else
           BIN_NAME="ESP32-P4-Allsky-Display-OTA-${BRANCH_NAME}.bin"
         fi
-        cp build/*.bin release/$BIN_NAME
+        
+        # Find the .bin file (should be ESP32-P4-Allsky-Display.ino.bin)
+        BIN_FILE=$(find ./build -name "*.bin" -type f | head -n 1)
+        if [ -z "$BIN_FILE" ]; then
+          echo "❌ Error: No .bin file found in build directory"
+          exit 1
+        fi
+        
+        echo "Found bin file: $BIN_FILE"
+        cp "$BIN_FILE" "release/$BIN_NAME"
         
         # Display build info
         ls -lh release/
