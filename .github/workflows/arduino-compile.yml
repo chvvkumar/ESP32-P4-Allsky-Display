@@ -106,7 +106,7 @@ jobs:
     
     - name: Cache Arduino CLI dependencies
       # Skip cache for self-hosted runners (files persist locally, no need to download 2.8GB cache)
-      if: ${{ !contains(runner.name, 'self-hosted') && runner.name != 'kumar-ubuntu' }}
+      if: ${{ runner.name != 'git01' }}
       uses: actions/cache@v4
       with:
         path: |
