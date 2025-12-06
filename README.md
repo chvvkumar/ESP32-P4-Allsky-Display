@@ -12,15 +12,29 @@ Check out the video below to see the display in action:
 
 ## 📋 Table of Contents
 
-- [Build Status](#build-status)
-- [Overview](#overview)
-- [Features](#features)
-- [Hardware Requirements](#hardware-requirements)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Image Optimization for AllSky](#image-optimization-for-allsky)
-- [Web Configuration Interface](#web-configuration-interface)
-- [Troubleshooting](#troubleshooting)
+- [Demo](#-demo)
+- [Build Status](#-build-status)
+- [Overview](#-overview)
+- [Features](#-features)
+- [Hardware Requirements](#-hardware-requirements)
+- [Installation](#-installation)
+  - [Prerequisites](#prerequisites)
+  - [Arduino IDE Setup](#arduino-ide-setup)
+  - [Initial Setup](#initial-setup)
+- [Configuration](#-configuration)
+  - [Web Interface](#web-interface)
+  - [Home Assistant MQTT Discovery](#home-assistant-mqtt-discovery)
+- [Image Optimization for AllSky](#-image-optimization-for-allsky)
+  - [Automated Image Resizing Script](#automated-image-resizing-script)
+  - [Setup Options](#setup-options)
+- [Web Configuration Interface](#-web-configuration-interface)
+  - [Configuration Pages](#configuration-pages)
+  - [Home Assistant Integration](#home-assistant-integration)
+  - [Touch Controls](#touch-controls)
+  - [Serial Commands](#serial-commands)
+- [Troubleshooting](#-troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Debug Information](#debug-information)
 - [Contributing](#contributing)
 - [License](#license)
 - [Support](#support)
@@ -112,8 +126,12 @@ On first boot, the device automatically creates a WiFi access point for easy con
 2. **Connect to the Network**
    - Use your phone, tablet, or computer
    - Connect to `AllSky-Display-Setup` WiFi
+   - The display shows a QR code and connection instructions:
+
+   <img src="images/config-qr-ap-setup.jpg" alt="WiFi Setup Screen with QR Code" width="400">
 
 3. **Configure WiFi**
+   - Scan the QR code on the display with your phone, or
    - A configuration page should open automatically (captive portal)
    - If not, manually open a browser and go to:
      - `http://192.168.4.1`

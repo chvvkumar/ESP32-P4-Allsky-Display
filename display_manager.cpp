@@ -195,6 +195,11 @@ void DisplayManager::setFirstImageLoaded(bool loaded) {
     firstImageLoaded = loaded;
 }
 
+void DisplayManager::setDebugY(int y) {
+    debugY = y;
+    debugLineCount = 0;
+}
+
 void DisplayManager::clearScreen(uint16_t color) {
     if (gfx) {
         gfx->fillScreen(color);

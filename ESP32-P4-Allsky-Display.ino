@@ -11,6 +11,7 @@
 #include "gt911.h"
 #include "i2c.h"
 #include "task_retry_handler.h"
+#include "wifi_qr_code.h"
 
 // Additional required libraries
 #include <HTTPClient.h>
@@ -68,6 +69,11 @@ static bool hasSeenFirstImage = false;
 // JPEG decoder
 JPEGDEC jpeg;
 
+// WiFi QR Code display
+uint16_t* qrCodeBuffer = nullptr;
+int16_t qrCodeWidth = 0;
+int16_t qrCodeHeight = 0;
+
 // Image processing control
 bool imageProcessing = false;
 unsigned long lastImageProcessTime = 0;
@@ -108,6 +114,8 @@ bool singleImageRefreshMode = false;  // false = cycling mode, true = single ima
 void debugPrint(const char* message, uint16_t color);
 void debugPrintf(uint16_t color, const char* format, ...);
 int JPEGDraw(JPEGDRAW *pDraw);
+int JPEGDrawQR(JPEGDRAW *pDraw);
+int16_t displayWiFiQRCode();
 void downloadAndDisplayImage();
 void processSerialCommands();
 void renderFullImage();
@@ -149,6 +157,175 @@ int JPEGDraw(JPEGDRAW *pDraw) {
         }
     }
     return 1;
+}
+
+// JPEG callback function for QR code display
+int JPEGDrawQR(JPEGDRAW *pDraw) {
+    // Store pixels in the QR code buffer
+    if (qrCodeBuffer && pDraw->y + pDraw->iHeight <= qrCodeHeight) {
+        for (int16_t y = 0; y < pDraw->iHeight; y++) {
+            uint16_t* destRow = qrCodeBuffer + ((pDraw->y + y) * qrCodeWidth + pDraw->x);
+            uint16_t* srcRow = pDraw->pPixels + (y * pDraw->iWidth);
+            memcpy(destRow, srcRow, pDraw->iWidth * sizeof(uint16_t));
+        }
+    }
+    return 1;
+}
+
+// Display WiFi QR Code on screen (called during WiFi setup)
+// Returns the Y position where text should start
+int16_t displayWiFiQRCode() {
+    int16_t displayWidth = displayManager.getWidth();
+    int16_t displayHeight = displayManager.getHeight();
+    int16_t textStartY = 200; // Default fallback
+    
+    Serial.println("DEBUG: Loading WiFi QR code...");
+    Serial.printf("DEBUG: Free heap before QR: %d bytes\n", systemMonitor.getCurrentFreeHeap());
+    Serial.printf("DEBUG: Free PSRAM before QR: %d bytes\n", systemMonitor.getCurrentFreePsram());
+    
+    // Reset watchdog before heavy operation
+    systemMonitor.forceResetWatchdog();
+    
+    // First, open JPEG to get actual dimensions
+    if (!jpeg.openRAM((uint8_t*)wifi_qr_code_jpg, wifi_qr_code_jpg_len, JPEGDrawQR)) {
+        Serial.println("ERROR: Failed to open QR code JPEG");
+        return textStartY; // Return default position
+    }
+    
+    qrCodeWidth = jpeg.getWidth();
+    qrCodeHeight = jpeg.getHeight();
+    Serial.printf("DEBUG: QR code dimensions - %dx%d\n", qrCodeWidth, qrCodeHeight);
+    
+    // Check if QR code fits on display
+    if (qrCodeWidth > displayWidth || qrCodeHeight > displayHeight) {
+        Serial.println("ERROR: QR code too large for display");
+        jpeg.close();
+        return textStartY; // Return default position
+    }
+    
+    // Allocate buffer for actual QR code size (RGB565)
+    const size_t qrBufferSize = qrCodeWidth * qrCodeHeight * sizeof(uint16_t);
+    qrCodeBuffer = (uint16_t*)ps_malloc(qrBufferSize);
+    if (!qrCodeBuffer) {
+        Serial.println("ERROR: Failed to allocate QR code buffer");
+        Serial.printf("ERROR: Tried to allocate %d bytes for %dx%d image\n", qrBufferSize, qrCodeWidth, qrCodeHeight);
+        jpeg.close();
+        return textStartY; // Return default position
+    }
+    
+    Serial.printf("DEBUG: QR buffer allocated: %d bytes\n", qrBufferSize);
+    
+    // Clear buffer
+    memset(qrCodeBuffer, 0, qrBufferSize);
+    
+    // Reset watchdog before decode
+    systemMonitor.forceResetWatchdog();
+    
+    // Pause display during decode to prevent memory contention
+    displayManager.pauseDisplay();
+    
+    // Decode QR code JPEG
+    if (jpeg.decode(0, 0, 0)) {
+        Serial.println("DEBUG: QR code decoded successfully");
+        
+        // Resume display before drawing
+        displayManager.resumeDisplay();
+        
+        // Scale down QR code to 65% for better fit on round display
+        // Use PPA for hardware-accelerated scaling
+        const float scale = 0.65f;
+        int16_t scaledWidth = qrCodeWidth * scale;
+        int16_t scaledHeight = qrCodeHeight * scale;
+        
+        // Allocate scaled buffer
+        size_t scaledSize = scaledWidth * scaledHeight * sizeof(uint16_t);
+        uint16_t* scaledQR = (uint16_t*)ps_malloc(scaledSize);
+        
+        if (scaledQR) {
+            Serial.printf("DEBUG: Scaling QR from %dx%d to %dx%d\n", qrCodeWidth, qrCodeHeight, scaledWidth, scaledHeight);
+            
+            // Clear buffer before scaling
+            memset(scaledQR, 0, scaledSize);
+            
+            // Use PPA to scale down
+            if (ppaAccelerator.scaleImage(qrCodeBuffer, qrCodeWidth, qrCodeHeight,
+                                         scaledQR, scaledWidth, scaledHeight)) {
+                Serial.println("DEBUG: QR code scaled successfully");
+                
+                // Position at top-center of screen with margin
+                int16_t qrX = (displayWidth - scaledWidth) / 2;
+                int16_t qrY = 50;  // Smaller margin from top
+                
+                // Clear area around QR code with margin to prevent corruption
+                int16_t clearMargin = 5;
+                Arduino_DSI_Display* gfx = displayManager.getGFX();
+                if (gfx) {
+                    gfx->fillRect(qrX - clearMargin, qrY - clearMargin, 
+                                 scaledWidth + (clearMargin * 2), 
+                                 scaledHeight + (clearMargin * 2), 
+                                 COLOR_BLACK);
+                }
+                
+                // Draw scaled QR code
+                displayManager.drawBitmap(qrX, qrY, scaledQR, scaledWidth, scaledHeight);
+                Serial.printf("DEBUG: Scaled QR code drawn at (%d, %d)\n", qrX, qrY);
+                
+                // Calculate where text should start (below QR code + small margin)
+                textStartY = qrY + scaledHeight + 15;
+            } else {
+                Serial.println("WARNING: PPA scaling failed, drawing original size");
+                int16_t qrX = (displayWidth - qrCodeWidth) / 2;
+                int16_t qrY = 50;
+                
+                // Clear area before drawing
+                Arduino_DSI_Display* gfx = displayManager.getGFX();
+                if (gfx) {
+                    gfx->fillRect(qrX - 5, qrY - 5, qrCodeWidth + 10, qrCodeHeight + 10, COLOR_BLACK);
+                }
+                
+                displayManager.drawBitmap(qrX, qrY, qrCodeBuffer, qrCodeWidth, qrCodeHeight);
+                textStartY = qrY + qrCodeHeight + 15;
+            }
+            
+            free(scaledQR);
+        } else {
+            Serial.println("WARNING: Could not allocate scaled buffer, drawing original");
+            int16_t qrX = (displayWidth - qrCodeWidth) / 2;
+            int16_t qrY = 50;
+            
+            // Clear area before drawing
+            Arduino_DSI_Display* gfx = displayManager.getGFX();
+            if (gfx) {
+                gfx->fillRect(qrX - 5, qrY - 5, qrCodeWidth + 10, qrCodeHeight + 10, COLOR_BLACK);
+            }
+            
+            displayManager.drawBitmap(qrX, qrY, qrCodeBuffer, qrCodeWidth, qrCodeHeight);
+            textStartY = qrY + qrCodeHeight + 15;
+        }
+        
+        // Reset watchdog after draw
+        systemMonitor.forceResetWatchdog();
+    } else {
+        Serial.println("ERROR: QR code decode failed");
+        displayManager.resumeDisplay();
+    }
+    
+    jpeg.close();
+    
+    // Free QR code buffer immediately after display
+    if (qrCodeBuffer) {
+        free(qrCodeBuffer);
+        qrCodeBuffer = nullptr;
+        Serial.println("DEBUG: QR buffer freed");
+    }
+    
+    Serial.printf("DEBUG: Free heap after QR: %d bytes\n", systemMonitor.getCurrentFreeHeap());
+    Serial.printf("DEBUG: Free PSRAM after QR: %d bytes\n", systemMonitor.getCurrentFreePsram());
+    
+    // Final watchdog reset
+    systemMonitor.forceResetWatchdog();
+    
+    return textStartY;
 }
 
 void setup() {
@@ -236,23 +413,24 @@ void setup() {
         // Clear screen and show only WiFi setup instructions
         displayManager.clearScreen();
         
-        debugPrint("", COLOR_WHITE);
-        debugPrint("", COLOR_WHITE);
-        debugPrint("  WiFi Setup Required", COLOR_YELLOW);
-        debugPrint("  ====================", COLOR_YELLOW);
-        debugPrint("", COLOR_WHITE);
-        debugPrint("  1. Connect to WiFi:", COLOR_CYAN);
-        debugPrint("     AllSky-Display-Setup", COLOR_WHITE);
-        debugPrint("", COLOR_WHITE);
-        debugPrint("  2. Browser opens automatically", COLOR_CYAN);
-        debugPrint("     If not, visit:", COLOR_CYAN);
-        
         // Start captive portal for WiFi configuration
         if (captivePortal.begin("AllSky-Display-Setup")) {
-            debugPrint("     http://192.168.4.1", COLOR_GREEN);
-            debugPrint("", COLOR_WHITE);
-            debugPrint("  3. Select your WiFi network", COLOR_CYAN);
-            debugPrint("     Enter password and connect", COLOR_CYAN);
+            // Display QR code first (at top/center) and get text start position
+            int16_t textY = displayWiFiQRCode();
+            
+            // Reset debug Y position to place text below QR code
+            displayManager.setDebugY(textY);
+            
+            // Show compact centered text instructions below QR code
+            debugPrint(" ", COLOR_WHITE);  // Small space
+            debugPrint("WiFi Setup Required", COLOR_YELLOW);
+            debugPrint(" ", COLOR_WHITE);
+            debugPrint("Scan QR or Connect:", COLOR_CYAN);
+            debugPrint("AllSky-Display-Setup", COLOR_WHITE);
+            debugPrint(" ", COLOR_WHITE);
+            debugPrint("Open: 192.168.4.1", COLOR_GREEN);
+            debugPrint(" ", COLOR_WHITE);
+            debugPrint("Select WiFi & Connect", COLOR_CYAN);
             
             // Wait for configuration with timeout
             unsigned long portalStartTime = millis();
