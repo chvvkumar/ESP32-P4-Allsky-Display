@@ -32,9 +32,6 @@ private:
     bool publishSelectDiscovery();
     bool publishButtonDiscovery(const char* entityId, const char* name, const char* icon);
     bool publishSensorDiscovery(const char* entityId, const char* name, const char* unit, const char* deviceClass, const char* icon);
-    
-    // Publish per-image transform entities
-    bool publishImageTransformEntities();
 
 public:
     HADiscovery();
