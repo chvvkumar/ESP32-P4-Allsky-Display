@@ -468,7 +468,7 @@ jobs:
         fi
     
     - name: Create Release
-      uses: softprops/action-gh-release@v2.2.0
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ needs.build.outputs.tag }}
         name: ${{ needs.build.outputs.release_type == 'test' && format('🧪 Test Release {0} ({1} branch)', needs.build.outputs.tag, needs.build.outputs.branch) || format('Release {0}', needs.build.outputs.tag) }}
