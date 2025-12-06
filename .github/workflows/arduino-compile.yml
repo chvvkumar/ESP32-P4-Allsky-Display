@@ -10,7 +10,7 @@ on:
       - '.gitignore'
       - 'LICENSE'
   pull_request:
-    branches: [ main, Snd, Dev ]
+    branches: [ main, Snd ]
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -26,6 +26,60 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+    
+    - name: Check required files exist
+      run: |
+        required_files=(
+          "README.md"
+          ".gitignore"
+          "ESP32-P4-Allsky-Display.ino"
+          "config.h"
+          "config.cpp"
+          "config_storage.h"
+          "config_storage.cpp"
+        )
+        
+        missing=0
+        for file in "${required_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "❌ Missing required file: $file"
+            missing=1
+          fi
+        done
+        
+        if [ $missing -eq 1 ]; then
+          exit 1
+        fi
+        echo "✅ All required files present"
+    
+    - name: Check for header/source pairs
+      run: |
+        for header in *.h; do
+          base="${header%.h}"
+          if [ "$base" != "web_config_html" ] && [ "$base" != "displays_config" ] && [ ! -f "${base}.cpp" ]; then
+            echo "⚠️ Header $header has no matching .cpp file"
+          fi
+        done
+        echo "✅ Header/source check complete"
+    
+    - name: Validate file naming convention
+      run: |
+        invalid_count=0
+        for file in *.cpp *.h *.ino; do
+          if [ -f "$file" ]; then
+            basename=$(basename "$file")
+            if ! echo "$basename" | grep -qE "^[a-zA-Z0-9_-]+\.(cpp|h|ino)$"; then
+              echo "⚠️ File not following naming convention: $basename"
+              invalid_count=$((invalid_count + 1))
+            fi
+          fi
+        done
+        
+        if [ $invalid_count -eq 0 ]; then
+          echo "✅ All files follow naming convention"
+        else
+          echo "⚠️ Found $invalid_count files with non-standard naming"
+        fi
     
     - name: Setup Arduino CLI
       uses: arduino/setup-arduino-cli@v1
@@ -58,10 +112,82 @@ jobs:
         echo "✅ GFX Library patched for ESP32-P4"
     
     - name: Compile sketch
+      id: compile
       run: |
         arduino-cli compile --fqbn esp32:esp32:esp32p4:PartitionScheme=app13M_data7M_32MB \
           --build-property "build.flash_size=32MB" \
           --build-property "build.psram_type=opi" \
           --build-property "compiler.cpp.extra_flags=-DBOARD_HAS_PSRAM" \
-          ESP32-P4-Allsky-Display.ino
+          ESP32-P4-Allsky-Display.ino 2>&1 | tee compile_output.txt
         echo "✅ Compilation successful"
+    
+    - name: Extract memory usage
+      id: memory
+      run: |
+        # Extract flash usage
+        FLASH_USED=$(grep "Sketch uses" compile_output.txt | grep -oP '\d+(?= bytes)' | head -1)
+        FLASH_PERCENT=$(grep "Sketch uses" compile_output.txt | grep -oP '\d+(?=%)' | head -1)
+        
+        # Extract RAM usage
+        RAM_USED=$(grep "Global variables use" compile_output.txt | grep -oP '\d+(?= bytes)' | head -1)
+        RAM_PERCENT=$(grep "Global variables use" compile_output.txt | grep -oP '\d+(?=%)' | head -1)
+        
+        # Convert to KB for readability
+        FLASH_KB=$((FLASH_USED / 1024))
+        RAM_KB=$((RAM_USED / 1024))
+        
+        # Save to outputs
+        echo "flash_used=${FLASH_USED}" >> $GITHUB_OUTPUT
+        echo "flash_kb=${FLASH_KB}" >> $GITHUB_OUTPUT
+        echo "flash_percent=${FLASH_PERCENT}" >> $GITHUB_OUTPUT
+        echo "ram_used=${RAM_USED}" >> $GITHUB_OUTPUT
+        echo "ram_kb=${RAM_KB}" >> $GITHUB_OUTPUT
+        echo "ram_percent=${RAM_PERCENT}" >> $GITHUB_OUTPUT
+        
+        # Display results
+        echo "📊 Memory Usage:"
+        echo "Flash: ${FLASH_KB}KB (${FLASH_PERCENT}%)"
+        echo "RAM: ${RAM_KB}KB (${RAM_PERCENT}%)"
+    
+    - name: Check for memory warnings
+      run: |
+        if grep -i "warning.*memory\|overflow" compile_output.txt; then
+          echo "⚠️ Memory warnings detected"
+          exit 1
+        fi
+        echo "✅ No memory warnings"
+    
+    - name: Create memory usage badge data
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        mkdir -p .github/badges
+        
+        # Create JSON files for shields.io dynamic badges
+        cat > .github/badges/flash-usage.json << EOF
+        {
+          "schemaVersion": 1,
+          "label": "Flash",
+          "message": "${{ steps.memory.outputs.flash_kb }}KB (${{ steps.memory.outputs.flash_percent }}%)",
+          "color": "16537e"
+        }
+        EOF
+        
+        cat > .github/badges/ram-usage.json << EOF
+        {
+          "schemaVersion": 1,
+          "label": "RAM",
+          "message": "${{ steps.memory.outputs.ram_kb }}KB (${{ steps.memory.outputs.ram_percent }}%)",
+          "color": "16537e"
+        }
+        EOF
+        
+        echo "✅ Badge data created"
+    
+    - name: Commit badge data to repository
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add .github/badges/*.json
+        git diff --quiet && git diff --staged --quiet || git commit -m "Update memory usage badges [skip ci]"
+        git push

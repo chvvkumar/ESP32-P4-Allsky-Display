@@ -74,6 +74,8 @@ Each subsystem is a singleton class with global instance:
 - `systemMonitor` - Watchdog, heap/PSRAM tracking
 - `captivePortal` - First-boot WiFi setup
 - `haDiscovery` - Home Assistant MQTT discovery
+- `taskRetryHandler` - Async retry logic with exponential backoff
+- `webConfig` - Web server for configuration UI
 
 All managers use debug function pointers set in `setup()`:
 ```cpp
@@ -121,7 +123,7 @@ Install via Arduino Library Manager:
 
 ### Serial Debugging
 
-115200 baud (changed from 9600 in setup). Debug messages only appear **before first image loads** (`firstImageLoaded` flag).
+9600 baud. Debug messages only appear **before first image loads** (`firstImageLoaded` flag).
 
 **Display Initialization Behavior:**
 - **WiFi not provisioned**: Shows centered WiFi setup instructions only
@@ -248,6 +250,16 @@ systemMonitor.forceResetWatchdog();  // Call during long operations
 
 Memory checks every 30 seconds log warnings if below thresholds.
 
+### Task Retry Handler
+
+`taskRetryHandler` provides async retry logic with exponential backoff for network operations:
+- Processes in main loop via `taskRetryHandler.process()`
+- Supports task types: `TASK_NETWORK_CONNECT`, `TASK_MQTT_CONNECT`, `TASK_IMAGE_DOWNLOAD`, `TASK_SYSTEM_INIT`, `TASK_CUSTOM`
+- Configurable max attempts, base interval, and exponential backoff
+- Task statuses: `TASK_PENDING`, `TASK_RUNNING`, `TASK_SUCCESS`, `TASK_FAILED`, `TASK_RETRYING`, `TASK_CANCELLED`
+- Call `taskRetryHandler.addTask()` to register tasks with callback functions
+- Prevents blocking operations from hanging the main loop
+
 ## Common Integration Points
 
 ### Adding New Manager Class
@@ -292,7 +304,7 @@ Memory checks every 30 seconds log warnings if below thresholds.
 - **Image size limits**: 512×512 max due to 1MB buffer; larger images truncated silently
 - **PSRAM speed**: Use large memcpy chunks (1KB) for network reads to maximize throughput
 - **First boot display**: Check `wifiProvisioned` flag before showing debug output to avoid cluttering WiFi setup screen
-- **Serial baud rate**: Changed to 115200 (was 9600) for faster debug output
+- **Serial baud rate**: Fixed at 9600 baud throughout project lifecycle
 
 ## File Structure Notes
 
