@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'main'
+      - 'snd'
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -28,12 +29,29 @@ jobs:
     - name: Get next version tag
       id: version
       run: |
-        # Get the latest tag
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        # Determine branch-specific tag prefix
+        BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+        echo "Branch: $BRANCH_NAME"
+        
+        if [ "$BRANCH_NAME" = "main" ]; then
+          TAG_PREFIX="v"
+          TAG_PATTERN="v[0-9]*.[0-9]*.[0-9]*"
+          RELEASE_TYPE="stable"
+        else
+          TAG_PREFIX="v-${BRANCH_NAME}-"
+          TAG_PATTERN="v-${BRANCH_NAME}-[0-9]*.[0-9]*.[0-9]*"
+          RELEASE_TYPE="test"
+        fi
+        
+        # Get the latest tag for this branch
+        LATEST_TAG=$(git tag -l "${TAG_PATTERN}" | sort -V | tail -n1)
+        if [ -z "$LATEST_TAG" ]; then
+          LATEST_TAG="${TAG_PREFIX}0.0.0"
+        fi
         echo "Latest tag: $LATEST_TAG"
         
-        # Extract version numbers
-        VERSION=${LATEST_TAG#v}
+        # Extract version numbers (remove prefix first)
+        VERSION="${LATEST_TAG#${TAG_PREFIX}}"
         IFS='.' read -ra PARTS <<< "$VERSION"
         MAJOR=${PARTS[0]:-0}
         MINOR=${PARTS[1]:-0}
@@ -41,7 +59,7 @@ jobs:
         
         # Increment patch version
         PATCH=$((PATCH + 1))
-        NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+        NEW_TAG="${TAG_PREFIX}${MAJOR}.${MINOR}.${PATCH}"
         
         # Check if tag already exists (in case workflow is re-run)
         if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
@@ -53,6 +71,8 @@ jobs:
         
         echo "New tag: $NEW_TAG"
         echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+        echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+        echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
     
     - name: Create and push tag
       if: steps.version.outputs.tag_exists == 'false'
@@ -82,6 +102,7 @@ jobs:
         arduino-cli lib install "GFX Library for Arduino"
         arduino-cli lib install "JPEGDEC"
         arduino-cli lib install "PubSubClient"
+        arduino-cli lib install "ElegantOTA"
     
     - name: Patch GFX Library for ESP32-P4 compatibility
       run: |
@@ -91,32 +112,84 @@ jobs:
     
     - name: Compile release build
       run: |
+        mkdir -p ./release
         arduino-cli compile --fqbn esp32:esp32:esp32p4:PartitionScheme=app13M_data7M_32MB \
           --build-property "build.flash_size=32MB" \
           --build-property "build.psram_type=opi" \
           --build-property "compiler.cpp.extra_flags=-DBOARD_HAS_PSRAM" \
           --output-dir ./build \
           ESP32-P4-Allsky-Display.ino
+        
+        # Copy and rename bin file with branch identifier
+        BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+        if [ "$BRANCH_NAME" = "main" ]; then
+          BIN_NAME="ESP32-P4-Allsky-Display-OTA.bin"
+        else
+          BIN_NAME="ESP32-P4-Allsky-Display-OTA-${BRANCH_NAME}.bin"
+        fi
+        cp build/*.bin release/$BIN_NAME
+        
+        # Display build info
+        ls -lh release/
+        echo "✅ OTA-ready firmware compiled successfully: $BIN_NAME"
     
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.version.outputs.tag }}
-        name: Release ${{ steps.version.outputs.tag }}
+        name: ${{ steps.version.outputs.release_type == 'test' && format('🧪 Test Release {0} ({1} branch)', steps.version.outputs.tag, steps.version.outputs.branch) || format('Release {0}', steps.version.outputs.tag) }}
+        prerelease: ${{ steps.version.outputs.release_type == 'test' }}
         files: |
-          build/*.bin
+          release/*.bin
           README.md
+          OTA_GUIDE.md
         body: |
-          ## Installation
+          ${{ steps.version.outputs.release_type == 'test' && '## 🧪 Test Release' || '## 📦 ESP32-P4 AllSky Display' }} ${{ steps.version.outputs.tag }}
           
-          1. Download the `.bin` file
-          2. Use esptool or Arduino IDE to flash to your ESP32-P4
-          3. Edit WiFi credentials in `config_storage.cpp` before first compile
+          ${{ steps.version.outputs.release_type == 'test' && format('⚠️ **This is a pre-release test build from the `{0}` branch.**', steps.version.outputs.branch) || '' }}
+          ${{ steps.version.outputs.release_type == 'test' && '**Use for testing purposes only. For stable releases, use builds from the main branch.**' || '' }}
+          ${{ steps.version.outputs.release_type == 'test' && '' || '' }}
           
-          See [README.md](README.md) for complete setup instructions.
+          ### 🚀 Installation Methods
           
-          ## What's Changed
+          #### Initial Installation (USB)
+          1. Download the `.bin` file below
+          2. Flash using esptool or Arduino IDE
+          3. Configure WiFi via captive portal (device creates `AllSky-Display-Setup` network)
           
+          #### OTA Update (Wireless) ✨
+          **Already have a previous version installed? Update wirelessly!**
+          
+          **Method 1: ElegantOTA (Recommended)**
+          1. Navigate to `http://[device-ip]:8080/update`
+          2. Upload the `.bin` file from this release
+          3. Device reboots automatically with new firmware
+          
+          **Method 2: ArduinoOTA (For Developers)**
+          1. Select network port in Arduino IDE: `Tools → Port → esp32-allsky-display at [IP]`
+          2. Click Upload button
+          
+          ### ✨ Features
+          - ✅ **OTA Updates**: Update wirelessly via web interface or Arduino IDE
+          - ✅ **Safe A/B Partitioning**: Automatic rollback if update fails
+          - ✅ **Configuration Preserved**: WiFi, MQTT, and image settings survive updates
+          - ✅ **Multi-Image Cycling**: Display from up to 10 image sources
+          - ✅ **Home Assistant Integration**: Full MQTT discovery support
+          - ✅ **Touch Controls**: Single/double tap gestures
+          - ✅ **Hardware Acceleration**: ESP32-P4 PPA for fast image processing
+          
+          ### 📖 Documentation
+          - [README.md](README.md) - Complete setup and features
+          - [OTA_GUIDE.md](OTA_GUIDE.md) - Detailed OTA update instructions
+          
+          ### 🔧 Technical Details
+          - **Partition Scheme**: 13MB app / 7MB data with A/B OTA support
+          - **Flash Size**: 32MB
+          - **PSRAM**: Required (OPI mode)
+          - **Supported Displays**: Waveshare ESP32-P4 3.4" & 4.0" DSI touch displays
+          ${{ steps.version.outputs.release_type == 'test' && format('- **Branch**: {0}', steps.version.outputs.branch) || '' }}
+          
+          ### 📝 What's Changed
           See commit history for detailed changes in this release.
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
