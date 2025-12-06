@@ -530,10 +530,18 @@ jobs:
           ${{ needs.build.outputs.release_type == 'test' && '**Use for testing purposes only. For stable releases, use builds from the main branch.**' || '' }}
           ${{ needs.build.outputs.release_type == 'test' && '' || '' }}
           
+          ### ⚠️ Display Compatibility
+          
+          **Pre-compiled firmware is configured for the 3.4" display (800×800) only.**
+          
+          - ✅ **3.4" Waveshare Display**: Use the `.bin` file below
+          - ❌ **4.0" Waveshare Display**: Must compile from source (see README.md)
+          - Display configuration is set at compile time and cannot be changed after flashing
+          
           ### 🚀 Installation Methods
           
           #### Initial Installation (USB)
-          1. Download the `.bin` file below
+          1. Download the `.bin` file below (for 3.4" display only)
           2. Flash using esptool or Arduino IDE
           3. Configure WiFi via captive portal (device creates `AllSky-Display-Setup` network)
           
