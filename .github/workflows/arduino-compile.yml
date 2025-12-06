@@ -2,7 +2,7 @@ name: Arduino Compilation Check
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, snd ]
     paths-ignore:
       - '**.md'
       - 'docs/**'
