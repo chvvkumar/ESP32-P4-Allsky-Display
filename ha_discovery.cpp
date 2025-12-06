@@ -66,7 +66,7 @@ String HADiscovery::getDeviceJson() {
     json += "\"identifiers\":[\"" + deviceId + "\"],";
     json += "\"name\":\"" + configStorage.getHADeviceName() + "\",";
     json += "\"model\":\"ESP32-P4-WIFI6-Touch-LCD\",";
-    json += "\"manufacturer\":\"Custom\",";
+    json += "\"manufacturer\":\"chvvkumar\",";
     json += "\"sw_version\":\"1.0\"";
     json += "}";
     return json;
@@ -203,57 +203,6 @@ bool HADiscovery::publishSensorDiscovery(const char* entityId, const char* name,
     return result;
 }
 
-bool HADiscovery::publishImageTransformEntities() {
-    int imageCount = configStorage.getImageSourceCount();
-    
-    for (int i = 0; i < imageCount; i++) {
-        String imagePrefix = "img" + String(i) + "_";
-        String imageName = "Image " + String(i + 1) + " ";
-        
-        // Scale X
-        if (!publishNumberDiscovery((imagePrefix + "scale_x").c_str(), 
-                                    (imageName + "Scale X").c_str(),
-                                    0.1, 3.0, 0.1, "", "mdi:arrow-expand-horizontal")) {
-            return false;
-        }
-        delay(10);
-        
-        // Scale Y
-        if (!publishNumberDiscovery((imagePrefix + "scale_y").c_str(),
-                                    (imageName + "Scale Y").c_str(),
-                                    0.1, 3.0, 0.1, "", "mdi:arrow-expand-vertical")) {
-            return false;
-        }
-        delay(10);
-        
-        // Offset X
-        if (!publishNumberDiscovery((imagePrefix + "offset_x").c_str(),
-                                    (imageName + "Offset X").c_str(),
-                                    -500, 500, 10, "px", "mdi:arrow-left-right")) {
-            return false;
-        }
-        delay(10);
-        
-        // Offset Y
-        if (!publishNumberDiscovery((imagePrefix + "offset_y").c_str(),
-                                    (imageName + "Offset Y").c_str(),
-                                    -500, 500, 10, "px", "mdi:arrow-up-down")) {
-            return false;
-        }
-        delay(10);
-        
-        // Rotation
-        if (!publishNumberDiscovery((imagePrefix + "rotation").c_str(),
-                                    (imageName + "Rotation").c_str(),
-                                    0, 360, 90, "°", "mdi:rotate-right")) {
-            return false;
-        }
-        delay(10);
-    }
-    
-    return true;
-}
-
 bool HADiscovery::publishDiscovery() {
     if (!mqttClient || !mqttClient->connected()) {
         return false;
@@ -283,13 +232,8 @@ bool HADiscovery::publishDiscovery() {
     // Number entities
     if (!publishNumberDiscovery("cycle_interval", "Cycle Interval", 10, 3600, 10, "s", "mdi:timer")) return false;
     delay(50);
-    if (!publishNumberDiscovery("update_interval", "Update Interval", 60, 3600, 60, "s", "mdi:update")) return false;
+    if (!publishNumberDiscovery("update_interval", "Update Interval", 10, 3600, 10, "s", "mdi:update")) return false;
     delay(50);
-    
-    // Per-image transform entities
-    if (!publishImageTransformEntities()) {
-        return false;
-    }
     
     // Select entity (image source)
     if (!publishSelectDiscovery()) return false;
@@ -315,6 +259,28 @@ bool HADiscovery::publishDiscovery() {
     if (!publishSensorDiscovery("uptime", "Uptime", "s", "", "mdi:clock-outline")) return false;
     delay(50);
     if (!publishSensorDiscovery("image_count", "Image Count", "", "", "mdi:counter")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("current_image_index", "Current Image Index", "", "", "mdi:numeric")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("cycling_mode", "Cycling Mode", "", "", "mdi:sync")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("random_order_status", "Random Order", "", "", "mdi:shuffle-variant")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("cycle_interval_status", "Cycle Interval", "s", "", "mdi:timer-outline")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("update_interval_status", "Update Interval", "s", "", "mdi:update")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("display_width", "Display Width", "px", "", "mdi:monitor-screenshot")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("display_height", "Display Height", "px", "", "mdi:monitor-screenshot")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("auto_brightness_status", "Auto Brightness", "", "", "mdi:brightness-auto")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("brightness_level", "Brightness Level", "%", "", "mdi:brightness-6")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("temperature_celsius", "Temperature", "°C", "temperature", "mdi:thermometer")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("temperature_fahrenheit", "Temperature (F)", "°F", "temperature", "mdi:thermometer")) return false;
     delay(50);
     
     return true;
@@ -370,27 +336,6 @@ bool HADiscovery::publishState() {
     String imageSource = "Image " + String(currentIndex + 1);
     mqttClient->publish(buildStateTopic("image_source").c_str(), imageSource.c_str());
     
-    // Per-image transforms
-    int imageCount = configStorage.getImageSourceCount();
-    for (int i = 0; i < imageCount; i++) {
-        String imagePrefix = "img" + String(i) + "_";
-        
-        String scaleX = String(configStorage.getImageScaleX(i), 2);
-        mqttClient->publish(buildStateTopic((imagePrefix + "scale_x").c_str()).c_str(), scaleX.c_str());
-        
-        String scaleY = String(configStorage.getImageScaleY(i), 2);
-        mqttClient->publish(buildStateTopic((imagePrefix + "scale_y").c_str()).c_str(), scaleY.c_str());
-        
-        String offsetX = String(configStorage.getImageOffsetX(i));
-        mqttClient->publish(buildStateTopic((imagePrefix + "offset_x").c_str()).c_str(), offsetX.c_str());
-        
-        String offsetY = String(configStorage.getImageOffsetY(i));
-        mqttClient->publish(buildStateTopic((imagePrefix + "offset_y").c_str()).c_str(), offsetY.c_str());
-        
-        String rotation = String(configStorage.getImageRotation(i), 0);
-        mqttClient->publish(buildStateTopic((imagePrefix + "rotation").c_str()).c_str(), rotation.c_str());
-    }
-    
     // Publish sensors
     publishSensors();
     
@@ -432,6 +377,49 @@ bool HADiscovery::publishSensors() {
     // Image count
     String imageCount = String(configStorage.getImageSourceCount());
     mqttClient->publish(buildStateTopic("image_count").c_str(), imageCount.c_str());
+    
+    // Current image index (1-based for display)
+    String currentIndex = String(configStorage.getCurrentImageIndex() + 1);
+    mqttClient->publish(buildStateTopic("current_image_index").c_str(), currentIndex.c_str());
+    
+    // Cycling mode
+    String cyclingMode = configStorage.getCyclingEnabled() ? "Cycling" : "Single";
+    mqttClient->publish(buildStateTopic("cycling_mode").c_str(), cyclingMode.c_str());
+    
+    // Random order status
+    String randomOrder = configStorage.getRandomOrder() ? "Enabled" : "Disabled";
+    mqttClient->publish(buildStateTopic("random_order_status").c_str(), randomOrder.c_str());
+    
+    // Cycle interval (in seconds)
+    String cycleIntervalStatus = String(configStorage.getCycleInterval() / 1000);
+    mqttClient->publish(buildStateTopic("cycle_interval_status").c_str(), cycleIntervalStatus.c_str());
+    
+    // Update interval (in seconds)
+    String updateIntervalStatus = String(configStorage.getUpdateInterval() / 1000);
+    mqttClient->publish(buildStateTopic("update_interval_status").c_str(), updateIntervalStatus.c_str());
+    
+    // Display dimensions
+    String displayWidth = String(displayManager.getWidth());
+    mqttClient->publish(buildStateTopic("display_width").c_str(), displayWidth.c_str());
+    
+    String displayHeight = String(displayManager.getHeight());
+    mqttClient->publish(buildStateTopic("display_height").c_str(), displayHeight.c_str());
+    
+    // Auto brightness status
+    String autoBrightness = configStorage.getBrightnessAutoMode() ? "Enabled" : "Disabled";
+    mqttClient->publish(buildStateTopic("auto_brightness_status").c_str(), autoBrightness.c_str());
+    
+    // Brightness level
+    String brightnessLevel = String(displayManager.getBrightness());
+    mqttClient->publish(buildStateTopic("brightness_level").c_str(), brightnessLevel.c_str());
+    
+    // Temperature (Celsius)
+    String tempCelsius = String(temperatureRead(), 1);
+    mqttClient->publish(buildStateTopic("temperature_celsius").c_str(), tempCelsius.c_str());
+    
+    // Temperature (Fahrenheit)
+    String tempFahrenheit = String(temperatureRead() * 9.0 / 5.0 + 32.0, 1);
+    mqttClient->publish(buildStateTopic("temperature_fahrenheit").c_str(), tempFahrenheit.c_str());
     
     return true;
 }
@@ -529,45 +517,5 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
         configStorage.copyAllDefaultsToImageTransforms();
         configStorage.saveConfig();
         publishState(); // Update all transform states
-    }
-    // Handle per-image transforms
-    else if (entity.startsWith("img")) {
-        // Parse image index from entity name (e.g., "img0_scale_x")
-        int underscorePos = entity.indexOf('_');
-        if (underscorePos > 3) {
-            int imageIndex = entity.substring(3, underscorePos).toInt();
-            String transformType = entity.substring(underscorePos + 1);
-            
-            if (transformType == "scale_x") {
-                float value = payload.toFloat();
-                configStorage.setImageScaleX(imageIndex, value);
-                configStorage.saveConfig();
-                mqttClient->publish(buildStateTopic(entity.c_str()).c_str(), payload.c_str());
-            }
-            else if (transformType == "scale_y") {
-                float value = payload.toFloat();
-                configStorage.setImageScaleY(imageIndex, value);
-                configStorage.saveConfig();
-                mqttClient->publish(buildStateTopic(entity.c_str()).c_str(), payload.c_str());
-            }
-            else if (transformType == "offset_x") {
-                int value = payload.toInt();
-                configStorage.setImageOffsetX(imageIndex, value);
-                configStorage.saveConfig();
-                mqttClient->publish(buildStateTopic(entity.c_str()).c_str(), payload.c_str());
-            }
-            else if (transformType == "offset_y") {
-                int value = payload.toInt();
-                configStorage.setImageOffsetY(imageIndex, value);
-                configStorage.saveConfig();
-                mqttClient->publish(buildStateTopic(entity.c_str()).c_str(), payload.c_str());
-            }
-            else if (transformType == "rotation") {
-                float value = payload.toFloat();
-                configStorage.setImageRotation(imageIndex, value);
-                configStorage.saveConfig();
-                mqttClient->publish(buildStateTopic(entity.c_str()).c_str(), payload.c_str());
-            }
-        }
     }
 }
