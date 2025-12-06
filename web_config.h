@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include <ElegantOTA.h>
 #include "config_storage.h"
 
 class WebConfig {

@@ -46,6 +46,40 @@ bool WebConfig::begin(int port) {
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
         server->on("/api/info", HTTP_GET, [this]() { handleGetAllInfo(); });
+        
+        // Initialize ElegantOTA
+        ElegantOTA.begin(server);
+        ElegantOTA.onStart([]() {
+            Serial.println("ElegantOTA: Update started");
+            displayManager.debugPrint("OTA Update starting...", COLOR_YELLOW);
+            displayManager.pauseDisplay();
+            systemMonitor.forceResetWatchdog();
+        });
+        ElegantOTA.onProgress([](size_t current, size_t final) {
+            // Reset watchdog on every progress update to prevent timeout
+            systemMonitor.forceResetWatchdog();
+            
+            static uint8_t lastPercent = 0;
+            uint8_t percent = (current * 100) / final;
+            if (percent != lastPercent && percent % 10 == 0) {
+                Serial.printf("ElegantOTA Progress: %u%%\n", percent);
+                char msg[64];
+                snprintf(msg, sizeof(msg), "OTA Progress: %u%%", percent);
+                displayManager.debugPrint(msg, COLOR_CYAN);
+                lastPercent = percent;
+            }
+        });
+        ElegantOTA.onEnd([](bool success) {
+            systemMonitor.forceResetWatchdog();
+            displayManager.resumeDisplay();
+            if (success) {
+                Serial.println("ElegantOTA: Update successful!");
+                displayManager.debugPrint("OTA Complete! Rebooting...", COLOR_GREEN);
+            } else {
+                Serial.println("ElegantOTA: Update failed!");
+                displayManager.debugPrint("OTA Update Failed", COLOR_RED);
+            }
+        });
         server->on("/api-reference", [this]() { handleAPIReference(); });
         server->onNotFound([this]() { handleNotFound(); });
         
@@ -71,8 +105,9 @@ bool WebConfig::begin(int port) {
 }
 
 void WebConfig::handleClient() {
-    if (serverRunning && server) {
+    if (server && serverRunning) {
         server->handleClient();
+        ElegantOTA.loop();
     }
 }
 

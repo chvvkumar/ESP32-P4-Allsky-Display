@@ -393,7 +393,16 @@ String WebConfig::generateAdvancedPage() {
     html += "<div class='form-group'><label for='critical_psram_threshold'>Critical PSRAM Threshold (bytes)</label>";
     html += "<input type='number' id='critical_psram_threshold' name='critical_psram_threshold' class='form-control' value='" + String(configStorage.getCriticalPSRAMThreshold()) + "' min='10000' max='10000000'></div></div>";
     html += "</div><div class='card' style='margin-top:1.5rem'>";
-    html += "<button type='submit' class='btn btn-primary'>💾 Save Advanced Settings</button></div></form></div></div>";
+    html += "<button type='submit' class='btn btn-primary'>💾 Save Advanced Settings</button></div></form>";
+    
+    // OTA Firmware Update Section
+    html += "<div class='card' style='margin-top:1.5rem'><h2>📦 Firmware Update (OTA)</h2>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Upload new firmware over-the-air using ElegantOTA. The device will automatically restart after a successful update.</p>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'><strong>Note:</strong> To clear settings after OTA update, use the Factory Reset button before updating, or use the serial command 'F' after the update.</p>";
+    html += "<div style='margin-top:1rem'><a href='/update' class='btn btn-primary' style='text-decoration:none;display:inline-block'>🚀 Open OTA Update Page</a></div>";
+    html += "</div>";
+    
+    html += "</div></div>";
     return html;
 }
 

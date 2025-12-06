@@ -4,6 +4,10 @@
 #include "network_manager.h"
 #include "mqtt_manager.h"
 #include "display_manager.h"
+#include "ota_manager.h"
+#include <Update.h>
+
+// System monitor is needed for watchdog resets during OTA
 
 // API handler functions for the web configuration interface
 // These functions process POST requests and handle configuration changes

@@ -20,7 +20,8 @@ $BUILD_PATH = Join-Path $env:LOCALAPPDATA "arduino\sketches\$SKETCH_HASH"
 $ARDUINO15_PATH = "$env:LOCALAPPDATA\Arduino15"
 
 # Board configuration
-$FQBN = "esp32:esp32:esp32p4:FlashSize=32M,PartitionScheme=app13M_data7M_32MB,PSRAM=enabled,EraseFlash=all"
+# Note: Using custom partitions.csv for OTA support (two 10MB app partitions)
+$FQBN = "esp32:esp32:esp32p4:FlashSize=32M,PSRAM=enabled,EraseFlash=all"
 $BOARD = "esp32p4"
 $CHIP = "esp32p4"
 
@@ -63,6 +64,8 @@ if ($ARDUINO_CLI) {
     # Capture output and show progress
     $compileOutput = & $ARDUINO_CLI compile --fqbn $FQBN `
         --build-path $BUILD_PATH `
+        --build-property "build.partitions=partitions" `
+        --build-property "upload.maximum_size=10485760" `
         --warnings "default" `
         $SKETCH_PATH 2>&1 | ForEach-Object {
             $line = $_.ToString()

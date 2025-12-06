@@ -8,6 +8,7 @@
 #include "display_manager.h"
 #include "ppa_accelerator.h"
 #include "mqtt_manager.h"
+#include "ota_manager.h"
 #include "gt911.h"
 #include "i2c.h"
 #include "task_retry_handler.h"
@@ -478,11 +479,18 @@ void setup() {
         debugPrint("ERROR: MQTT initialization failed!", COLOR_RED);
     }
     
+    // Initialize OTA manager
+    otaManager.begin();
+    otaManager.setDebugFunction(debugPrint);
+    
     // Start web configuration server if WiFi is connected
     if (wifiManager.isConnected()) {
         if (!webConfig.begin(8080)) {
             debugPrint("ERROR: Web config server failed to start", COLOR_RED);
         }
+        
+        // Initialize ArduinoOTA for network updates
+        wifiManager.initOTA();
     }
     
     // Load cycling configuration after all modules are initialized
@@ -1383,6 +1391,12 @@ void loop() {
     
     wifiManager.update();
     systemMonitor.forceResetWatchdog();
+    
+    // Handle OTA updates if WiFi is connected
+    if (wifiManager.isConnected()) {
+        wifiManager.handleOTA();
+        systemMonitor.forceResetWatchdog();
+    }
     
     // Handle web configuration server with better error handling
     if (wifiManager.isConnected()) {
