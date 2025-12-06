@@ -137,3 +137,31 @@ void WiFiManager::printConnectionInfo() {
     }
     Serial.println("============================");
 }
+
+bool WiFiManager::startAPMode(const char* ssid, const char* password) {
+    WiFi.mode(WIFI_AP);
+    delay(100);
+    
+    bool success;
+    if (password && strlen(password) > 0) {
+        success = WiFi.softAP(ssid, password);
+    } else {
+        success = WiFi.softAP(ssid);
+    }
+    
+    if (success) {
+        Serial.printf("AP Mode started: %s\n", ssid);
+        Serial.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+    }
+    
+    return success;
+}
+
+void WiFiManager::stopAPMode() {
+    WiFi.softAPdisconnect(true);
+    Serial.println("AP Mode stopped");
+}
+
+bool WiFiManager::isAPMode() const {
+    return (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA);
+}
