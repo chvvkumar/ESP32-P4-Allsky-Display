@@ -359,14 +359,16 @@ jobs:
           BIN_NAME="ESP32-P4-Allsky-Display-OTA-${BRANCH_NAME}.bin"
         fi
         
-        # Find the .bin file
-        BIN_FILE=$(find ./build -name "*.bin" -type f | head -n 1)
+        # Find the main firmware .bin file (exclude bootloader and partitions)
+        BIN_FILE=$(find ./build -name "ESP32-P4-Allsky-Display.ino.bin" -type f)
         if [ -z "$BIN_FILE" ]; then
-          echo "❌ Error: No .bin file found in build directory"
+          echo "❌ Error: ESP32-P4-Allsky-Display.ino.bin not found in build directory"
+          echo "Available .bin files:"
+          find ./build -name "*.bin" -type f
           exit 1
         fi
         
-        echo "Found bin file: $BIN_FILE"
+        echo "Found bin file: $BIN_FILE ($(du -h "$BIN_FILE" | cut -f1))"
         cp "$BIN_FILE" "release/$BIN_NAME"
         
         # Display build info
