@@ -341,6 +341,36 @@ void WebConfig::handleFactoryReset() {
     ESP.restart();
 }
 
+void WebConfig::handleSetLogSeverity() {
+    if (!server->hasArg("severity")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing severity parameter\"}");
+        return;
+    }
+    
+    int severity = server->arg("severity").toInt();
+    
+    // Validate severity range (0=DEBUG, 1=INFO, 2=WARNING, 3=ERROR, 4=CRITICAL)
+    if (severity < 0 || severity > 4) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid severity level. Must be 0-4\"}");
+        return;
+    }
+    
+    // Update configuration
+    configStorage.setMinLogSeverity(severity);
+    configStorage.saveConfig();
+    
+    const char* severityNames[] = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"};
+    String json = "{";
+    json += "\"status\":\"success\",";
+    json += "\"message\":\"Log severity filter updated to " + String(severityNames[severity]) + "\",";
+    json += "\"severity\":" + String(severity);
+    json += "}";
+    
+    sendResponse(200, "application/json", json);
+    
+    Serial.printf("[WebConfig] Log severity filter updated to %s (%d)\n", severityNames[severity], severity);
+}
+
 void WebConfig::applyImageSettings() {
     extern float scaleX, scaleY;
     extern int16_t offsetX, offsetY;

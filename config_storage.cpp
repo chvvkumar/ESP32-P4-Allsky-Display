@@ -78,6 +78,9 @@ void ConfigStorage::setDefaults() {
     config.watchdogTimeout = WATCHDOG_TIMEOUT_MS;
     config.criticalHeapThreshold = CRITICAL_HEAP_THRESHOLD;
     config.criticalPSRAMThreshold = CRITICAL_PSRAM_THRESHOLD;
+    
+    // Logging defaults
+    config.minLogSeverity = DEFAULT_LOG_LEVEL;
 }
 
 void ConfigStorage::loadConfig() {
@@ -141,6 +144,9 @@ void ConfigStorage::loadConfig() {
         config.watchdogTimeout = preferences.getULong("wd_timeout", config.watchdogTimeout);
         config.criticalHeapThreshold = preferences.getULong("heap_thresh", config.criticalHeapThreshold);
         config.criticalPSRAMThreshold = preferences.getULong("psram_thresh", config.criticalPSRAMThreshold);
+        
+        // Load logging settings
+        config.minLogSeverity = preferences.getInt("log_min_sev", config.minLogSeverity);
     }
     
     preferences.end();
@@ -206,6 +212,9 @@ void ConfigStorage::saveConfig() {
     preferences.putULong("wd_timeout", config.watchdogTimeout);
     preferences.putULong("heap_thresh", config.criticalHeapThreshold);
     preferences.putULong("psram_thresh", config.criticalPSRAMThreshold);
+    
+    // Save logging settings
+    preferences.putInt("log_min_sev", config.minLogSeverity);
     
     preferences.end();
 }
@@ -526,4 +535,12 @@ String ConfigStorage::getImageTransformsAsJson() {
     }
     json += "]";
     return json;
+}
+
+void ConfigStorage::setMinLogSeverity(int severity) {
+    config.minLogSeverity = severity;
+}
+
+int ConfigStorage::getMinLogSeverity() {
+    return config.minLogSeverity;
 }

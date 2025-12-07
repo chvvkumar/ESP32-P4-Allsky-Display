@@ -3,7 +3,6 @@
 #include "display_manager.h"
 #include "ota_manager.h"
 #include "web_config.h"
-#include "logging.h"
 #include <ArduinoOTA.h>
 
 // Global instances
@@ -23,7 +22,7 @@ WiFiManager::WiFiManager() :
 bool WiFiManager::begin() {
     // Check WiFi credentials
     if (strlen(WIFI_SSID) == 0) {
-        LOG_ERROR("ERROR: WiFi SSID is empty - please configure in config.cpp!");
+        Serial.println("ERROR: WiFi SSID is empty - please configure in config.cpp!");
         if (debugPrintFunc) debugPrintFunc("ERROR: WiFi SSID not configured", COLOR_RED);
         return false;
     }
@@ -41,8 +40,8 @@ void WiFiManager::connectToWiFi() {
     }
     
     lastConnectionAttempt = now;
-    LOG_INFO_F("[WiFi] Attempting connection to SSID: %s\n", WIFI_SSID);
-    LOG_INFO_F("[WiFi] MAC Address: %s\n", WiFi.macAddress().c_str());
+    Serial.printf("[WiFi] Attempting connection to SSID: %s\n", WIFI_SSID);
+    Serial.printf("[WiFi] MAC Address: %s\n", WiFi.macAddress().c_str());
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     
     connectionAttempts = 0;
@@ -51,7 +50,7 @@ void WiFiManager::connectToWiFi() {
     while (WiFi.status() != WL_CONNECTED && connectionAttempts < WIFI_MAX_ATTEMPTS) {
         // Check for timeout to prevent infinite hanging
         if (millis() - startTime > WIFI_MAX_WAIT_TIME) {
-            LOG_INFO_F("[WiFi] Connection timeout after %lu ms (max: %d ms)\n", millis() - startTime, WIFI_MAX_WAIT_TIME);
+            Serial.printf("[WiFi] Connection timeout after %lu ms (max: %d ms)\n", millis() - startTime, WIFI_MAX_WAIT_TIME);
             if (debugPrintFunc) debugPrintFunc("WiFi connection timeout!", COLOR_RED);
             break;
         }
@@ -70,20 +69,20 @@ void WiFiManager::connectToWiFi() {
     
     if (WiFi.status() == WL_CONNECTED) {
         wifiConnected = true;
-        LOG_INFO("[WiFi] ✓ Connection successful!");
-        LOG_INFO_F("[WiFi] IP Address: %s\n", WiFi.localIP().toString().c_str());
-        LOG_INFO_F("[WiFi] Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
-        LOG_INFO_F("[WiFi] DNS: %s\n", WiFi.dnsIP().toString().c_str());
-        LOG_INFO_F("[WiFi] Signal Strength (RSSI): %d dBm\n", WiFi.RSSI());
-        LOG_INFO_F("[WiFi] Connection took %d attempts, %lu ms\n", connectionAttempts, millis() - startTime);
+        Serial.println("[WiFi] ✓ Connection successful!");
+        Serial.printf("[WiFi] IP Address: %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("[WiFi] Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+        Serial.printf("[WiFi] DNS: %s\n", WiFi.dnsIP().toString().c_str());
+        Serial.printf("[WiFi] Signal Strength (RSSI): %d dBm\n", WiFi.RSSI());
+        Serial.printf("[WiFi] Connection took %d attempts, %lu ms\n", connectionAttempts, millis() - startTime);
     } else {
         wifiConnected = false;
-        LOG_ERROR_F("[WiFi] Connection failed after %d attempts\n", connectionAttempts);
-        LOG_INFO_F("[WiFi] WiFi status code: %d\n", WiFi.status());
-        LOG_ERROR_F("[WiFi] Status meanings: 0=IDLE, 1=NO_SSID_AVAIL, 3=CONNECTED, 4=CONNECT_FAILED, 6=DISCONNECTED\n");
+        Serial.printf("[WiFi] Connection failed after %d attempts\n", connectionAttempts);
+        Serial.printf("[WiFi] WiFi status code: %d\n", WiFi.status());
+        Serial.printf("[WiFi] Status meanings: 0=IDLE, 1=NO_SSID_AVAIL, 3=CONNECTED, 4=CONNECT_FAILED, 6=DISCONNECTED\n");
         
         // Disconnect to clean up any partial connection state
-        LOG_INFO("[WiFi] Cleaning up connection state...");
+        Serial.println("[WiFi] Cleaning up connection state...");
         WiFi.disconnect();
         systemMonitor.safeDelay(1000);
     }
@@ -99,12 +98,12 @@ void WiFiManager::checkConnection() {
     if (currentStatus != wifiConnected) {
         wifiConnected = currentStatus;
         if (!currentStatus) {
-            LOG_INFO("[WiFi] Connection lost! Starting reconnection logic...");
-            LOG_INFO_F("[WiFi] Last known IP: %s\n", WiFi.localIP().toString().c_str());
-            LOG_INFO_F("[WiFi] WiFi status: %d\n", WiFi.status());
+            Serial.println("[WiFi] Connection lost! Starting reconnection logic...");
+            Serial.printf("[WiFi] Last known IP: %s\n", WiFi.localIP().toString().c_str());
+            Serial.printf("[WiFi] WiFi status: %d\n", WiFi.status());
         } else {
-            LOG_INFO("[WiFi] Connection restored!");
-            LOG_INFO_F("[WiFi] IP: %s, RSSI: %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
+            Serial.println("[WiFi] Connection restored!");
+            Serial.printf("[WiFi] IP: %s, RSSI: %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
         }
     }
 }
@@ -147,17 +146,17 @@ void WiFiManager::update() {
 }
 
 void WiFiManager::printConnectionInfo() {
-    LOG_INFO("=== WiFi Connection Info ===");
-    LOG_INFO_F("Status: %s\n", isConnected() ? "Connected" : "Disconnected");
+    Serial.println("=== WiFi Connection Info ===");
+    Serial.printf("Status: %s\n", isConnected() ? "Connected" : "Disconnected");
     if (isConnected()) {
-        LOG_INFO_F("SSID: %s\n", WiFi.SSID().c_str());
-        LOG_INFO_F("IP Address: %s\n", getIPAddress().c_str());
-        LOG_INFO_F("Signal Strength: %d dBm\n", getSignalStrength());
-        LOG_INFO_F("MAC Address: %s\n", getMACAddress().c_str());
-        LOG_INFO_F("Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
-        LOG_INFO_F("DNS: %s\n", WiFi.dnsIP().toString().c_str());
+        Serial.printf("SSID: %s\n", WiFi.SSID().c_str());
+        Serial.printf("IP Address: %s\n", getIPAddress().c_str());
+        Serial.printf("Signal Strength: %d dBm\n", getSignalStrength());
+        Serial.printf("MAC Address: %s\n", getMACAddress().c_str());
+        Serial.printf("Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+        Serial.printf("DNS: %s\n", WiFi.dnsIP().toString().c_str());
     }
-    LOG_INFO("============================");
+    Serial.println("============================");
 }
 
 bool WiFiManager::startAPMode(const char* ssid, const char* password) {
@@ -172,8 +171,8 @@ bool WiFiManager::startAPMode(const char* ssid, const char* password) {
     }
     
     if (success) {
-        LOG_INFO_F("AP Mode started: %s\n", ssid);
-        LOG_INFO_F("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+        Serial.printf("AP Mode started: %s\n", ssid);
+        Serial.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
     }
     
     return success;
@@ -181,7 +180,7 @@ bool WiFiManager::startAPMode(const char* ssid, const char* password) {
 
 void WiFiManager::stopAPMode() {
     WiFi.softAPdisconnect(true);
-    LOG_INFO("AP Mode stopped");
+    Serial.println("AP Mode stopped");
 }
 
 bool WiFiManager::isAPMode() const {
@@ -207,7 +206,7 @@ void WiFiManager::initOTA() {
             type = "filesystem";
         }
         
-        LOG_INFO_F("Start OTA updating %s\n", type.c_str());
+        Serial.println("Start OTA updating " + type);
         webConfig.setOTAInProgress(true);  // Suspend main loop operations
         displayManager.showOTAProgress("ArduinoOTA Update", 0, "Starting...");
         
@@ -215,7 +214,7 @@ void WiFiManager::initOTA() {
     });
     
     ArduinoOTA.onEnd([]() {
-        LOG_INFO("\nOTA Update Complete");
+        Serial.println("\nOTA Update Complete");
         displayManager.showOTAProgress("OTA Complete!", 100, "Rebooting...");
         delay(2000);
         
@@ -229,7 +228,7 @@ void WiFiManager::initOTA() {
         // Only log progress to serial, don't update display
         static uint8_t lastPercent = 0;
         if (percent != lastPercent && percent % 10 == 0) {
-            LOG_INFO_F("OTA Progress: %u%%\n", percent);
+            Serial.printf("OTA Progress: %u%%\n", percent);
             otaManager.setProgress(percent);
             lastPercent = percent;
         }
@@ -237,24 +236,24 @@ void WiFiManager::initOTA() {
     });
     
     ArduinoOTA.onError([](ota_error_t error) {
-        LOG_ERROR_F("OTA Error[%u]: ", error);
+        Serial.printf("OTA Error[%u]: ", error);
         String errorMsg = "";
         
         if (error == OTA_AUTH_ERROR) {
             errorMsg = "Auth Failed";
-            LOG_ERROR("Auth Failed");
+            Serial.println("Auth Failed");
         } else if (error == OTA_BEGIN_ERROR) {
             errorMsg = "Begin Failed";
-            LOG_ERROR("Begin Failed");
+            Serial.println("Begin Failed");
         } else if (error == OTA_CONNECT_ERROR) {
             errorMsg = "Connect Failed";
-            LOG_ERROR("Connect Failed");
+            Serial.println("Connect Failed");
         } else if (error == OTA_RECEIVE_ERROR) {
             errorMsg = "Receive Failed";
-            LOG_ERROR("Receive Failed");
+            Serial.println("Receive Failed");
         } else if (error == OTA_END_ERROR) {
             errorMsg = "End Failed";
-            LOG_ERROR("End Failed");
+            Serial.println("End Failed");
         }
         
         displayManager.showOTAProgress("OTA Error", 0, errorMsg.c_str());
@@ -265,7 +264,7 @@ void WiFiManager::initOTA() {
     });
     
     ArduinoOTA.begin();
-    LOG_INFO("ArduinoOTA initialized");
+    Serial.println("ArduinoOTA initialized");
     if (debugPrintFunc) debugPrintFunc("ArduinoOTA ready", COLOR_GREEN);
 }
 

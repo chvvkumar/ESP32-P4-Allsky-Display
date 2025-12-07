@@ -48,6 +48,7 @@ bool WebConfig::begin(int port) {
         server->on("/api/apply-transform", HTTP_POST, [this]() { handleApplyTransform(); });
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
+        server->on("/api/set-log-severity", HTTP_POST, [this]() { handleSetLogSeverity(); });
         server->on("/api/info", HTTP_GET, [this]() { handleGetAllInfo(); });
         server->on("/api/current-image", HTTP_GET, [this]() { handleCurrentImage(); });
         
@@ -427,11 +428,17 @@ void WebConfig::webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, siz
     }
 }
 
-// Broadcast log message to all connected WebSocket clients
-void WebConfig::broadcastLog(const char* message, uint16_t color) {
+// Broadcast log message to all connected WebSocket clients with severity filtering
+void WebConfig::broadcastLog(const char* message, uint16_t color, LogSeverity severity) {
     if (!serverRunning || !wsServer || !message || otaInProgress) {
         // Silent return - don't spam serial with these conditions
         return;
+    }
+    
+    // Check severity filter - only send messages at or above configured threshold
+    int minSeverity = configStorage.getMinLogSeverity();
+    if (severity < minSeverity) {
+        return; // Message filtered out by severity level
     }
     
     // Log broadcast failures for troubleshooting
@@ -445,10 +452,21 @@ void WebConfig::broadcastLog(const char* message, uint16_t color) {
         return;
     }
     
+    // Severity prefixes for visual identification
+    const char* severityPrefix = "";
+    switch(severity) {
+        case LOG_DEBUG: severityPrefix = "[DEBUG] "; break;
+        case LOG_INFO: severityPrefix = "[INFO] "; break;
+        case LOG_WARNING: severityPrefix = "[WARN] "; break;
+        case LOG_ERROR: severityPrefix = "[ERROR] "; break;
+        case LOG_CRITICAL: severityPrefix = "[CRITICAL] "; break;
+    }
+    
     // Use fixed buffer to avoid String heap fragmentation
     char buffer[384];
     unsigned long ms = millis();
-    int written = snprintf(buffer, sizeof(buffer), "[%lu.%03lu] %s", ms / 1000, ms % 1000, message);
+    int written = snprintf(buffer, sizeof(buffer), "[%lu.%03lu] %s%s", 
+                          ms / 1000, ms % 1000, severityPrefix, message);
     
     // Ensure newline termination if there's room
     if (written > 0 && written < (int)sizeof(buffer) - 2) {
