@@ -1544,6 +1544,25 @@ void processSerialCommands() {
                 Serial.printf("Rotate CW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
                 break;
                 
+            // Next image command
+            case 'N':
+            case 'n':
+                if (cyclingEnabled && imageSourceCount > 1) {
+                    advanceToNextImage();
+                    lastUpdate = 0; // Reset cycle timer for fresh interval
+                    Serial.printf("Serial: Advancing to next image (image %d of %d)\n", currentImageIndex + 1, imageSourceCount);
+                } else {
+                    Serial.println("Serial: Cycling not enabled or only one source configured");
+                }
+                break;
+            
+            // Refresh current image
+            case 'F':
+            case 'f':
+                lastUpdate = 0; // Force immediate refresh
+                Serial.println("Serial: Forcing image refresh");
+                break;
+                
             // Reset command
             case 'R':
             case 'r':
@@ -1600,6 +1619,9 @@ void processSerialCommands() {
             case 'h':
             case '?':
                 Serial.println("\n=== Image Control Commands ===");
+                Serial.println("Navigation:");
+                Serial.println("  N   : Next image (resets cycle timer)");
+                Serial.println("  F   : Force refresh current image");
                 Serial.println("Scaling:");
                 Serial.println("  +/- : Scale both axes");
                 Serial.println("Movement:");
