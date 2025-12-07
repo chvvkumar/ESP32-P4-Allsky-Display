@@ -166,9 +166,14 @@ void WebConfig::handleAddImageSource() {
 void WebConfig::handleRemoveImageSource() {
     if (server->hasArg("index")) {
         int index = server->arg("index").toInt();
-        configStorage.removeImageSource(index);
-        configStorage.saveConfig();
-        sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Image source removed successfully\"}");
+        Serial.printf("API: Remove source request - index=%d\n", index);
+        
+        if (configStorage.removeImageSource(index)) {
+            configStorage.saveConfig();
+            sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Image source removed successfully\"}");
+        } else {
+            sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Failed to remove source: invalid index or last source\"}");
+        }
     } else {
         sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
     }

@@ -62,7 +62,7 @@ public:
     void setImageSourceCount(int count);
     void setImageSource(int index, const String& url);
     void addImageSource(const String& url);
-    void removeImageSource(int index);
+    bool removeImageSource(int index);
     void clearImageSources();
     
     // Individual parameter getters

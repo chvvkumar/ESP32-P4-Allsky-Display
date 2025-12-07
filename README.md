@@ -42,10 +42,12 @@ Transform your ESP32-P4 display into a powerful all-sky camera viewer with multi
 ## 🛠️ Hardware Requirements
 
 **Supported Displays:**
-- [Waveshare 3.4" ESP32-P4 Touch LCD](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.4c.htm) (800×800)
-- [Waveshare 4.0" ESP32-P4 Touch LCD](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-4C) (720×720)
+- [Waveshare 3.4" ESP32-P4 Touch LCD](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.4c.htm) (800×800) ✅ **Tested & Confirmed Working**
+- [Waveshare 4.0" ESP32-P4 Touch LCD](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-4C) (720×720) ⚠️ **Untested - Configuration Available**
 
 **Requirements:** ESP32-P4 with WiFi 6, DSI display, GT911 touch, 16MB flash, **PSRAM required**
+
+**Note:** This project has been developed and tested exclusively on the 3.4" display. The 4.0" display configuration is available in the code but has not been verified on actual hardware.
 
 **Optional 3D Printed Case:** [Download from Printables](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
 
