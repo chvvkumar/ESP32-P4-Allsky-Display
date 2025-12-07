@@ -738,6 +738,13 @@ void renderFullImage() {
         // Try hardware acceleration first if available
         size_t scaledImageSize = scaledWidth * scaledHeight * 2;
         
+        Serial.printf("[Render] Image: %dx%d -> Scaled: %dx%d (rot:%.0f) = %d bytes vs buffer %d bytes\n",
+                     fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, 
+                     rotationAngle, scaledImageSize, scaledBufferSize);
+        Serial.printf("[Render] PPA available: %s, Size check: %s\n", 
+                     ppaAccelerator.isAvailable() ? "YES" : "NO",
+                     scaledImageSize <= scaledBufferSize ? "PASS" : "FAIL");
+        
         if (ppaAccelerator.isAvailable() && scaledImageSize <= scaledBufferSize) {
             systemMonitor.forceResetWatchdog();
             
@@ -746,12 +753,19 @@ void renderFullImage() {
             // Pause display during heavy PPA operations to prevent LCD underrun
             displayManager.pauseDisplay();
             
+            Serial.printf("[PPA] Attempting hardware scale+rotate: %dx%d -> %dx%d (%.0f°)\n",
+                         fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, rotationAngle);
+            
             if (ppaAccelerator.scaleRotateImage(fullImageBuffer, fullImageWidth, fullImageHeight,
                                               scaledBuffer, scaledWidth, scaledHeight, rotationAngle)) {
                 // Resume display after heavy operation
                 displayManager.resumeDisplay();
                 
                 systemMonitor.forceResetWatchdog();
+                
+                unsigned long hwTime = millis() - hwStart;
+                Serial.printf("[PPA] ✓ Hardware acceleration successful in %lu ms\n", hwTime);
+                debugPrintf(COLOR_GREEN, "PPA hardware render: %lu ms", hwTime);
                 
                 // Draw the hardware-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
@@ -769,8 +783,16 @@ void renderFullImage() {
                 prevImageHeight = scaledHeight;
                 return;
             } else {
+                Serial.println("[PPA] ✗ Hardware acceleration failed, falling back to software");
                 debugPrint("DEBUG: PPA scale+rotate failed, falling back to software", COLOR_YELLOW);
+                displayManager.resumeDisplay();  // Resume display if PPA failed
                 systemMonitor.forceResetWatchdog();
+            }
+        } else {
+            if (!ppaAccelerator.isAvailable()) {
+                Serial.println("[PPA] Hardware acceleration not available");
+            } else {
+                Serial.printf("[PPA] Scaled image too large: %d > %d bytes\n", scaledImageSize, scaledBufferSize);
             }
         }
         
