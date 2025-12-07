@@ -1,11 +1,13 @@
 #include "ha_discovery.h"
 #include "display_manager.h"
 #include "system_monitor.h"
+#include "crash_logger.h"
 #include <WiFi.h>
 #include <esp_task_wdt.h>
 
-// Global instance
+// Global instances
 HADiscovery haDiscovery;
+extern CrashLogger crashLogger;
 
 HADiscovery::HADiscovery() :
     mqttClient(nullptr),
@@ -504,6 +506,7 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     // Handle buttons
     else if (entity == "reboot" && payload == "PRESS") {
         delay(100);
+        crashLogger.saveBeforeReboot();
         ESP.restart();
     }
     else if (entity == "next_image" && payload == "PRESS") {

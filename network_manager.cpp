@@ -2,10 +2,12 @@
 #include "system_monitor.h"
 #include "display_manager.h"
 #include "ota_manager.h"
+#include "web_config.h"
 #include <ArduinoOTA.h>
 
-// Global instance
+// Global instances
 WiFiManager wifiManager;
+extern WebConfig webConfig;
 
 WiFiManager::WiFiManager() :
     wifiConnected(false),
@@ -38,6 +40,8 @@ void WiFiManager::connectToWiFi() {
     }
     
     lastConnectionAttempt = now;
+    Serial.printf("[WiFi] Attempting connection to SSID: %s\n", WIFI_SSID);
+    Serial.printf("[WiFi] MAC Address: %s\n", WiFi.macAddress().c_str());
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     
     connectionAttempts = 0;
@@ -46,6 +50,7 @@ void WiFiManager::connectToWiFi() {
     while (WiFi.status() != WL_CONNECTED && connectionAttempts < WIFI_MAX_ATTEMPTS) {
         // Check for timeout to prevent infinite hanging
         if (millis() - startTime > WIFI_MAX_WAIT_TIME) {
+            Serial.printf("[WiFi] Connection timeout after %lu ms (max: %d ms)\n", millis() - startTime, WIFI_MAX_WAIT_TIME);
             if (debugPrintFunc) debugPrintFunc("WiFi connection timeout!", COLOR_RED);
             break;
         }
@@ -64,12 +69,20 @@ void WiFiManager::connectToWiFi() {
     
     if (WiFi.status() == WL_CONNECTED) {
         wifiConnected = true;
-        Serial.printf("WiFi connected! IP: %s\n", WiFi.localIP().toString().c_str());
+        Serial.println("[WiFi] ✓ Connection successful!");
+        Serial.printf("[WiFi] IP Address: %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("[WiFi] Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+        Serial.printf("[WiFi] DNS: %s\n", WiFi.dnsIP().toString().c_str());
+        Serial.printf("[WiFi] Signal Strength (RSSI): %d dBm\n", WiFi.RSSI());
+        Serial.printf("[WiFi] Connection took %d attempts, %lu ms\n", connectionAttempts, millis() - startTime);
     } else {
         wifiConnected = false;
-        Serial.printf("WiFi failed (status: %d)\n", WiFi.status());
+        Serial.printf("[WiFi] Connection failed after %d attempts\n", connectionAttempts);
+        Serial.printf("[WiFi] WiFi status code: %d\n", WiFi.status());
+        Serial.printf("[WiFi] Status meanings: 0=IDLE, 1=NO_SSID_AVAIL, 3=CONNECTED, 4=CONNECT_FAILED, 6=DISCONNECTED\n");
         
         // Disconnect to clean up any partial connection state
+        Serial.println("[WiFi] Cleaning up connection state...");
         WiFi.disconnect();
         systemMonitor.safeDelay(1000);
     }
@@ -85,7 +98,12 @@ void WiFiManager::checkConnection() {
     if (currentStatus != wifiConnected) {
         wifiConnected = currentStatus;
         if (!currentStatus) {
-            Serial.println("WiFi disconnected!");
+            Serial.println("[WiFi] Connection lost! Starting reconnection logic...");
+            Serial.printf("[WiFi] Last known IP: %s\n", WiFi.localIP().toString().c_str());
+            Serial.printf("[WiFi] WiFi status: %d\n", WiFi.status());
+        } else {
+            Serial.println("[WiFi] Connection restored!");
+            Serial.printf("[WiFi] IP: %s, RSSI: %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
         }
     }
 }
@@ -189,67 +207,60 @@ void WiFiManager::initOTA() {
         }
         
         Serial.println("Start OTA updating " + type);
-        displayManager.debugPrint(("OTA Update: " + type).c_str(), COLOR_YELLOW);
-        
-        // Pause display during OTA
-        displayManager.pauseDisplay();
+        webConfig.setOTAInProgress(true);  // Suspend main loop operations
+        displayManager.showOTAProgress("ArduinoOTA Update", 0, "Starting...");
         
         otaManager.setStatus(OTA_UPDATE_IN_PROGRESS, "Starting OTA update...");
     });
     
     ArduinoOTA.onEnd([]() {
         Serial.println("\nOTA Update Complete");
-        displayManager.debugPrint("OTA Complete! Rebooting...", COLOR_GREEN);
+        displayManager.showOTAProgress("OTA Complete!", 100, "Rebooting...");
+        delay(2000);
         
+        webConfig.setOTAInProgress(false);  // Resume main loop operations
         otaManager.setStatus(OTA_UPDATE_SUCCESS, "OTA update successful");
-        
-        // Resume display
-        displayManager.resumeDisplay();
     });
     
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
         uint8_t percent = (progress * 100) / total;
         
-        // Update progress every 10%
+        // Only log progress to serial, don't update display
         static uint8_t lastPercent = 0;
         if (percent != lastPercent && percent % 10 == 0) {
             Serial.printf("OTA Progress: %u%%\n", percent);
-            
-            char msg[64];
-            snprintf(msg, sizeof(msg), "OTA Progress: %u%%", percent);
-            displayManager.debugPrint(msg, COLOR_CYAN);
-            
             otaManager.setProgress(percent);
             lastPercent = percent;
         }
+        systemMonitor.forceResetWatchdog();
     });
     
     ArduinoOTA.onError([](ota_error_t error) {
         Serial.printf("OTA Error[%u]: ", error);
-        String errorMsg = "OTA Error: ";
+        String errorMsg = "";
         
         if (error == OTA_AUTH_ERROR) {
-            errorMsg += "Auth Failed";
+            errorMsg = "Auth Failed";
             Serial.println("Auth Failed");
         } else if (error == OTA_BEGIN_ERROR) {
-            errorMsg += "Begin Failed";
+            errorMsg = "Begin Failed";
             Serial.println("Begin Failed");
         } else if (error == OTA_CONNECT_ERROR) {
-            errorMsg += "Connect Failed";
+            errorMsg = "Connect Failed";
             Serial.println("Connect Failed");
         } else if (error == OTA_RECEIVE_ERROR) {
-            errorMsg += "Receive Failed";
+            errorMsg = "Receive Failed";
             Serial.println("Receive Failed");
         } else if (error == OTA_END_ERROR) {
-            errorMsg += "End Failed";
+            errorMsg = "End Failed";
             Serial.println("End Failed");
         }
         
-        displayManager.debugPrint(errorMsg.c_str(), COLOR_RED);
-        otaManager.setStatus(OTA_UPDATE_FAILED, errorMsg.c_str());
+        displayManager.showOTAProgress("OTA Error", 0, errorMsg.c_str());
+        delay(3000);
         
-        // Resume display
-        displayManager.resumeDisplay();
+        webConfig.setOTAInProgress(false);  // Resume main loop operations
+        otaManager.setStatus(OTA_UPDATE_FAILED, errorMsg.c_str());
     });
     
     ArduinoOTA.begin();

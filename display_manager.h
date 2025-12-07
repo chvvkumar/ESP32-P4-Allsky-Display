@@ -25,6 +25,10 @@ private:
     int debugY;
     int debugLineCount;
     bool firstImageLoaded;
+    
+    // OTA progress tracking (to avoid unnecessary redraws)
+    bool otaScreenInitialized;
+    uint8_t lastOTAPercent;
 
 public:
     DisplayManager();
@@ -63,6 +67,9 @@ public:
     void drawStatusOverlay(const char* message, uint16_t color = COLOR_CYAN, int yOffset = 20);
     void clearStatusOverlay();
     void drawOverlayMessage(const char* message, int x, int y, uint16_t color, int backgroundColor = COLOR_BLACK);
+    
+    // OTA progress display
+    void showOTAProgress(const char* title, uint8_t percent, const char* message = nullptr);
     
     // Status display
     void showSystemStatus();

@@ -120,11 +120,25 @@ Modern, responsive configuration portal at `http://[device-ip]:8080/`
 
 **Configuration Pages:**
 - **Home** - System status and quick actions
+- **Console** - Real-time serial output monitoring over WiFi
 - **WiFi** - Network settings
 - **MQTT** - Home Assistant integration
 - **Images** - Multi-image sources (up to 10)
 - **Display** - Brightness and transforms
 - **Advanced** - Intervals and thresholds
+
+### Remote Serial Monitoring
+
+**WebSocket Console:** Access `http://[device-ip]:8080/console` to view real-time serial output over WiFi
+
+**Features:**
+- No USB connection required
+- Real-time log streaming via WebSocket (port 81)
+- Auto-scroll, message counter, log filtering
+- Download logs to file
+- Connect/disconnect on demand
+
+**Use Cases:** Monitor debug output remotely, troubleshoot network issues, verify system behavior
 
 ### OTA Updates
 
@@ -200,7 +214,11 @@ X    : Reset transforms   M : Memory            V : Version
 | **Images won't load** | Verify URL accessible, check image size, use resized images |
 | **OTA fails** | See [OTA_GUIDE.md](OTA_GUIDE.md) troubleshooting section |
 
-**Debug Tools:** Serial monitor (9600 baud), web interface status page, memory monitoring
+**Debug Tools:** 
+- Serial monitor (9600 baud) - Comprehensive debug output for all operations
+- WebSocket console at `/console` - Real-time remote monitoring without USB
+- Web interface status page - System health and metrics
+- Detailed logging for: WiFi connections, MQTT operations, HTTP downloads, image processing, memory allocations
 
 ## 🤝 Contributing
 

@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <WebServer.h>
+#include <WebSocketsServer.h>
 #include <WiFi.h>
 #include <ElegantOTA.h>
 #include "config_storage.h"
@@ -26,10 +27,16 @@ public:
 
 private:
     WebServer* server;
+    WebSocketsServer* wsServer;
     bool serverRunning;
+    bool otaInProgress;
+    
+    // WebSocket handlers
+    static void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length);
     
     // Route handlers
     void handleRoot();
+    void handleConsole();
     void handleNetworkConfig();
     void handleMQTTConfig();
     void handleImageConfig();
@@ -49,6 +56,22 @@ private:
     void handleApplyTransform();
     void handleRestart();
     void handleFactoryReset();
+    
+public:
+    // WebSocket log broadcasting
+    void broadcastLog(const char* message, uint16_t color = 0xFFFF);
+    
+    // OTA status
+    bool isOTAInProgress() const { return otaInProgress; }
+    void setOTAInProgress(bool inProgress) { otaInProgress = inProgress; }
+    
+    // WebSocket loop handler
+    void loopWebSocket();
+    
+private:
+    void sendCrashLogsToClient(uint8_t clientNum);
+    
+private:
     void handleNotFound();
     void handleAPIReference();
     void handleGetAllInfo();
@@ -60,6 +83,7 @@ private:
     String generateNavigation(const String& currentPage = "");
     String generateMainPage();
     String generateNetworkPage();
+    String generateConsolePage();
     String generateMQTTPage();
     String generateImagePage();
     String generateImageSourcesPage();
