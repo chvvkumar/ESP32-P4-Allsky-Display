@@ -1,6 +1,7 @@
 # ESP32-P4 AllSky Display
 
-Transform your ESP32-P4 display into a powerful all-sky camera viewer with multi-image cycling, hardware acceleration, and seamless Home Assistant integration.
+
+Transform your ESP32-P4 display into a all-sky camera viewer with multi-image cycling, hardware acceleration, and seamless Home Assistant integration.
 
 <img src="images/display.jpg" alt="Display in Action" width="600">
 
@@ -23,6 +24,8 @@ Transform your ESP32-P4 display into a powerful all-sky camera viewer with multi
 [![Release](https://img.shields.io/github/v/release/chvvkumar/ESP32-P4-Allsky-Display?labelColor=1a1a2e&color=16537e)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
 ![Flash Usage](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/badges/.github/badges/flash-usage.json&query=$.message&label=Flash&labelColor=1a1a2e&color=16537e)
 ![RAM Usage](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/badges/.github/badges/ram-usage.json&query=$.message&label=RAM&labelColor=1a1a2e&color=16537e)
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/chvvkumar/ESP32-P4-Allsky-Display)
 
 ## ✨ Features
 
