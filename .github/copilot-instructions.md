@@ -90,6 +90,16 @@ wifiManager.setDebugFunctions(debugPrint, debugPrintf, &firstImageLoaded);
 - All debug text is centered horizontally for visual appeal
 - Debug area scrolls when reaching screen bottom
 
+**Comprehensive Debug Logging:**
+- All serial output available via WebSocket console at `/console` - no USB needed
+- Detailed logging for remote troubleshooting throughout critical sections:
+  - **WiFi:** Connection status, IP/gateway/DNS, RSSI, timing, error codes with explanations
+  - **MQTT:** Connection attempts, authentication status, error codes, HA discovery progress
+  - **HTTP Downloads:** Request/response codes, content-length, progress (%), speed (KB/s), timeout tracking
+  - **Image Processing:** JPEG validation, header checks, dimensions, decode timing, error diagnostics
+  - **Memory Allocations:** Heap/PSRAM before/after, buffer sizes, largest free block, fragmentation warnings
+  - All error messages include diagnostic information and possible causes for field troubleshooting
+
 ### Display Configuration System
 
 Two display configs via `CURRENT_SCREEN` in `displays_config.h`:
@@ -133,6 +143,7 @@ Install via Arduino Library Manager:
 - JPEGDEC (1.8.4+)
 - PubSubClient (2.8.0+)
 - ElegantOTA (latest)
+- WebSockets by Markus Sattler (2.5.0+) - For WebSocket console support
 
 ### Serial Debugging
 
@@ -187,6 +198,7 @@ Portal implementation in `captive_portal.cpp`:
 
 Express-like routing in `web_config.cpp`:
 - `/` - System status dashboard
+- `/console` - Real-time serial console (WebSocket-based)
 - `/wifi` - Network settings
 - `/mqtt` - MQTT/HA config
 - `/images` - Multi-image sources (up to 10)
@@ -196,6 +208,14 @@ Express-like routing in `web_config.cpp`:
 - `/api/*` - REST endpoints (JSON responses)
 
 Web server runs on port 8080. All pages use a dark blue theme with real-time status updates via `/api/status`.
+
+**Remote Serial Monitoring**:
+- WebSocket server on port 81 for real-time log streaming
+- All `debugPrint()` and `debugPrintf()` calls broadcast to connected console clients
+- Console page at `/console` with connect/disconnect, auto-scroll, clear, and download features
+- No USB connection required - monitor serial output over WiFi
+- Multiple clients can connect simultaneously
+- Messages include timestamp in `[seconds.milliseconds]` format
 
 ### Over-The-Air (OTA) Updates
 

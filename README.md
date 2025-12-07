@@ -1,6 +1,7 @@
 # ESP32-P4 AllSky Display
 
-Transform your ESP32-P4 display into a powerful all-sky camera viewer with multi-image cycling, hardware acceleration, and seamless Home Assistant integration.
+
+Transform your ESP32-P4 display into a all-sky camera viewer with multi-image cycling, hardware acceleration, and seamless Home Assistant integration.
 
 <img src="images/display.jpg" alt="Display in Action" width="600">
 
@@ -23,6 +24,8 @@ Transform your ESP32-P4 display into a powerful all-sky camera viewer with multi
 [![Release](https://img.shields.io/github/v/release/chvvkumar/ESP32-P4-Allsky-Display?labelColor=1a1a2e&color=16537e)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
 ![Flash Usage](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/badges/.github/badges/flash-usage.json&query=$.message&label=Flash&labelColor=1a1a2e&color=16537e)
 ![RAM Usage](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/badges/.github/badges/ram-usage.json&query=$.message&label=RAM&labelColor=1a1a2e&color=16537e)
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/chvvkumar/ESP32-P4-Allsky-Display)
 
 ## ✨ Features
 
@@ -117,11 +120,27 @@ Modern, responsive configuration portal at `http://[device-ip]:8080/`
 
 **Configuration Pages:**
 - **Home** - System status and quick actions
+- **Console** - Real-time serial output monitoring over WiFi
 - **WiFi** - Network settings
 - **MQTT** - Home Assistant integration
 - **Images** - Multi-image sources (up to 10)
 - **Display** - Brightness and transforms
 - **Advanced** - Intervals and thresholds
+
+### Remote Serial Monitoring
+
+**WebSocket Console:** Access `http://[device-ip]:8080/console` to view real-time serial output over WiFi
+
+<img src="images/config-console.png" alt="WebSocket Console Interface" width="600">
+
+**Features:**
+- No USB connection required
+- Real-time log streaming via WebSocket (port 81)
+- Auto-scroll, message counter, log filtering
+- Download logs to file
+- Connect/disconnect on demand
+
+**Use Cases:** Monitor debug output remotely, troubleshoot network issues, verify system behavior
 
 ### OTA Updates
 
@@ -197,7 +216,11 @@ X    : Reset transforms   M : Memory            V : Version
 | **Images won't load** | Verify URL accessible, check image size, use resized images |
 | **OTA fails** | See [OTA_GUIDE.md](OTA_GUIDE.md) troubleshooting section |
 
-**Debug Tools:** Serial monitor (9600 baud), web interface status page, memory monitoring
+**Debug Tools:** 
+- Serial monitor (9600 baud) - Comprehensive debug output for all operations
+- WebSocket console at `/console` - Real-time remote monitoring without USB
+- Web interface status page - System health and metrics
+- Detailed logging for: WiFi connections, MQTT operations, HTTP downloads, image processing, memory allocations
 
 ## 🤝 Contributing
 

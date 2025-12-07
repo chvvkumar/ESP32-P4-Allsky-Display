@@ -1,11 +1,12 @@
 # ESP32-P4 Allsky Display - Compile and Upload Script
 # This script compiles and uploads the sketch to ESP32-P4
-
+# 
 # Parameters
 param(
     [string]$ComPort = "COM3",
     [string]$BaudRate = "921600",
     [string]$OutputFolder = "",
+    [string]$OutputPath = "",
     [switch]$SkipUpload
 )
 
@@ -161,13 +162,15 @@ if ($ARDUINO_CLI) {
         # Copy binary to specified output folder or Downloads folder
         $BIN_FILE = "$BUILD_PATH\$SKETCH_NAME.bin"
         if (Test-Path $BIN_FILE) {
-            # Determine destination path
-            if ($OutputFolder -and $OutputFolder -ne "") {
+            # Determine destination path (support both OutputPath and OutputFolder parameters)
+            $targetPath = if ($OutputPath -and $OutputPath -ne "") { $OutputPath } else { $OutputFolder }
+            
+            if ($targetPath -and $targetPath -ne "") {
                 # Use specified output folder
-                if (-not (Test-Path $OutputFolder)) {
-                    New-Item -ItemType Directory -Path $OutputFolder -Force | Out-Null
+                if (-not (Test-Path $targetPath)) {
+                    New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
                 }
-                $destFile = Join-Path $OutputFolder "ESP32-P4-Allsky-Display.bin"
+                $destFile = Join-Path $targetPath "ESP32-P4-Allsky-Display.bin"
             } else {
                 # Default to Downloads folder
                 $downloadsPath = [System.IO.Path]::Combine($env:USERPROFILE, "Downloads")

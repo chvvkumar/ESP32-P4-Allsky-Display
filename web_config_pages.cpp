@@ -893,3 +893,172 @@ String WebConfig::generateAPIReferencePage() {
     html += "</div></div>";
     return html;
 }
+
+String WebConfig::generateConsolePage() {
+    String html = "<div class='main'><div class='container'>";
+    html += "<div class='card'>";
+    html += "<h2>🖥️ Serial Console</h2>";
+    
+    // Info box
+    html += "<div style='background:rgba(56,189,248,0.1);border:1px solid #38bdf8;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
+    html += "<p style='color:#38bdf8;margin:0;font-size:0.9rem'><i class='fas fa-info-circle' style='margin-right:8px'></i>";
+    html += "<strong>Real-time Monitoring:</strong> View serial debug output from the device in real-time over WiFi. ";
+    html += "No USB connection required. Messages appear as they are logged by the system.</p>";
+    html += "</div>";
+    
+    // Control buttons
+    html += "<div style='display:flex;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap'>";
+    html += "<button class='btn btn-success' onclick='connectConsole()' id='connectBtn'><i class='fas fa-plug' style='margin-right:0.5rem'></i>Connect</button>";
+    html += "<button class='btn btn-danger' onclick='disconnectConsole()' id='disconnectBtn' disabled><i class='fas fa-times' style='margin-right:0.5rem'></i>Disconnect</button>";
+    html += "<button class='btn btn-secondary' onclick='clearConsole()'><i class='fas fa-eraser' style='margin-right:0.5rem'></i>Clear</button>";
+    html += "<button class='btn btn-secondary' onclick='toggleAutoscroll()' id='autoscrollBtn'><i class='fas fa-arrow-down' style='margin-right:0.5rem'></i>Auto-scroll: ON</button>";
+    html += "<button class='btn btn-secondary' onclick='downloadLogs()'><i class='fas fa-download' style='margin-right:0.5rem'></i>Download</button>";
+    html += "</div>";
+    
+    // Status indicator
+    html += "<div style='margin-bottom:1rem;padding:0.75rem;background:#1e293b;border-radius:8px;display:flex;align-items:center;gap:0.75rem'>";
+    html += "<span id='wsStatus' class='status-indicator status-offline'></span>";
+    html += "<span id='wsStatusText' style='color:#94a3b8;font-size:0.9rem'>Disconnected</span>";
+    html += "<span id='wsStats' style='margin-left:auto;color:#64748b;font-size:0.85rem'>0 messages</span>";
+    html += "</div>";
+    
+    // Console output area
+    html += "<div id='consoleOutput' style='";
+    html += "background:#0f172a;";
+    html += "border:1px solid #334155;";
+    html += "border-radius:8px;";
+    html += "padding:1rem;";
+    html += "height:600px;";
+    html += "overflow-y:auto;";
+    html += "font-family:\"Courier New\",monospace;";
+    html += "font-size:0.85rem;";
+    html += "line-height:1.5;";
+    html += "color:#e2e8f0;";
+    html += "white-space:pre-wrap;";
+    html += "word-wrap:break-word;";
+    html += "'></div>";
+    
+    html += "</div></div></div>";
+    
+    // WebSocket JavaScript
+    html += "<script>";
+    html += "let ws = null;";
+    html += "let messageCount = 0;";
+    html += "let autoscroll = true;";
+    html += "let reconnectAttempts = 0;";
+    html += "let reconnectTimer = null;";
+    html += "let manualDisconnect = false;";
+    html += "const MAX_MESSAGES = 1000;";
+    html += "const consoleOutput = document.getElementById('consoleOutput');";
+    html += "const wsStatus = document.getElementById('wsStatus');";
+    html += "const wsStatusText = document.getElementById('wsStatusText');";
+    html += "const wsStats = document.getElementById('wsStats');";
+    html += "const connectBtn = document.getElementById('connectBtn');";
+    html += "const disconnectBtn = document.getElementById('disconnectBtn');";
+    html += "const autoscrollBtn = document.getElementById('autoscrollBtn');";
+    
+    html += "function connectConsole() {";
+    html += "  if (ws && ws.readyState === WebSocket.OPEN) return;";
+    html += "  manualDisconnect = false;";
+    html += "  if (reconnectTimer) clearTimeout(reconnectTimer);";
+    html += "  const wsUrl = 'ws://' + window.location.hostname + ':81';";
+    html += "  consoleOutput.textContent += '[CLIENT] Connecting to ' + wsUrl + '...\\n';";
+    html += "  ws = new WebSocket(wsUrl);";
+    html += "  ws.onopen = function() {";
+    html += "    wsStatus.className = 'status-indicator status-online';";
+    html += "    wsStatusText.textContent = 'Connected';";
+    html += "    connectBtn.disabled = true;";
+    html += "    disconnectBtn.disabled = false;";
+    html += "    consoleOutput.textContent += '[CLIENT] Connected successfully\\n';";
+    html += "    if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
+    html += "  };";
+    html += "  ws.onmessage = function(event) {";
+    html += "    messageCount++;";
+    html += "    reconnectAttempts = 0;";
+    html += "    wsStats.textContent = messageCount + ' messages';";
+    html += "    let msg = event.data;";
+    // Add color coding for special markers
+    html += "    if (msg.includes('╔══════')) {";
+    html += "      msg = '<span style=\"color:#10b981;font-weight:bold\">' + msg.replace(/\\n/g, '</span>\\n<span style=\"color:#10b981;font-weight:bold\">') + '</span>';";
+    html += "      consoleOutput.innerHTML += msg;";
+    html += "    } else if (msg.includes('BUFFERED LOGS') || msg.includes('END OF BUFFERED')) {";
+    html += "      msg = '<span style=\"color:#06b6d4;font-weight:bold\">' + msg + '</span>';";
+    html += "      consoleOutput.innerHTML += msg;";
+    html += "    } else if (msg.includes('CRASH') || msg.includes('crash')) {";
+    html += "      msg = '<span style=\"color:#f59e0b;font-weight:bold\">' + msg + '</span>';";
+    html += "      consoleOutput.innerHTML += msg;";
+    html += "    } else {";
+    html += "      const textNode = document.createTextNode(msg);";
+    html += "      consoleOutput.appendChild(textNode);";
+    html += "    }";
+    html += "    const lines = consoleOutput.textContent.split('\\n');";
+    html += "    if (lines.length > MAX_MESSAGES) {";
+    html += "      const keepLines = lines.slice(-MAX_MESSAGES).join('\\n');";
+    html += "      consoleOutput.textContent = keepLines;";
+    html += "    }";
+    html += "    if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
+    html += "  };";
+    html += "  ws.onerror = function(error) {";
+    html += "    consoleOutput.textContent += '[CLIENT] WebSocket error\\n';";
+    html += "    if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
+    html += "  };";
+    html += "  ws.onclose = function() {";
+    html += "    wsStatus.className = 'status-indicator status-offline';";
+    html += "    wsStatusText.textContent = 'Disconnected';";
+    html += "    connectBtn.disabled = false;";
+    html += "    disconnectBtn.disabled = true;";
+    html += "    consoleOutput.textContent += '[CLIENT] Disconnected\\n';";
+    html += "    if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
+    html += "    if (!manualDisconnect && reconnectAttempts < 5) {";
+    html += "      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);";
+    html += "      reconnectAttempts++;";
+    html += "      wsStatusText.textContent = 'Reconnecting in ' + (delay/1000) + 's...';";
+    html += "      reconnectTimer = setTimeout(connectConsole, delay);";
+    html += "    }";
+    html += "  };";
+    html += "}";
+    
+    html += "function disconnectConsole() {";
+    html += "  manualDisconnect = true;";
+    html += "  reconnectAttempts = 0;";
+    html += "  if (reconnectTimer) {";
+    html += "    clearTimeout(reconnectTimer);";
+    html += "    reconnectTimer = null;";
+    html += "  }";
+    html += "  if (ws) {";
+    html += "    ws.close();";
+    html += "    ws = null;";
+    html += "  }";
+    html += "}";
+    
+    html += "function clearConsole() {";
+    html += "  consoleOutput.textContent = '';";
+    html += "  messageCount = 0;";
+    html += "  wsStats.textContent = '0 messages';";
+    html += "}";
+    
+    html += "function toggleAutoscroll() {";
+    html += "  autoscroll = !autoscroll;";
+    html += "  autoscrollBtn.innerHTML = '<i class=\"fas fa-arrow-down\" style=\"margin-right:0.5rem\"></i>Auto-scroll: ' + (autoscroll ? 'ON' : 'OFF');";
+    html += "  autoscrollBtn.className = autoscroll ? 'btn btn-secondary' : 'btn btn-warning';";
+    html += "}";
+    
+    html += "function downloadLogs() {";
+    html += "  const blob = new Blob([consoleOutput.textContent], {type: 'text/plain'});";
+    html += "  const url = URL.createObjectURL(blob);";
+    html += "  const a = document.createElement('a');";
+    html += "  a.href = url;";
+    html += "  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');";
+    html += "  a.download = 'esp32-console-' + timestamp + '.txt';";
+    html += "  a.click();";
+    html += "  URL.revokeObjectURL(url);";
+    html += "}";
+    
+    html += "window.addEventListener('beforeunload', function() {";
+    html += "  if (ws) ws.close();";
+    html += "});";
+    
+    html += "</script>";
+    
+    return html;
+}

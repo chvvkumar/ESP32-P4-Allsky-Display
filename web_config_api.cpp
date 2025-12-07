@@ -1,11 +1,16 @@
 #include "web_config.h"
 #include "web_config_html.h"
 #include "system_monitor.h"
+#include "config_storage.h"
 #include "network_manager.h"
+#include "crash_logger.h"
 #include "mqtt_manager.h"
 #include "display_manager.h"
 #include "ota_manager.h"
 #include <Update.h>
+
+// External global instances
+extern CrashLogger crashLogger;
 
 // System monitor is needed for watchdog resets during OTA
 
@@ -145,6 +150,7 @@ void WebConfig::handleRestart() {
     displayManager.debugPrint("Device restart requested...", COLOR_YELLOW);
     
     delay(500);
+    crashLogger.saveBeforeReboot();
     ESP.restart();
 }
 
@@ -331,6 +337,7 @@ void WebConfig::handleFactoryReset() {
     displayManager.debugPrint("WiFi setup portal will run on restart", COLOR_CYAN);
     
     delay(500);
+    crashLogger.saveBeforeReboot();
     ESP.restart();
 }
 
