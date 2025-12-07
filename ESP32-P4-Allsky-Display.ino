@@ -501,19 +501,34 @@ void setup() {
             // Reset watchdog after QR code display
             systemMonitor.forceResetWatchdog();
             
-            // Reset debug Y position to place text below QR code
-            displayManager.setDebugY(textY);
-            
-            // Show compact centered text instructions below QR code
-            debugPrint(" ", COLOR_WHITE);  // Small space
-            debugPrint("WiFi Setup Required", COLOR_YELLOW);
-            debugPrint(" ", COLOR_WHITE);
-            debugPrint("Scan QR or Connect:", COLOR_CYAN);
-            debugPrint("AllSky-Display-Setup", COLOR_WHITE);
-            debugPrint(" ", COLOR_WHITE);
-            debugPrint("Open: 192.168.4.1", COLOR_GREEN);
-            debugPrint(" ", COLOR_WHITE);
-            debugPrint("Select WiFi & Connect", COLOR_CYAN);
+            // Draw text instructions directly below QR code (bypass debug system to avoid screen clear)
+            Arduino_DSI_Display* gfx = displayManager.getGFX();
+            if (gfx) {
+                const int16_t LINE_HEIGHT = 26;
+                int16_t currentY = textY + 10; // Small space below QR
+                
+                // Helper lambda to draw centered text
+                auto drawCenteredText = [&](const char* text, uint16_t color) {
+                    int16_t x1, y1;
+                    uint16_t w, h;
+                    gfx->setTextSize(2);
+                    gfx->setTextColor(color);
+                    gfx->getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
+                    int16_t x = (displayManager.getWidth() - w) / 2;
+                    gfx->setCursor(x, currentY);
+                    gfx->println(text);
+                    currentY += LINE_HEIGHT;
+                };
+                
+                drawCenteredText("WiFi Setup Required", COLOR_YELLOW);
+                currentY += 10; // Extra space
+                drawCenteredText("Scan QR or Connect:", COLOR_CYAN);
+                drawCenteredText("AllSky-Display-Setup", COLOR_WHITE);
+                currentY += 10;
+                drawCenteredText("Open: 192.168.4.1", COLOR_GREEN);
+                currentY += 10;
+                drawCenteredText("Select WiFi & Connect", COLOR_CYAN);
+            }
             
             // Wait for configuration with timeout
             unsigned long portalStartTime = millis();
