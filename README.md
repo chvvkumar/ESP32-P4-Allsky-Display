@@ -131,6 +131,8 @@ Modern, responsive configuration portal at `http://[device-ip]:8080/`
 
 **WebSocket Console:** Access `http://[device-ip]:8080/console` to view real-time serial output over WiFi
 
+<img src="images/config-console.png" alt="WebSocket Console Interface" width="600">
+
 **Features:**
 - No USB connection required
 - Real-time log streaming via WebSocket (port 81)
