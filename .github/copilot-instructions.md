@@ -93,8 +93,10 @@ wifiManager.setDebugFunctions(debugPrint, debugPrintf, &firstImageLoaded);
 ### Display Configuration System
 
 Two display configs via `CURRENT_SCREEN` in `displays_config.h`:
-- `SCREEN_3INCH_4_DSI` (800×800) - Waveshare 3.4"
-- `SCREEN_4INCH_DSI` (720×720) - Waveshare 4.0"
+- `SCREEN_3INCH_4_DSI` (800×800) - Waveshare 3.4" ✅ **Tested & Confirmed Working**
+- `SCREEN_4INCH_DSI` (720×720) - Waveshare 4.0" ⚠️ **Untested - Configuration Available**
+
+**Hardware Compatibility Note:** This project has been developed and tested exclusively on the 3.4" display. The 4.0" display configuration is provided based on manufacturer specifications but has not been verified on actual hardware. Users with 4.0" displays should test carefully and report any issues.
 
 Each has vendor-specific LCD init commands and DSI timing parameters. **Do not modify these arrays** unless adding new hardware.
 
