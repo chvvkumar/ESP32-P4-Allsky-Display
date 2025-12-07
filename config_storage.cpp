@@ -328,20 +328,43 @@ void ConfigStorage::addImageSource(const String& url) {
     }
 }
 
-void ConfigStorage::removeImageSource(int index) {
-    if (index >= 0 && index < config.imageSourceCount && config.imageSourceCount > 1) {
-        // Shift all sources after the removed index
-        for (int i = index; i < config.imageSourceCount - 1; i++) {
-            config.imageSources[i] = config.imageSources[i + 1];
-        }
-        config.imageSources[config.imageSourceCount - 1] = "";
-        config.imageSourceCount--;
-        
-        // Adjust current index if necessary
-        if (config.currentImageIndex >= config.imageSourceCount) {
-            config.currentImageIndex = 0;
-        }
+bool ConfigStorage::removeImageSource(int index) {
+    // Validate index range
+    if (index < 0 || index >= config.imageSourceCount) {
+        Serial.printf("ERROR: Invalid index %d (count: %d)\n", index, config.imageSourceCount);
+        return false;
     }
+    
+    // Prevent removing the last source
+    if (config.imageSourceCount <= 1) {
+        Serial.printf("ERROR: Cannot remove last image source (count: %d)\n", config.imageSourceCount);
+        return false;
+    }
+    
+    Serial.printf("Removing image source at index %d (count: %d)\n", index, config.imageSourceCount);
+    
+    // Shift all sources and their transforms after the removed index
+    for (int i = index; i < config.imageSourceCount - 1; i++) {
+        config.imageSources[i] = config.imageSources[i + 1];
+        config.imageTransforms[i] = config.imageTransforms[i + 1];
+    }
+    
+    // Clear the last source and reset its transform to defaults
+    config.imageSources[config.imageSourceCount - 1] = "";
+    config.imageTransforms[config.imageSourceCount - 1].scaleX = DEFAULT_SCALE_X;
+    config.imageTransforms[config.imageSourceCount - 1].scaleY = DEFAULT_SCALE_Y;
+    config.imageTransforms[config.imageSourceCount - 1].offsetX = DEFAULT_OFFSET_X;
+    config.imageTransforms[config.imageSourceCount - 1].offsetY = DEFAULT_OFFSET_Y;
+    config.imageTransforms[config.imageSourceCount - 1].rotation = DEFAULT_ROTATION;
+    config.imageSourceCount--;
+    
+    // Adjust current index if necessary
+    if (config.currentImageIndex >= config.imageSourceCount) {
+        config.currentImageIndex = 0;
+    }
+    
+    Serial.printf("Image source removed. New count: %d\n", config.imageSourceCount);
+    return true;
 }
 
 void ConfigStorage::clearImageSources() {
