@@ -214,23 +214,33 @@ int16_t displayWiFiQRCode() {
         return textStartY; // Return default position
     }
     
-    // Allocate buffer for actual QR code size (RGB565)
+    // Calculate buffer size with cache line alignment (64 bytes)
     const size_t qrBufferSize = qrCodeWidth * qrCodeHeight * sizeof(uint16_t);
-    qrCodeBuffer = (uint16_t*)ps_malloc(qrBufferSize);
+    const size_t qrBufferSizeAligned = (qrBufferSize + 63) & ~63;
+    
+    Serial.printf("DEBUG: QR buffer size calculation - raw:%zu aligned:%zu (padding:%zu bytes)\n", 
+                 qrBufferSize, qrBufferSizeAligned, qrBufferSizeAligned - qrBufferSize);
+    
+    // Allocate buffer with cache alignment for DMA operations
+    qrCodeBuffer = (uint16_t*)heap_caps_aligned_alloc(64, qrBufferSizeAligned, 
+                                                       MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
     if (!qrCodeBuffer) {
         Serial.println("ERROR: Failed to allocate QR code buffer");
-        Serial.printf("ERROR: Tried to allocate %d bytes for %dx%d image\n", qrBufferSize, qrCodeWidth, qrCodeHeight);
+        Serial.printf("ERROR: Tried to allocate %zu bytes (aligned: %zu) for %dx%d image\n", 
+                     qrBufferSize, qrBufferSizeAligned, qrCodeWidth, qrCodeHeight);
         jpeg.close();
         return textStartY; // Return default position
     }
     
-    Serial.printf("DEBUG: QR buffer allocated: %d bytes\n", qrBufferSize);
+    Serial.printf("DEBUG: QR buffer allocated: %zu bytes (aligned: %zu)\n", qrBufferSize, qrBufferSizeAligned);
+    Serial.printf("DEBUG: QR buffer address: 0x%08x (64-byte aligned: %s)\n", 
+                 (uint32_t)qrCodeBuffer, ((uint32_t)qrCodeBuffer % 64 == 0) ? "YES" : "NO");
     
     // Reset watchdog after allocation
     systemMonitor.forceResetWatchdog();
     
-    // Clear buffer
-    memset(qrCodeBuffer, 0, qrBufferSize);
+    // Clear buffer to prevent garbage data
+    memset(qrCodeBuffer, 0, qrBufferSizeAligned);
     
     // Reset watchdog before decode
     systemMonitor.forceResetWatchdog();
@@ -251,55 +261,70 @@ int16_t displayWiFiQRCode() {
         // Scale down QR code to 65% for better fit on round display
         // Use PPA for hardware-accelerated scaling
         const float scale = 0.65f;
-        int16_t scaledWidth = qrCodeWidth * scale;
-        int16_t scaledHeight = qrCodeHeight * scale;
+        int16_t scaledWidth = (int16_t)(qrCodeWidth * scale);
+        int16_t scaledHeight = (int16_t)(qrCodeHeight * scale);
         
-        // Allocate scaled buffer
+        // Calculate scaled buffer size with cache alignment
         size_t scaledSize = scaledWidth * scaledHeight * sizeof(uint16_t);
-        uint16_t* scaledQR = (uint16_t*)ps_malloc(scaledSize);
+        size_t scaledSizeAligned = (scaledSize + 63) & ~63;
+        
+        Serial.printf("DEBUG: Scaled buffer size - raw:%zu aligned:%zu (padding:%zu bytes)\n", 
+                     scaledSize, scaledSizeAligned, scaledSizeAligned - scaledSize);
+        
+        // Allocate scaled buffer with cache alignment
+        uint16_t* scaledQR = (uint16_t*)heap_caps_aligned_alloc(64, scaledSizeAligned,
+                                                                 MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
         
         // Reset watchdog after allocation
         systemMonitor.forceResetWatchdog();
         
         if (scaledQR) {
+            Serial.printf("DEBUG: Scaled buffer allocated at 0x%08x (64-byte aligned: %s)\n", 
+                         (uint32_t)scaledQR, ((uint32_t)scaledQR % 64 == 0) ? "YES" : "NO");
             Serial.printf("DEBUG: Scaling QR from %dx%d to %dx%d\n", qrCodeWidth, qrCodeHeight, scaledWidth, scaledHeight);
             
             // Clear buffer before scaling
-            memset(scaledQR, 0, scaledSize);
+            memset(scaledQR, 0, scaledSizeAligned);
             
             // Reset watchdog before PPA scaling
             systemMonitor.forceResetWatchdog();
             
-            // Use PPA to scale down
+            // CRITICAL: Flush cache to memory before PPA operation
+            Serial.printf("DEBUG: Cache flush (C2M) - buffer:0x%08x size:%zu\n", (uint32_t)qrCodeBuffer, qrBufferSizeAligned);
+            esp_cache_msync(qrCodeBuffer, qrBufferSizeAligned, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+            
+            // Use PPA hardware acceleration to scale down
             if (ppaAccelerator.scaleImage(qrCodeBuffer, qrCodeWidth, qrCodeHeight,
                                          scaledQR, scaledWidth, scaledHeight)) {
                 Serial.println("DEBUG: QR code scaled successfully");
+                
+                // CRITICAL: Invalidate cache after PPA operation
+                Serial.printf("DEBUG: Cache invalidate (M2C) - buffer:0x%08x size:%zu\n", (uint32_t)scaledQR, scaledSizeAligned);
+                esp_cache_msync(scaledQR, scaledSizeAligned, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
                 
                 // Reset watchdog after scaling
                 systemMonitor.forceResetWatchdog();
                 
                 // Position at top-center of screen with margin
                 int16_t qrX = (displayWidth - scaledWidth) / 2;
-                int16_t qrY = 50;  // Smaller margin from top
+                int16_t qrY = 50;
                 
-                // Clear area around QR code with margin to prevent corruption
-                int16_t clearMargin = 5;
+                // Clear area before drawing to prevent artifacts
                 Arduino_DSI_Display* gfx = displayManager.getGFX();
                 if (gfx) {
-                    gfx->fillRect(qrX - clearMargin, qrY - clearMargin, 
-                                 scaledWidth + (clearMargin * 2), 
-                                 scaledHeight + (clearMargin * 2), 
-                                 COLOR_BLACK);
+                    gfx->fillRect(qrX - 5, qrY - 5, scaledWidth + 10, scaledHeight + 10, COLOR_BLACK);
                 }
                 
-                // Draw scaled QR code
                 displayManager.drawBitmap(qrX, qrY, scaledQR, scaledWidth, scaledHeight);
                 Serial.printf("DEBUG: Scaled QR code drawn at (%d, %d)\n", qrX, qrY);
                 
-                // Calculate where text should start (below QR code + small margin)
+                // Calculate text start position below QR code
                 textStartY = qrY + scaledHeight + 15;
+                
+                // Reset watchdog after draw
+                systemMonitor.forceResetWatchdog();
             } else {
-                Serial.println("WARNING: PPA scaling failed, drawing original size");
+                Serial.println("WARNING: PPA scaling failed, drawing original QR code");
                 int16_t qrX = (displayWidth - qrCodeWidth) / 2;
                 int16_t qrY = 50;
                 
@@ -313,9 +338,17 @@ int16_t displayWiFiQRCode() {
                 textStartY = qrY + qrCodeHeight + 15;
             }
             
-            free(scaledQR);
+            // CRITICAL: Free scaled buffer BEFORE freeing source buffer to prevent fragmentation
+            heap_caps_free(scaledQR);
+            scaledQR = nullptr;
+            Serial.println("DEBUG: Scaled QR buffer freed");
         } else {
-            Serial.println("WARNING: Could not allocate scaled buffer, drawing original");
+            Serial.println("ERROR: Failed to allocate scaled buffer!");
+            Serial.printf("ERROR: Requested %zu bytes (aligned: %zu) for %dx%d scaled image\n", 
+                         scaledSize, scaledSizeAligned, scaledWidth, scaledHeight);
+            Serial.printf("ERROR: Free heap: %d bytes, Free PSRAM: %d bytes\n", 
+                         systemMonitor.getCurrentFreeHeap(), systemMonitor.getCurrentFreePsram());
+            Serial.println("WARNING: Falling back to original size QR code");
             int16_t qrX = (displayWidth - qrCodeWidth) / 2;
             int16_t qrY = 50;
             
@@ -338,9 +371,9 @@ int16_t displayWiFiQRCode() {
     
     jpeg.close();
     
-    // Free QR code buffer immediately after display
+    // CRITICAL: Free QR code buffer immediately after display
     if (qrCodeBuffer) {
-        free(qrCodeBuffer);
+        heap_caps_free(qrCodeBuffer);
         qrCodeBuffer = nullptr;
         Serial.println("DEBUG: QR buffer freed");
     }
@@ -372,40 +405,46 @@ void setup() {
     Serial.println("Pre-allocating PSRAM buffers before display initialization...");
     Serial.printf("Free PSRAM before allocation: %d bytes\n", ESP.getFreePsram());
     
-    // Calculate buffer sizes based on expected display dimensions (800x800)
-    const int16_t w = 800;  // Will be verified after display init
-    const int16_t h = 800;
+    // Get expected display dimensions from config (before display init)
+    int16_t w = display_cfg.width;
+    int16_t h = display_cfg.height;
     
+    Serial.printf("Allocating buffers for %dx%d display\n", w, h);
+    
+    // Allocate image buffer (download buffer)
     imageBufferSize = w * h * IMAGE_BUFFER_MULTIPLIER * 2;
     imageBuffer = (uint8_t*)ps_malloc(imageBufferSize);
     if (!imageBuffer) {
-        Serial.printf("CRITICAL: Image buffer pre-allocation failed! Size: %d bytes\n", imageBufferSize);
+        Serial.printf("CRITICAL: Image buffer pre-allocation failed! Size: %zu bytes\n", imageBufferSize);
         while(1) delay(1000);
     }
-    Serial.printf("✓ Image buffer allocated: %d bytes\n", imageBufferSize);
+    Serial.printf("✓ Image buffer allocated: %zu bytes\n", imageBufferSize);
     
+    // Allocate full image buffer (active display buffer)
     fullImageBufferSize = FULL_IMAGE_BUFFER_SIZE;
     fullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
     if (!fullImageBuffer) {
-        Serial.printf("CRITICAL: Full image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
+        Serial.printf("CRITICAL: Full image buffer pre-allocation failed! Size: %zu bytes\n", fullImageBufferSize);
         while(1) delay(1000);
     }
-    Serial.printf("✓ Full image buffer allocated: %d bytes\n", fullImageBufferSize);
+    Serial.printf("✓ Full image buffer allocated: %zu bytes\n", fullImageBufferSize);
     
+    // Allocate pending full image buffer (decode target for flicker-free swap)
     pendingFullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
     if (!pendingFullImageBuffer) {
-        Serial.printf("CRITICAL: Pending image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
+        Serial.printf("CRITICAL: Pending image buffer pre-allocation failed! Size: %zu bytes\n", fullImageBufferSize);
         while(1) delay(1000);
     }
-    Serial.printf("✓ Pending image buffer allocated: %d bytes\n", fullImageBufferSize);
+    Serial.printf("✓ Pending image buffer allocated: %zu bytes\n", fullImageBufferSize);
     
+    // Allocate scaled buffer (transform operations)
     scaledBufferSize = w * h * SCALED_BUFFER_MULTIPLIER * 2;
     scaledBuffer = (uint16_t*)ps_malloc(scaledBufferSize);
     if (!scaledBuffer) {
-        Serial.printf("CRITICAL: Scaled buffer pre-allocation failed! Size: %d bytes\n", scaledBufferSize);
+        Serial.printf("CRITICAL: Scaled buffer pre-allocation failed! Size: %zu bytes\n", scaledBufferSize);
         while(1) delay(1000);
     }
-    Serial.printf("✓ Scaled buffer allocated: %d bytes\n", scaledBufferSize);
+    Serial.printf("✓ Scaled buffer allocated: %zu bytes\n", scaledBufferSize);
     
     Serial.printf("PSRAM pre-allocation complete - Free PSRAM remaining: %d bytes\n", ESP.getFreePsram());
     
@@ -420,7 +459,7 @@ void setup() {
     if (displayManager.getWidth() != w || displayManager.getHeight() != h) {
         Serial.printf("WARNING: Display dimensions mismatch! Expected %dx%d, got %dx%d\n",
                      w, h, displayManager.getWidth(), displayManager.getHeight());
-        Serial.println("Buffer sizes may be incorrect - please update CURRENT_SCREEN define");
+        Serial.println("WARNING: Buffer sizes may be incorrect - please update CURRENT_SCREEN define");
     }
     
     // Setup debug functions for other modules
@@ -462,19 +501,34 @@ void setup() {
             // Reset watchdog after QR code display
             systemMonitor.forceResetWatchdog();
             
-            // Reset debug Y position to place text below QR code
-            displayManager.setDebugY(textY);
-            
-            // Show compact centered text instructions below QR code
-            debugPrint(" ", COLOR_WHITE);  // Small space
-            debugPrint("WiFi Setup Required", COLOR_YELLOW);
-            debugPrint(" ", COLOR_WHITE);
-            debugPrint("Scan QR or Connect:", COLOR_CYAN);
-            debugPrint("AllSky-Display-Setup", COLOR_WHITE);
-            debugPrint(" ", COLOR_WHITE);
-            debugPrint("Open: 192.168.4.1", COLOR_GREEN);
-            debugPrint(" ", COLOR_WHITE);
-            debugPrint("Select WiFi & Connect", COLOR_CYAN);
+            // Draw text instructions directly below QR code (bypass debug system to avoid screen clear)
+            Arduino_DSI_Display* gfx = displayManager.getGFX();
+            if (gfx) {
+                const int16_t LINE_HEIGHT = 26;
+                int16_t currentY = textY + 10; // Small space below QR
+                
+                // Helper lambda to draw centered text
+                auto drawCenteredText = [&](const char* text, uint16_t color) {
+                    int16_t x1, y1;
+                    uint16_t w, h;
+                    gfx->setTextSize(2);
+                    gfx->setTextColor(color);
+                    gfx->getTextBounds(text, 0, 0, &x1, &y1, &w, &h);
+                    int16_t x = (displayManager.getWidth() - w) / 2;
+                    gfx->setCursor(x, currentY);
+                    gfx->println(text);
+                    currentY += LINE_HEIGHT;
+                };
+                
+                drawCenteredText("WiFi Setup Required", COLOR_YELLOW);
+                currentY += 10; // Extra space
+                drawCenteredText("Scan QR or Connect:", COLOR_CYAN);
+                drawCenteredText("AllSky-Display-Setup", COLOR_WHITE);
+                currentY += 10;
+                drawCenteredText("Open: 192.168.4.1", COLOR_GREEN);
+                currentY += 10;
+                drawCenteredText("Select WiFi & Connect", COLOR_CYAN);
+            }
             
             // Wait for configuration with timeout
             unsigned long portalStartTime = millis();
