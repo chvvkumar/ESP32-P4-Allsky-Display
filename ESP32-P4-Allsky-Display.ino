@@ -1045,7 +1045,8 @@ void downloadAndDisplayImage() {
     size_t size = http.getSize();
     
     Serial.printf("[Image] Content-Length: %d bytes\n", size);
-    debugPrintf(COLOR_WHITE, "Image size: %d bytes", size);
+    Serial.printf("[Image] Source: Image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+    debugPrintf(COLOR_WHITE, "Image %d/%d: %d bytes", currentImageIndex + 1, imageSourceCount, size);
     
     // Validate size before proceeding
     if (size <= 0) {
@@ -1314,7 +1315,8 @@ void downloadAndDisplayImage() {
                 
                 // Mark image as ready to display (but don't display yet - let loop handle it)
                 imageReadyToDisplay = true;
-                debugPrint("DEBUG: Image ready to display - pending buffer prepared", COLOR_GREEN);
+                Serial.printf("[Image] Image %d/%d ready to display - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+                debugPrintf(COLOR_GREEN, "Image %d/%d ready", currentImageIndex + 1, imageSourceCount);
                 Serial.println("Image fully decoded and ready for display");
                 
                 // Mark first image as loaded (only once) - happens before actual display
@@ -1382,6 +1384,7 @@ void downloadAndDisplayImage() {
     // Final watchdog reset and cleanup
     systemMonitor.forceResetWatchdog();
     debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
+    Serial.printf("[Image] Download cycle completed for image %d/%d\n", currentImageIndex + 1, imageSourceCount);
     debugPrint("Download cycle completed", COLOR_GREEN);
 }
 
@@ -1549,7 +1552,8 @@ void processSerialCommands() {
             case 'n':
                 if (cyclingEnabled && imageSourceCount > 1) {
                     advanceToNextImage();
-                    lastUpdate = 0; // Reset cycle timer for fresh interval
+                    lastCycleTime = millis(); // Reset cycle timer for fresh interval
+                    lastUpdate = 0; // Force immediate image download
                     Serial.printf("Serial: Advancing to next image (image %d of %d)\n", currentImageIndex + 1, imageSourceCount);
                 } else {
                     Serial.println("Serial: Cycling not enabled or only one source configured");
@@ -1840,6 +1844,8 @@ void loop() {
         // If cycling is enabled, advance to next image
         if (cyclingEnabled && imageSourceCount > 1) {
             advanceToNextImage();
+            // Reset cycle timer to start fresh interval
+            lastCycleTime = millis();
             // Force immediate image download
             lastUpdate = 0;
         } else {
@@ -1967,7 +1973,8 @@ void loop() {
         systemMonitor.forceResetWatchdog();
         
         // Now render the new image to display (single seamless update, no clearing artifacts)
-        debugPrint("Rendering swapped image...", COLOR_GREEN);
+        Serial.printf("[Image] Rendering image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+        debugPrintf(COLOR_GREEN, "Rendering image %d/%d", currentImageIndex + 1, imageSourceCount);
         renderFullImage();
         systemMonitor.forceResetWatchdog();
         

@@ -209,10 +209,12 @@ void WebConfig::handleNextImage() {
     extern void updateCyclingVariables();
     extern void downloadAndDisplayImage();
     extern unsigned long lastUpdate;
+    extern unsigned long lastCycleTime;
     
     updateCyclingVariables();
     advanceToNextImage();
-    lastUpdate = 0; // Reset cycle timer for fresh interval
+    lastCycleTime = millis(); // Reset cycle timer for fresh interval
+    lastUpdate = 0; // Force immediate image download
     downloadAndDisplayImage();
     
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Switched to next image and refreshed display\"}");
