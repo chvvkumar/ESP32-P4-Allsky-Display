@@ -5,6 +5,21 @@
 #include <Arduino.h>
 
 // =============================================================================
+// LOG SEVERITY LEVELS
+// =============================================================================
+
+enum LogSeverity {
+    LOG_DEBUG = 0,      // Verbose debugging information
+    LOG_INFO = 1,       // General informational messages
+    LOG_WARNING = 2,    // Warning messages (non-critical issues)
+    LOG_ERROR = 3,      // Error messages (failures, but system continues)
+    LOG_CRITICAL = 4    // Critical errors (system instability)
+};
+
+// Default log level for WebSocket console filtering
+#define DEFAULT_LOG_LEVEL LOG_DEBUG  // Show all messages by default
+
+// =============================================================================
 // SYSTEM CONFIGURATION
 // =============================================================================
 

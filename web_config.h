@@ -8,6 +8,7 @@
 #include <WiFi.h>
 #include <ElegantOTA.h>
 #include "config_storage.h"
+#include "config.h"  // For LogSeverity enum
 
 class WebConfig {
 public:
@@ -56,10 +57,11 @@ private:
     void handleApplyTransform();
     void handleRestart();
     void handleFactoryReset();
+    void handleSetLogSeverity();
     
 public:
-    // WebSocket log broadcasting
-    void broadcastLog(const char* message, uint16_t color = 0xFFFF);
+    // WebSocket log broadcasting with severity filtering
+    void broadcastLog(const char* message, uint16_t color = 0xFFFF, LogSeverity severity = LOG_INFO);
     
     // OTA status
     bool isOTAInProgress() const { return otaInProgress; }

@@ -1,6 +1,7 @@
 // Include all our modular components
 #include "config.h"
 #include "config_storage.h"
+#include "logging.h"  // Logging macros and functions
 #include "web_config.h"
 #include "system_monitor.h"
 #include "network_manager.h"
@@ -133,14 +134,54 @@ void processTouchGestures();
 void handleSingleTap();
 void handleDoubleTap();
 
-// Debug output wrapper functions
+// Universal logging function - sends to Serial AND WebSocket console
+// Default parameter defined in logging.h
+void logPrint(const char* message, LogSeverity severity) {
+    Serial.print(message);
+    // Log to crash logger (survives reboot)
+    crashLogger.log(message);
+    // Send to WebSocket console clients with severity filtering
+    webConfig.broadcastLog(message, COLOR_WHITE, severity);
+}
+
+void logPrintf(LogSeverity severity, const char* format, ...) {
+    char buffer[384];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    
+    Serial.print(buffer);
+    // Log to crash logger (survives reboot)
+    crashLogger.log(buffer);
+    // Send to WebSocket console clients with severity filtering
+    webConfig.broadcastLog(buffer, COLOR_WHITE, severity);
+}
+
+// Debug output wrapper functions (also show on display)
 void debugPrint(const char* message, uint16_t color) {
     displayManager.debugPrint(message, color);
     // Log to crash logger (survives reboot)
     crashLogger.log(message);
     crashLogger.log("\n");
-    // Also send to WebSocket console clients
-    webConfig.broadcastLog(message, color);
+    
+    // Intelligently detect severity from message content
+    LogSeverity severity = LOG_INFO;  // Default
+    String msg = String(message);
+    msg.toLowerCase();
+    
+    if (msg.indexOf("debug:") >= 0 || msg.indexOf("trace") >= 0) {
+        severity = LOG_DEBUG;
+    } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
+        severity = LOG_ERROR;
+    } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
+        severity = LOG_WARNING;
+    } else if (msg.indexOf("critical") >= 0 || msg.indexOf("fatal") >= 0 || msg.indexOf("panic") >= 0) {
+        severity = LOG_CRITICAL;
+    }
+    
+    // Send to WebSocket console clients with detected severity
+    webConfig.broadcastLog(message, color, severity);
 }
 
 void debugPrintf(uint16_t color, const char* format, ...) {
@@ -154,8 +195,24 @@ void debugPrintf(uint16_t color, const char* format, ...) {
     // Log to crash logger (survives reboot)
     crashLogger.log(buffer);
     crashLogger.log("\n");
-    // Also send to WebSocket console clients
-    webConfig.broadcastLog(buffer, color);
+    
+    // Intelligently detect severity from message content
+    LogSeverity severity = LOG_INFO;  // Default
+    String msg = String(buffer);
+    msg.toLowerCase();
+    
+    if (msg.indexOf("debug:") >= 0 || msg.indexOf("trace") >= 0) {
+        severity = LOG_DEBUG;
+    } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
+        severity = LOG_ERROR;
+    } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
+        severity = LOG_WARNING;
+    } else if (msg.indexOf("critical") >= 0 || msg.indexOf("fatal") >= 0 || msg.indexOf("panic") >= 0) {
+        severity = LOG_CRITICAL;
+    }
+    
+    // Send to WebSocket console clients with detected severity
+    webConfig.broadcastLog(buffer, color, severity);
 }
 
 // JPEG callback function to collect pixels into PENDING image buffer (not displayed yet)

@@ -906,13 +906,27 @@ String WebConfig::generateConsolePage() {
     html += "No USB connection required. Messages appear as they are logged by the system.</p>";
     html += "</div>";
     
-    // Control buttons
-    html += "<div style='display:flex;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap'>";
+    // Control buttons and severity filter
+    html += "<div style='display:flex;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center'>";
     html += "<button class='btn btn-success' onclick='connectConsole()' id='connectBtn'><i class='fas fa-plug' style='margin-right:0.5rem'></i>Connect</button>";
     html += "<button class='btn btn-danger' onclick='disconnectConsole()' id='disconnectBtn' disabled><i class='fas fa-times' style='margin-right:0.5rem'></i>Disconnect</button>";
     html += "<button class='btn btn-secondary' onclick='clearConsole()'><i class='fas fa-eraser' style='margin-right:0.5rem'></i>Clear</button>";
     html += "<button class='btn btn-secondary' onclick='toggleAutoscroll()' id='autoscrollBtn'><i class='fas fa-arrow-down' style='margin-right:0.5rem'></i>Auto-scroll: ON</button>";
     html += "<button class='btn btn-secondary' onclick='downloadLogs()'><i class='fas fa-download' style='margin-right:0.5rem'></i>Download</button>";
+    
+    // Severity filter dropdown
+    html += "<div style='display:flex;align-items:center;gap:0.5rem;margin-left:auto'>";
+    html += "<label for='severityFilter' style='color:#94a3b8;font-size:0.9rem;white-space:nowrap'><i class='fas fa-filter' style='margin-right:0.5rem'></i>Min Severity:</label>";
+    html += "<select id='severityFilter' onchange='updateSeverityFilter()' style='background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:0.5rem;font-size:0.9rem;cursor:pointer'>";
+    
+    int currentSeverity = configStorage.getMinLogSeverity();
+    html += "<option value='0'" + String(currentSeverity == 0 ? " selected" : "") + ">DEBUG</option>";
+    html += "<option value='1'" + String(currentSeverity == 1 ? " selected" : "") + ">INFO</option>";
+    html += "<option value='2'" + String(currentSeverity == 2 ? " selected" : "") + ">WARNING</option>";
+    html += "<option value='3'" + String(currentSeverity == 3 ? " selected" : "") + ">ERROR</option>";
+    html += "<option value='4'" + String(currentSeverity == 4 ? " selected" : "") + ">CRITICAL</option>";
+    html += "</select>";
+    html += "</div>";
     html += "</div>";
     
     // Status indicator
@@ -1052,6 +1066,22 @@ String WebConfig::generateConsolePage() {
     html += "  a.download = 'esp32-console-' + timestamp + '.txt';";
     html += "  a.click();";
     html += "  URL.revokeObjectURL(url);";
+    html += "}";
+    
+    html += "function updateSeverityFilter() {";
+    html += "  const severity = parseInt(document.getElementById('severityFilter').value);";
+    html += "  fetch('/api/set-log-severity', {";
+    html += "    method: 'POST',";
+    html += "    headers: {'Content-Type': 'application/x-www-form-urlencoded'},";
+    html += "    body: 'severity=' + severity";
+    html += "  }).then(response => response.json())";
+    html += "    .then(data => {";
+    html += "      if (data.status === 'success') {";
+    html += "        const levels = ['DEBUG','INFO','WARNING','ERROR','CRITICAL'];";
+    html += "        consoleOutput.textContent += '[CLIENT] Severity filter updated to ' + levels[severity] + '\\n';";
+    html += "        if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
+    html += "      }";
+    html += "    });";
     html += "}";
     
     html += "window.addEventListener('beforeunload', function() {";

@@ -2,7 +2,6 @@
 #include "system_monitor.h"
 #include "display_manager.h"
 #include "config_storage.h"
-#include "logging.h"
 
 // Global instance
 MQTTManager mqttManager;
@@ -51,24 +50,24 @@ void MQTTManager::connect() {
     // Reset watchdog before connection attempt
     esp_task_wdt_reset();
     
-    LOG_INFO("[MQTT] ===== Connection Attempt =====");
-    LOG_INFO_F("[MQTT] Server: %s:%d\n", configStorage.getMQTTServer().c_str(), configStorage.getMQTTPort());
-    LOG_INFO_F("[MQTT] Client ID: %s\n", clientId.c_str());
+    Serial.println("[MQTT] ===== Connection Attempt =====");
+    Serial.printf("[MQTT] Server: %s:%d\n", configStorage.getMQTTServer().c_str(), configStorage.getMQTTPort());
+    Serial.printf("[MQTT] Client ID: %s\n", clientId.c_str());
     
     // Set up Last Will and Testament (LWT) for Home Assistant availability
     String availabilityTopic = haDiscovery.getAvailabilityTopic();
-    LOG_INFO_F("[MQTT] LWT Topic: %s\n", availabilityTopic.c_str());
+    Serial.printf("[MQTT] LWT Topic: %s\n", availabilityTopic.c_str());
     
     bool connected = false;
     String mqttUser = configStorage.getMQTTUser();
     String mqttPassword = configStorage.getMQTTPassword();
     
     if (mqttUser.length() > 0) {
-        LOG_INFO_F("[MQTT] Using authentication (username: %s)\n", mqttUser.c_str());
+        Serial.printf("[MQTT] Using authentication (username: %s)\n", mqttUser.c_str());
         connected = mqttClient.connect(clientId.c_str(), mqttUser.c_str(), mqttPassword.c_str(),
                                       availabilityTopic.c_str(), 0, true, "offline");
     } else {
-        LOG_INFO("[MQTT] Connecting without authentication");
+        Serial.println("[MQTT] Connecting without authentication");
         connected = mqttClient.connect(clientId.c_str(), nullptr, nullptr,
                                       availabilityTopic.c_str(), 0, true, "offline");
     }
@@ -82,41 +81,41 @@ void MQTTManager::connect() {
         reconnectBackoff = 5000;  // Reset backoff
         discoveryPublished = false; // Reset discovery flag
         
-        LOG_INFO("[MQTT] ✓ Connection successful!");
-        LOG_INFO_F("[MQTT] Max packet size: %d bytes\n", mqttClient.getBufferSize());
+        Serial.println("[MQTT] ✓ Connection successful!");
+        Serial.printf("[MQTT] Max packet size: %d bytes\n", mqttClient.getBufferSize());
         
         // Publish availability as online
         esp_task_wdt_reset();
-        LOG_INFO("[MQTT] Publishing availability: online");
+        Serial.println("[MQTT] Publishing availability: online");
         haDiscovery.publishAvailability(true);
         
         // Publish Home Assistant discovery if enabled
         if (configStorage.getHADiscoveryEnabled()) {
             esp_task_wdt_reset();
-            LOG_INFO("[MQTT] Home Assistant discovery enabled, publishing...");
+            Serial.println("[MQTT] Home Assistant discovery enabled, publishing...");
             
             if (haDiscovery.publishDiscovery()) {
                 discoveryPublished = true;
-                LOG_INFO("[MQTT] ✓ HA discovery messages published");
+                Serial.println("[MQTT] ✓ HA discovery messages published");
                 
                 // Subscribe to command topic filter
                 String commandFilter = haDiscovery.getCommandTopicFilter();
-                LOG_INFO_F("[MQTT] Subscribing to HA commands: %s\n", commandFilter.c_str());
+                Serial.printf("[MQTT] Subscribing to HA commands: %s\n", commandFilter.c_str());
                 if (!mqttClient.subscribe(commandFilter.c_str())) {
-                    LOG_ERROR_F("[MQTT] ✗ FAILED to subscribe to HA command topics! MQTT state: %d\n", mqttClient.state());
+                    Serial.printf("[MQTT] ✗ FAILED to subscribe to HA command topics! MQTT state: %d\n", mqttClient.state());
                 } else {
-                    LOG_INFO("[MQTT] ✓ Subscribed to HA command topics");
+                    Serial.println("[MQTT] ✓ Subscribed to HA command topics");
                 }
                 
                 // Publish initial state
                 esp_task_wdt_reset();
-                LOG_INFO("[MQTT] Publishing initial state to HA");
+                Serial.println("[MQTT] Publishing initial state to HA");
                 haDiscovery.publishState();
             } else {
-                LOG_ERROR("[MQTT] ✗ Failed to publish HA discovery");
+                Serial.println("[MQTT] ✗ Failed to publish HA discovery");
             }
         } else {
-            LOG_INFO("[MQTT] HA discovery disabled in configuration");
+            Serial.println("[MQTT] HA discovery disabled in configuration");
         }
         
     } else {
@@ -129,21 +128,21 @@ void MQTTManager::connect() {
         }
         
         int mqttState = mqttClient.state();
-        LOG_ERROR_F("[MQTT] ✗ Connection failed! State code: %d (attempt #%d)\n", mqttState, reconnectFailures);
-        logPrint("[MQTT] Error meaning: ", LOG_INFO);
+        Serial.printf("[MQTT] ✗ Connection failed! State code: %d (attempt #%d)\n", mqttState, reconnectFailures);
+        Serial.print("[MQTT] Error meaning: ");
         switch(mqttState) {
-            case -4: LOG_INFO("MQTT_CONNECTION_TIMEOUT"); break;
-            case -3: LOG_INFO("MQTT_CONNECTION_LOST"); break;
-            case -2: LOG_ERROR("MQTT_CONNECT_FAILED - Network error"); break;
-            case -1: LOG_INFO("MQTT_DISCONNECTED"); break;
-            case 1: LOG_INFO("MQTT_CONNECT_BAD_PROTOCOL"); break;
-            case 2: LOG_INFO("MQTT_CONNECT_BAD_CLIENT_ID"); break;
-            case 3: LOG_INFO("MQTT_CONNECT_UNAVAILABLE - Server unavailable"); break;
-            case 4: LOG_INFO("MQTT_CONNECT_BAD_CREDENTIALS - Check username/password"); break;
-            case 5: LOG_INFO("MQTT_CONNECT_UNAUTHORIZED - Not authorized"); break;
-            default: LOG_ERROR("Unknown error code"); break;
+            case -4: Serial.println("MQTT_CONNECTION_TIMEOUT"); break;
+            case -3: Serial.println("MQTT_CONNECTION_LOST"); break;
+            case -2: Serial.println("MQTT_CONNECT_FAILED - Network error"); break;
+            case -1: Serial.println("MQTT_DISCONNECTED"); break;
+            case 1: Serial.println("MQTT_CONNECT_BAD_PROTOCOL"); break;
+            case 2: Serial.println("MQTT_CONNECT_BAD_CLIENT_ID"); break;
+            case 3: Serial.println("MQTT_CONNECT_UNAVAILABLE - Server unavailable"); break;
+            case 4: Serial.println("MQTT_CONNECT_BAD_CREDENTIALS - Check username/password"); break;
+            case 5: Serial.println("MQTT_CONNECT_UNAUTHORIZED - Not authorized"); break;
+            default: Serial.println("Unknown error code"); break;
         }
-        LOG_INFO_F("[MQTT] Next retry in %lu ms (backoff: %lu ms)\n", reconnectBackoff, reconnectBackoff);
+        Serial.printf("[MQTT] Next retry in %lu ms (backoff: %lu ms)\n", reconnectBackoff, reconnectBackoff);
         
         if (debugPrintFunc && !firstImageLoaded) {
             debugPrintfFunc(COLOR_RED, "MQTT failed, state: %d", mqttState);
@@ -234,20 +233,20 @@ void MQTTManager::update() {
 }
 
 void MQTTManager::printConnectionInfo() {
-    LOG_INFO("=== MQTT Connection Info ===");
-    LOG_INFO_F("Status: %s\n", isConnected() ? "Connected" : "Disconnected");
-    LOG_INFO_F("Server: %s:%d\n", configStorage.getMQTTServer().c_str(), configStorage.getMQTTPort());
-    LOG_INFO_F("Client ID: %s\n", configStorage.getMQTTClientID().c_str());
+    Serial.println("=== MQTT Connection Info ===");
+    Serial.printf("Status: %s\n", isConnected() ? "Connected" : "Disconnected");
+    Serial.printf("Server: %s:%d\n", configStorage.getMQTTServer().c_str(), configStorage.getMQTTPort());
+    Serial.printf("Client ID: %s\n", configStorage.getMQTTClientID().c_str());
     if (isConnected()) {
         if (configStorage.getHADiscoveryEnabled()) {
-            LOG_INFO("Home Assistant Discovery: Enabled");
-            LOG_INFO_F("Device Name: %s\n", configStorage.getHADeviceName().c_str());
-            LOG_INFO_F("Base Topic: %s\n", haDiscovery.getCommandTopicFilter().c_str());
+            Serial.println("Home Assistant Discovery: Enabled");
+            Serial.printf("Device Name: %s\n", configStorage.getHADeviceName().c_str());
+            Serial.printf("Base Topic: %s\n", haDiscovery.getCommandTopicFilter().c_str());
         } else {
-            LOG_INFO("Home Assistant Discovery: Disabled");
+            Serial.println("Home Assistant Discovery: Disabled");
         }
     }
-    LOG_INFO("============================");
+    Serial.println("============================");
 }
 
 void MQTTManager::logConnectionStatus() {
