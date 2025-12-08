@@ -41,7 +41,6 @@ private:
     void handleNetworkConfig();
     void handleMQTTConfig();
     void handleImageConfig();
-    void handleImageSources();
     void handleDisplayConfig();
     void handleAdvancedConfig();
     void handleSerialCommands();
@@ -88,7 +87,6 @@ private:
     String generateConsolePage();
     String generateMQTTPage();
     String generateImagePage();
-    String generateImageSourcesPage();
     String generateDisplayPage();
     String generateAdvancedPage();
     String generateStatusPage();

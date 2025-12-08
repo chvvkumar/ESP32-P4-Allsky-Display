@@ -31,7 +31,8 @@ Transform your ESP32-P4 display into a all-sky camera viewer with multi-image cy
 
 ### Core Functionality
 - **Multi-Image Display** - Cycle through up to 10 image sources automatically
-- **Hardware Accelerated** - ESP32-P4 PPA for fast scaling and rotation
+- **Hardware Accelerated** - ESP32-P4 PPA for fast scaling and rotation (385-507ms render time)
+- **High Resolution Support** - Up to 1448×1448 pixel images with 2× scaling capability
 - **Per-Image Transforms** - Individual scale, offset, and rotation settings
 - **Touch Controls** - Tap to navigate, double-tap to toggle modes
 - **Easy Setup** - Captive portal WiFi configuration with QR code
@@ -161,9 +162,25 @@ Wireless firmware updates without USB cable - see detailed [OTA_GUIDE.md](OTA_GU
 
 **Entities:** Light (brightness), Switches (cycling, random), Numbers (transforms), Select (image picker), Buttons (actions), Sensors (WiFi, memory, uptime)
 
-## 📷 AllSky Image Optimization
+## 📷 Image Size & Resolution Limits
 
-**⚠️ Important:** Resize images to ≤1MB to prevent crashes. Use 720×720 (4") or 800×800 (3.4") dimensions.
+### Supported Image Sizes
+
+| Configuration | Max Image Dimensions | Max File Size | Buffer Size | Recommended Use |
+|--------------|---------------------|---------------|-------------|-----------------|
+| **Current (Default)** | **1448×1448 pixels** | **~4MB** | 4MB | High-resolution AllSky images |
+| Conservative | 1024×1024 pixels | ~2MB | 2MB | Standard quality |
+| Legacy | 512×512 pixels | ~512KB | 1MB | Low memory systems |
+
+**Current Setup:** The firmware is configured to support images up to **1448×1448 pixels** with hardware-accelerated scaling up to **2.0×** (1600×1600 output).
+
+**Scale Limits:** Maximum scale factor is automatically calculated as `sqrt(buffer_multiplier)`. With the default 4× buffer multiplier, you can scale images up to 2.0× their original size.
+
+### AllSky Image Optimization
+
+**Recommended Dimensions:**
+- 3.4" display (800×800): Use **800×800 to 1200×1200** source images
+- 4.0" display (720×720): Use **720×720 to 1200×1200** source images
 
 **Quick Setup Script:**
 
@@ -191,14 +208,15 @@ mkdir -p "${OUTPUT_DIR}"
 ### Serial Commands (9600 baud)
 
 ```
-Scale & Transform:        Navigation:           System:
-+/-  : Scale ±0.1         N : Next image        B : Reboot
-WASD : Move 10px          R : Refresh           C : Clear config
-QE   : Rotate 90°         T : Toggle cycling    F : Factory reset
+Navigation:               Scale & Transform:    Display:
+N : Next image (reset)    +/-  : Scale ±0.1     L/K  : Brightness ±10%
+F : Refresh current       WASD : Move 10px      X    : Reset transforms
+T : Toggle cycling        QE   : Rotate 90°     
+                          R    : Reset all
 
-Display:                  Info:
-L/K  : Brightness ±10%    I : Status            H/? : Help
-X    : Reset transforms   M : Memory            V : Version
+System:                   Info:
+B : Reboot                I : Status            H/? : Help
+                          M : Memory            V : Version
 ```
 
 ### Configuration Screenshots
@@ -210,7 +228,7 @@ X    : Reset transforms   M : Memory            V : Version
 | Issue | Solution |
 |-------|----------|
 | **Won't compile** | Enable PSRAM in Arduino IDE, verify ESP32 core 3.3.4+ |
-| **Out of memory** | Resize images to ≤1MB, monitor PSRAM in serial output |
+| **Out of memory** | Images up to 4MB supported; check free PSRAM in `/api/info` |
 | **WiFi won't connect** | Check credentials, verify 2.4GHz network, check serial output |
 | **Touch not working** | Verify GT911 I2C connections, check debug output |
 | **Images won't load** | Verify URL accessible, check image size, use resized images |

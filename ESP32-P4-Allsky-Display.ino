@@ -738,6 +738,13 @@ void renderFullImage() {
         // Try hardware acceleration first if available
         size_t scaledImageSize = scaledWidth * scaledHeight * 2;
         
+        Serial.printf("[Render] Image: %dx%d -> Scaled: %dx%d (rot:%.0f) = %d bytes vs buffer %d bytes\n",
+                     fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, 
+                     rotationAngle, scaledImageSize, scaledBufferSize);
+        Serial.printf("[Render] PPA available: %s, Size check: %s\n", 
+                     ppaAccelerator.isAvailable() ? "YES" : "NO",
+                     scaledImageSize <= scaledBufferSize ? "PASS" : "FAIL");
+        
         if (ppaAccelerator.isAvailable() && scaledImageSize <= scaledBufferSize) {
             systemMonitor.forceResetWatchdog();
             
@@ -746,12 +753,19 @@ void renderFullImage() {
             // Pause display during heavy PPA operations to prevent LCD underrun
             displayManager.pauseDisplay();
             
+            Serial.printf("[PPA] Attempting hardware scale+rotate: %dx%d -> %dx%d (%.0f°)\n",
+                         fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, rotationAngle);
+            
             if (ppaAccelerator.scaleRotateImage(fullImageBuffer, fullImageWidth, fullImageHeight,
                                               scaledBuffer, scaledWidth, scaledHeight, rotationAngle)) {
                 // Resume display after heavy operation
                 displayManager.resumeDisplay();
                 
                 systemMonitor.forceResetWatchdog();
+                
+                unsigned long hwTime = millis() - hwStart;
+                Serial.printf("[PPA] ✓ Hardware acceleration successful in %lu ms\n", hwTime);
+                debugPrintf(COLOR_GREEN, "PPA hardware render: %lu ms", hwTime);
                 
                 // Draw the hardware-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
@@ -769,8 +783,16 @@ void renderFullImage() {
                 prevImageHeight = scaledHeight;
                 return;
             } else {
+                Serial.println("[PPA] ✗ Hardware acceleration failed, falling back to software");
                 debugPrint("DEBUG: PPA scale+rotate failed, falling back to software", COLOR_YELLOW);
+                displayManager.resumeDisplay();  // Resume display if PPA failed
                 systemMonitor.forceResetWatchdog();
+            }
+        } else {
+            if (!ppaAccelerator.isAvailable()) {
+                Serial.println("[PPA] Hardware acceleration not available");
+            } else {
+                Serial.printf("[PPA] Scaled image too large: %d > %d bytes\n", scaledImageSize, scaledBufferSize);
             }
         }
         
@@ -1023,7 +1045,8 @@ void downloadAndDisplayImage() {
     size_t size = http.getSize();
     
     Serial.printf("[Image] Content-Length: %d bytes\n", size);
-    debugPrintf(COLOR_WHITE, "Image size: %d bytes", size);
+    Serial.printf("[Image] Source: Image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+    debugPrintf(COLOR_WHITE, "Image %d/%d: %d bytes", currentImageIndex + 1, imageSourceCount, size);
     
     // Validate size before proceeding
     if (size <= 0) {
@@ -1292,7 +1315,8 @@ void downloadAndDisplayImage() {
                 
                 // Mark image as ready to display (but don't display yet - let loop handle it)
                 imageReadyToDisplay = true;
-                debugPrint("DEBUG: Image ready to display - pending buffer prepared", COLOR_GREEN);
+                Serial.printf("[Image] Image %d/%d ready to display - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+                debugPrintf(COLOR_GREEN, "Image %d/%d ready", currentImageIndex + 1, imageSourceCount);
                 Serial.println("Image fully decoded and ready for display");
                 
                 // Mark first image as loaded (only once) - happens before actual display
@@ -1360,6 +1384,7 @@ void downloadAndDisplayImage() {
     // Final watchdog reset and cleanup
     systemMonitor.forceResetWatchdog();
     debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
+    Serial.printf("[Image] Download cycle completed for image %d/%d\n", currentImageIndex + 1, imageSourceCount);
     debugPrint("Download cycle completed", COLOR_GREEN);
 }
 
@@ -1522,6 +1547,26 @@ void processSerialCommands() {
                 Serial.printf("Rotate CW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
                 break;
                 
+            // Next image command
+            case 'N':
+            case 'n':
+                if (cyclingEnabled && imageSourceCount > 1) {
+                    advanceToNextImage();
+                    lastCycleTime = millis(); // Reset cycle timer for fresh interval
+                    lastUpdate = 0; // Force immediate image download
+                    Serial.printf("Serial: Advancing to next image (image %d of %d)\n", currentImageIndex + 1, imageSourceCount);
+                } else {
+                    Serial.println("Serial: Cycling not enabled or only one source configured");
+                }
+                break;
+            
+            // Refresh current image
+            case 'F':
+            case 'f':
+                lastUpdate = 0; // Force immediate refresh
+                Serial.println("Serial: Forcing image refresh");
+                break;
+                
             // Reset command
             case 'R':
             case 'r':
@@ -1578,6 +1623,9 @@ void processSerialCommands() {
             case 'h':
             case '?':
                 Serial.println("\n=== Image Control Commands ===");
+                Serial.println("Navigation:");
+                Serial.println("  N   : Next image (resets cycle timer)");
+                Serial.println("  F   : Force refresh current image");
                 Serial.println("Scaling:");
                 Serial.println("  +/- : Scale both axes");
                 Serial.println("Movement:");
@@ -1796,6 +1844,8 @@ void loop() {
         // If cycling is enabled, advance to next image
         if (cyclingEnabled && imageSourceCount > 1) {
             advanceToNextImage();
+            // Reset cycle timer to start fresh interval
+            lastCycleTime = millis();
             // Force immediate image download
             lastUpdate = 0;
         } else {
@@ -1923,7 +1973,8 @@ void loop() {
         systemMonitor.forceResetWatchdog();
         
         // Now render the new image to display (single seamless update, no clearing artifacts)
-        debugPrint("Rendering swapped image...", COLOR_GREEN);
+        Serial.printf("[Image] Rendering image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+        debugPrintf(COLOR_GREEN, "Rendering image %d/%d", currentImageIndex + 1, imageSourceCount);
         renderFullImage();
         systemMonitor.forceResetWatchdog();
         

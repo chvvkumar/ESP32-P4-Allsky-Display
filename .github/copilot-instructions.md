@@ -17,9 +17,17 @@ This is an embedded image viewer for ESP32-P4 with DSI displays, targeting AllSk
 
 **PSRAM is mandatory** - all image buffers MUST use `ps_malloc()`:
 - `imageBuffer` (download buffer): `w * h * 2` bytes
-- `fullImageBuffer` (active display): 1MB fixed (512×512 max at RGB565)
-- `pendingFullImageBuffer` (decode target): 1MB for flicker-free swaps
-- `scaledBuffer` (transforms): `w * h * 8` bytes (4× display size)
+- `fullImageBuffer` (active display): `FULL_IMAGE_BUFFER_SIZE` (default 4MB for 1448×1448 max at RGB565)
+- `pendingFullImageBuffer` (decode target): `FULL_IMAGE_BUFFER_SIZE` for flicker-free swaps
+- `scaledBuffer` (transforms): `w * h * SCALED_BUFFER_MULTIPLIER * 2` bytes (default 4× display = 5.12MB)
+- `ppa_src_buffer` (PPA input): Automatically matches `FULL_IMAGE_BUFFER_SIZE`
+- `ppa_dst_buffer` (PPA output): Automatically sized as `display_size * SCALED_BUFFER_MULTIPLIER * 2`
+
+**Dynamic Configuration**: All buffer sizes and scale limits are calculated from two config.h constants:
+- `FULL_IMAGE_BUFFER_SIZE` - Controls maximum decoded image size
+- `SCALED_BUFFER_MULTIPLIER` - Controls maximum scaling factor via `MAX_SCALE = sqrt(SCALED_BUFFER_MULTIPLIER)`
+  - Example: Multiplier=4 → MAX_SCALE=2.0 (can scale 800×800 to 1600×1600)
+  - Example: Multiplier=9 → MAX_SCALE=3.0 (can scale 800×800 to 2400×2400)
 
 **PPA (Picture Processing Accelerator) requires DMA-aligned buffers**:
 ```cpp

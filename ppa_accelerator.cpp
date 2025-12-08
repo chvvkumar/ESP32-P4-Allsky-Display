@@ -38,8 +38,8 @@ bool PPAAccelerator::begin(int16_t displayWidth, int16_t displayHeight) {
     }
     
     // Allocate DMA-aligned buffers for PPA operations
-    // Source buffer - for original image data
-    ppa_src_buffer_size = 1024 * 1024; // 1MB for source (512x512 max at 16-bit)
+    // Source buffer - dynamically sized based on FULL_IMAGE_BUFFER_SIZE config
+    ppa_src_buffer_size = FULL_IMAGE_BUFFER_SIZE; // Matches full image buffer size from config.h
     ppa_src_buffer = (uint16_t*)heap_caps_aligned_alloc(64, ppa_src_buffer_size, 
                                                         MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
     
@@ -50,8 +50,8 @@ bool PPAAccelerator::begin(int16_t displayWidth, int16_t displayHeight) {
         return false;
     }
     
-    // Destination buffer - for scaled image data (increased for scaling operations)
-    ppa_dst_buffer_size = displayWidth * displayHeight * 2 * 2; // 2x display size to handle scaling up to 2x
+    // Destination buffer - dynamically sized based on display and scale multiplier
+    ppa_dst_buffer_size = displayWidth * displayHeight * 2 * SCALED_BUFFER_MULTIPLIER; // Matches scaled buffer logic
     ppa_dst_buffer = (uint16_t*)heap_caps_aligned_alloc(64, ppa_dst_buffer_size, 
                                                         MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
     
