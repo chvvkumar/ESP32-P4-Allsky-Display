@@ -143,21 +143,48 @@ void WebConfig::handleSaveConfig() {
     
     // Handle checkbox parameters - HTML forms only send checked checkbox values
     // If a checkbox parameter is not present, it means the checkbox was unchecked
-    bool wasCycling = configStorage.getCyclingEnabled();
-    bool nowCycling = server->hasArg("cycling_enabled");
-    bool modeChanged = (wasCycling != nowCycling);
+    // However, we need to distinguish between a full form submission and a partial update
+    // (e.g., when JavaScript sends only brightness_auto_mode without other checkboxes)
     
-    if (modeChanged) {
-        LOG_INFO_F("[WebAPI] Cycling mode changed: %s -> %s\n", 
-                   wasCycling ? "enabled" : "disabled", 
-                   nowCycling ? "enabled" : "disabled");
+    // Check which checkboxes are explicitly mentioned in the request (checked or with _present suffix)
+    bool hasCyclingEnabled = server->hasArg("cycling_enabled") || server->hasArg("cycling_enabled_present");
+    bool hasRandomOrder = server->hasArg("random_order") || server->hasArg("random_order_present");
+    bool hasBrightnessAutoMode = server->hasArg("brightness_auto_mode") || server->hasArg("brightness_auto_mode_present");
+    bool hasHADiscovery = server->hasArg("ha_discovery_enabled") || server->hasArg("ha_discovery_enabled_present");
+    bool hasNTPEnabled = server->hasArg("ntp_enabled") || server->hasArg("ntp_enabled_present");
+    
+    // Only update checkboxes that are explicitly present in this request
+    bool wasCycling = configStorage.getCyclingEnabled();
+    bool nowCycling = wasCycling;  // Default to current value
+    bool modeChanged = false;
+    
+    if (hasCyclingEnabled) {
+        nowCycling = server->hasArg("cycling_enabled");
+        modeChanged = (wasCycling != nowCycling);
+        
+        if (modeChanged) {
+            LOG_INFO_F("[WebAPI] Cycling mode changed: %s -> %s\n", 
+                       wasCycling ? "enabled" : "disabled", 
+                       nowCycling ? "enabled" : "disabled");
+        }
+        configStorage.setCyclingEnabled(nowCycling);
     }
     
-    configStorage.setCyclingEnabled(nowCycling);
-    configStorage.setRandomOrder(server->hasArg("random_order"));
-    configStorage.setBrightnessAutoMode(server->hasArg("brightness_auto_mode"));
-    configStorage.setHADiscoveryEnabled(server->hasArg("ha_discovery_enabled"));
-    configStorage.setNTPEnabled(server->hasArg("ntp_enabled"));
+    if (hasRandomOrder) {
+        configStorage.setRandomOrder(server->hasArg("random_order"));
+    }
+    
+    if (hasBrightnessAutoMode) {
+        configStorage.setBrightnessAutoMode(server->hasArg("brightness_auto_mode"));
+    }
+    
+    if (hasHADiscovery) {
+        configStorage.setHADiscoveryEnabled(server->hasArg("ha_discovery_enabled"));
+    }
+    
+    if (hasNTPEnabled) {
+        configStorage.setNTPEnabled(server->hasArg("ntp_enabled"));
+    }
     
     // Save configuration to persistent storage
     configStorage.saveConfig();

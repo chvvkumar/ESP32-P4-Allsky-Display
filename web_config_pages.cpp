@@ -218,7 +218,8 @@ String WebConfig::generateMQTTPage() {
     html += "<div class='form-group'><div style='display:flex;align-items:center;margin-bottom:1rem'>";
     html += "<input type='checkbox' id='ha_discovery_enabled' name='ha_discovery_enabled' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'";
     if (configStorage.getHADiscoveryEnabled()) html += " checked";
-    html += "><label for='ha_discovery_enabled' style='margin-bottom:0;cursor:pointer;font-size:1rem'>Enable Home Assistant MQTT Discovery</label></div>";
+    html += "><label for='ha_discovery_enabled' style='margin-bottom:0;cursor:pointer;font-size:1rem'>Enable Home Assistant MQTT Discovery</label>";
+    html += "<input type='hidden' name='ha_discovery_enabled_present' value='1'></div>";
     html += "<p style='color:#94a3b8;font-size:0.9rem;margin-top:-0.5rem;margin-bottom:1rem'>Automatically creates entities in Home Assistant for all device controls and sensors</p></div>";
     
     html += "<div class='form-group'><label for='ha_device_name'>Device Name</label>";
@@ -259,6 +260,7 @@ String WebConfig::generateImagePage() {
     
     // Hidden checkbox for form submission (updated by toggleImageMode)
     html += "<input type='checkbox' id='cycling_enabled' name='cycling_enabled' style='display:none'" + String(isCycling ? " checked" : "") + ">";
+    html += "<input type='hidden' name='cycling_enabled_present' value='1'>";
     
     html += "<label style='display:flex;align-items:center;cursor:pointer;flex:1;padding:0.75rem;background:" + String(isCycling ? "#0f172a" : "#1e3a8a") + ";border:2px solid " + String(isCycling ? "#334155" : "#3b82f6") + ";border-radius:6px;transition:all 0.3s'>";
     html += "<input type='radio' name='mode' value='single' style='width:20px;height:20px;margin-right:0.75rem;accent-color:#3b82f6'" + String(isCycling ? "" : " checked") + " onchange='toggleImageMode(false)'>";
@@ -324,7 +326,8 @@ String WebConfig::generateImagePage() {
     
     html += "<div class='form-group'><div style='display:flex;align-items:center'>";
     html += "<input type='checkbox' id='random_order' name='random_order' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'" + String(configStorage.getRandomOrder() ? " checked" : "") + ">";
-    html += "<label for='random_order' style='margin-bottom:0;cursor:pointer'>Randomize display order</label></div></div>";
+    html += "<label for='random_order' style='margin-bottom:0;cursor:pointer'>Randomize display order</label>";
+    html += "<input type='hidden' name='random_order_present' value='1'></div></div>";
     
     // Image sources list
     html += "<h3 style='color:#38bdf8;margin-top:1.5rem;margin-bottom:1rem'>Image Sources</h3>";
@@ -492,7 +495,8 @@ String WebConfig::generateAdvancedPage() {
     html += "<input type='number' id='watchdog_timeout' name='watchdog_timeout' class='form-control' value='" + String(configStorage.getWatchdogTimeout() / 1000) + "' min='10' max='120'></div></div>";
     
     html += "<div class='card'><h2>🕐 Time Settings</h2>";
-    html += "<div class='form-group'><label><input type='checkbox' id='ntp_enabled' name='ntp_enabled' " + String(configStorage.getNTPEnabled() ? "checked" : "") + "> Enable NTP Time Sync</label></div>";
+    html += "<div class='form-group'><label><input type='checkbox' id='ntp_enabled' name='ntp_enabled' " + String(configStorage.getNTPEnabled() ? "checked" : "") + "> Enable NTP Time Sync</label>";
+    html += "<input type='hidden' name='ntp_enabled_present' value='1'></div>";
     html += "<div class='form-group'><label for='ntp_server'>NTP Server</label>";
     html += "<input type='text' id='ntp_server' name='ntp_server' class='form-control' value='" + configStorage.getNTPServer() + "' placeholder='pool.ntp.org'></div>";
     html += "<div class='form-group'><label for='timezone'>Timezone</label>";
