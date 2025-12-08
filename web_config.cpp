@@ -31,8 +31,7 @@ bool WebConfig::begin(int port) {
         server->on("/console", [this]() { handleConsole(); });
         server->on("/config/network", [this]() { handleNetworkConfig(); });
         server->on("/config/mqtt", [this]() { handleMQTTConfig(); });
-        server->on("/config/image", [this]() { handleImageConfig(); });
-        server->on("/config/sources", [this]() { handleImageSources(); });
+        server->on("/config/images", [this]() { handleImageConfig(); });
         server->on("/config/display", [this]() { handleDisplayConfig(); });
         server->on("/config/advanced", [this]() { handleAdvancedConfig(); });
         server->on("/config/commands", [this]() { handleSerialCommands(); });
@@ -193,16 +192,8 @@ void WebConfig::handleMQTTConfig() {
 
 void WebConfig::handleImageConfig() {
     String html = generateHeader("Image Configuration");
-    html += generateNavigation("image");
+    html += generateNavigation("images");
     html += generateImagePage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
-}
-
-void WebConfig::handleImageSources() {
-    String html = generateHeader("Image Sources");
-    html += generateNavigation("sources");
-    html += generateImageSourcesPage();
     html += generateFooter();
     sendResponse(200, "text/html", html);
 }
@@ -284,11 +275,11 @@ String WebConfig::generateNavigation(const String& currentPage) {
     html += "<button class='nav-toggle' onclick='toggleNav()' aria-label='Toggle navigation'><i class='fas fa-bars'></i></button>";
     html += "<div class='nav-content'>";
     
-    String pages[] = {"dashboard", "console", "network", "mqtt", "image", "sources", "display", "advanced", "commands", "api"};
-    String labels[] = {"🏠 Dashboard", "🖥️ Console", "📡 Network", "🔗 MQTT", "🖼️ Single Image", "🔄 Multi-Image", "💡 Display", "⚙️ Advanced", "📟 Commands", "📚 API"};
-    String urls[] = {"/", "/console", "/config/network", "/config/mqtt", "/config/image", "/config/sources", "/config/display", "/config/advanced", "/config/commands", "/api-reference"};
+    String pages[] = {"dashboard", "images", "display", "network", "mqtt", "console", "commands", "advanced", "api"};
+    String labels[] = {"🏠 Dashboard", "🖼️ Images", "💡 Display", "📡 Network", "🔗 MQTT", "🖥️ Console", "📟 Commands", "⚙️ Advanced", "📚 API"};
+    String urls[] = {"/", "/config/images", "/config/display", "/config/network", "/config/mqtt", "/console", "/config/commands", "/config/advanced", "/api-reference"};
     
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 9; i++) {
         String activeClass = (currentPage == pages[i]) ? " active" : "";
         html += "<a href='" + urls[i] + "' class='nav-item" + activeClass + "'>" + labels[i] + "</a>";
     }

@@ -114,7 +114,11 @@ void WebConfig::handleSaveConfig() {
     
     // Handle checkbox parameters - HTML forms only send checked checkbox values
     // If a checkbox parameter is not present, it means the checkbox was unchecked
-    configStorage.setCyclingEnabled(server->hasArg("cycling_enabled"));
+    bool wasCycling = configStorage.getCyclingEnabled();
+    bool nowCycling = server->hasArg("cycling_enabled");
+    bool modeChanged = (wasCycling != nowCycling);
+    
+    configStorage.setCyclingEnabled(nowCycling);
     configStorage.setRandomOrder(server->hasArg("random_order"));
     configStorage.setBrightnessAutoMode(server->hasArg("brightness_auto_mode"));
     configStorage.setHADiscoveryEnabled(server->hasArg("ha_discovery_enabled"));
@@ -132,6 +136,29 @@ void WebConfig::handleSaveConfig() {
     
     if (imageSettingsChanged) {
         applyImageSettings();
+    }
+    
+    // Switch images immediately when mode changes
+    if (modeChanged) {
+        extern void advanceToNextImage();
+        extern void downloadAndDisplayImage();
+        extern unsigned long lastUpdate;
+        extern unsigned long lastCycleTime;
+        
+        if (nowCycling) {
+            // Switched to multi-image mode: reset to first image (index 0)
+            Serial.println("Mode switched to multi-image: resetting to first source");
+            configStorage.setCurrentImageIndex(0);
+            configStorage.saveConfig();
+            lastCycleTime = millis();
+        } else {
+            // Switched to single-image mode: load the single image URL
+            Serial.println("Mode switched to single-image: loading primary URL");
+        }
+        
+        // Force immediate download
+        lastUpdate = 0;
+        downloadAndDisplayImage();
     }
     
     // Prepare response message
