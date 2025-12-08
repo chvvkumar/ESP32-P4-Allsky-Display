@@ -366,7 +366,13 @@ int16_t displayWiFiQRCode() {
                 
                 // Draw scaled QR code
                 displayManager.drawBitmap(qrX, qrY, scaledQR, scaledWidth, scaledHeight);
-                Serial.printf("DEBUG: Scaled QR code drawn at (%d, %d)\n", qrX, qrY);
+                
+                // Flush to ensure QR code is visible immediately
+                if (gfx) {
+                    gfx->flush();
+                }
+                
+                Serial.printf("DEBUG: Scaled QR code drawn and flushed at (%d, %d)\n", qrX, qrY);
                 
                 // Calculate where text should start (below QR code + small margin)
                 textStartY = qrY + scaledHeight + 15;
@@ -382,6 +388,12 @@ int16_t displayWiFiQRCode() {
                 }
                 
                 displayManager.drawBitmap(qrX, qrY, qrCodeBuffer, qrCodeWidth, qrCodeHeight);
+                
+                // Flush to ensure QR code is visible
+                if (gfx) {
+                    gfx->flush();
+                }
+                
                 textStartY = qrY + qrCodeHeight + 15;
             }
             
@@ -398,6 +410,12 @@ int16_t displayWiFiQRCode() {
             }
             
             displayManager.drawBitmap(qrX, qrY, qrCodeBuffer, qrCodeWidth, qrCodeHeight);
+            
+            // Flush to ensure QR code is visible
+            if (gfx) {
+                gfx->flush();
+            }
+            
             textStartY = qrY + qrCodeHeight + 15;
         }
         
@@ -444,8 +462,10 @@ void setup() {
     // Initialize configuration system first
     initializeConfiguration();
     
-    // Initialize system monitor
-    if (!systemMonitor.begin()) {
+    // Initialize system monitor with configured watchdog timeout
+    unsigned long watchdogTimeout = configStorage.getWatchdogTimeout();
+    Serial.printf("Initializing system monitor with watchdog timeout: %lu ms\n", watchdogTimeout);
+    if (!systemMonitor.begin(watchdogTimeout)) {
         Serial.println("CRITICAL: System monitor initialization failed!");
         while(1) delay(1000);
     }
@@ -588,6 +608,9 @@ void setup() {
             // Reset debug Y position to place text below QR code
             displayManager.setDebugY(textY);
             
+            // Disable auto-scroll to prevent QR code from being cleared
+            displayManager.setDisableAutoScroll(true);
+            
             // Show compact centered text instructions below QR code
             debugPrint(" ", COLOR_WHITE);  // Small space
             debugPrint("WiFi Setup Required", COLOR_YELLOW);
@@ -620,9 +643,13 @@ void setup() {
             } else {
                 debugPrint("Configuration timeout - continuing without WiFi", COLOR_RED);
                 captivePortal.stop();
+                // Re-enable auto-scroll after WiFi setup
+                displayManager.setDisableAutoScroll(false);
             }
         } else {
             debugPrint("ERROR: Failed to start captive portal", COLOR_RED);
+            // Re-enable auto-scroll
+            displayManager.setDisableAutoScroll(false);
         }
     }
     

@@ -24,7 +24,7 @@ public:
     SystemMonitor();
     
     // Initialization
-    bool begin();
+    bool begin(unsigned long timeoutMs = WATCHDOG_TIMEOUT_MS);
     
     // Watchdog management
     void resetWatchdog();

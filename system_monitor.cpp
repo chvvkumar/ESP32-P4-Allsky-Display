@@ -14,16 +14,16 @@ SystemMonitor::SystemMonitor() :
 {
 }
 
-bool SystemMonitor::begin() {
+bool SystemMonitor::begin(unsigned long timeoutMs) {
     LOG_INFO("[SystemMonitor] Initializing system monitor and watchdog");
     // Try to initialize watchdog timer for system stability
     esp_task_wdt_config_t wdt_config = {
-        .timeout_ms = WATCHDOG_TIMEOUT_MS,
+        .timeout_ms = timeoutMs,
         .idle_core_mask = WATCHDOG_IDLE_CORE_MASK,
         .trigger_panic = WATCHDOG_TRIGGER_PANIC
     };
     
-    LOG_DEBUG_F("[SystemMonitor] Watchdog timeout: %d ms\n", WATCHDOG_TIMEOUT_MS);
+    LOG_DEBUG_F("[SystemMonitor] Watchdog timeout: %lu ms\n", timeoutMs);
     esp_err_t result = esp_task_wdt_init(&wdt_config);
     if (result == ESP_ERR_INVALID_STATE) {
         LOG_DEBUG("[SystemMonitor] Watchdog already initialized");
