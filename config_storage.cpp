@@ -84,7 +84,7 @@ void ConfigStorage::setDefaults() {
     
     // Time settings
     config.ntpServer = "pool.ntp.org";
-    config.timezone = "UTC0";  // UTC by default, user can configure their timezone
+    config.timezone = "CST6CDT,M3.2.0,M11.1.0";  // US Central Time by default
     config.ntpEnabled = true;
 }
 

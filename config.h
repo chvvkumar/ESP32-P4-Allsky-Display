@@ -33,7 +33,7 @@ enum LogSeverity {
 #define SCALED_BUFFER_MULTIPLIER 4       // 4x display size to handle large scale factors
 
 // System timing intervals (milliseconds)
-#define UPDATE_INTERVAL 300000           // 5 minutes between image updates
+#define UPDATE_INTERVAL 120000           // 2 minutes between image updates
 #define FORCE_CHECK_INTERVAL 900000      // Force check every 15 minutes regardless of cache headers
 #define WATCHDOG_RESET_INTERVAL 1000     // Reset watchdog every 1 second
 #define MEMORY_CHECK_INTERVAL 30000      // Check memory every 30 seconds

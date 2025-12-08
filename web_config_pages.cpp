@@ -1287,6 +1287,11 @@ String WebConfig::generateConsolePage() {
     html += "  if (ws) ws.close();";
     html += "});";
     
+    // Auto-connect when page loads
+    html += "window.addEventListener('load', function() {";
+    html += "  setTimeout(connectConsole, 500);";
+    html += "});";
+    
     html += "</script>";
     
     return html;

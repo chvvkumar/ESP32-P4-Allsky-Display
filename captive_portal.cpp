@@ -300,10 +300,10 @@ String CaptivePortal::generateJavaScript() {
     js += "let selectedSSID='';let selectedEncrypted=false;";
     
     // Network selection handler
-    js += "function selectNetwork(ssid,encrypted){";
+    js += "function selectNetwork(ssid,encrypted,evt){";
     js += "selectedSSID=ssid;selectedEncrypted=encrypted;";
     js += "document.querySelectorAll('.network-item').forEach(el=>el.classList.remove('selected'));";
-    js += "event.currentTarget.classList.add('selected');";
+    js += "if(evt&&evt.currentTarget){evt.currentTarget.classList.add('selected')}";
     js += "const pwdSection=document.getElementById('passwordSection');";
     js += "pwdSection.classList.add('show');";
     js += "document.getElementById('ssid_display').textContent=ssid;";
@@ -354,7 +354,7 @@ String CaptivePortal::generateJavaScript() {
     js += "const lockIcon=net.encrypted?'🔒':'';";
     js += "const item=document.createElement('div');";
     js += "item.className='network-item';";
-    js += "item.onclick=function(){selectNetwork(net.ssid,net.encrypted);};";
+    js += "item.onclick=function(evt){selectNetwork(net.ssid,net.encrypted,evt);};";
     js += "item.innerHTML='<div class=\"network-info\"><div class=\"network-ssid\">'+net.ssid+'</div>';";
     js += "item.innerHTML+='<div class=\"network-signal\">Signal: '+signal+' ('+net.rssi+' dBm)</div></div>';";
     js += "item.innerHTML+='<div class=\"network-lock\">'+lockIcon+'</div>';";
@@ -434,7 +434,7 @@ String CaptivePortal::generateNetworkList() {
         escapedSSID.replace("'", "\\'");
         escapedSSID.replace("\"", "&quot;");
         
-        html += "<div class='network-item' onclick=\"selectNetwork('" + escapedSSID + "'," + String(network.encrypted ? "true" : "false") + ")\">";
+        html += "<div class='network-item' onclick=\"selectNetwork('" + escapedSSID + "'," + String(network.encrypted ? "true" : "false") + ",event)\">";
         html += "<div class='network-info'>";
         html += "<div class='network-ssid'>" + escapeHtml(network.ssid) + "</div>";
         html += "<div class='network-signal'>Signal: " + signalQuality + " (" + String(network.rssi) + " dBm)</div>";
