@@ -4,11 +4,14 @@
 #include "ota_manager.h"
 #include "web_config.h"
 #include "logging.h"
+#include "config_storage.h"
 #include <ArduinoOTA.h>
+#include <time.h>
 
 // Global instances
 WiFiManager wifiManager;
 extern WebConfig webConfig;
+extern ConfigStorage configStorage;
 
 WiFiManager::WiFiManager() :
     wifiConnected(false),
@@ -76,6 +79,9 @@ void WiFiManager::connectToWiFi() {
         LOG_INFO_F("[WiFi] DNS: %s\n", WiFi.dnsIP().toString().c_str());
         LOG_INFO_F("[WiFi] Signal Strength (RSSI): %d dBm\n", WiFi.RSSI());
         LOG_INFO_F("[WiFi] Connection took %d attempts, %lu ms\n", connectionAttempts, millis() - startTime);
+        
+        // Sync NTP time after successful connection
+        syncNTPTime();
     } else {
         wifiConnected = false;
         LOG_ERROR_F("[WiFi] Connection failed after %d attempts\n", connectionAttempts);
@@ -271,4 +277,60 @@ void WiFiManager::initOTA() {
 
 void WiFiManager::handleOTA() {
     ArduinoOTA.handle();
+}
+
+void WiFiManager::syncNTPTime() {
+    if (!isConnected()) {
+        LOG_WARNING("[NTP] Cannot sync time - WiFi not connected");
+        return;
+    }
+    
+    if (!configStorage.getNTPEnabled()) {
+        LOG_INFO("[NTP] Time synchronization disabled in config");
+        return;
+    }
+    
+    String ntpServer = configStorage.getNTPServer();
+    String timezone = configStorage.getTimezone();
+    
+    LOG_INFO_F("[NTP] Synchronizing time from %s...\n", ntpServer.c_str());
+    LOG_INFO_F("[NTP] Timezone: %s\n", timezone.c_str());
+    
+    // Configure time with NTP server and timezone
+    // GMT offset and daylight offset are handled by the timezone string
+    configTime(0, 0, ntpServer.c_str());
+    setenv("TZ", timezone.c_str(), 1);
+    tzset();
+    
+    // Wait for time to be set (up to 5 seconds)
+    int retries = 0;
+    const int maxRetries = 10;
+    struct tm timeinfo;
+    
+    while (!getLocalTime(&timeinfo, 500) && retries < maxRetries) {
+        LOG_INFO("[NTP] Waiting for time sync...");
+        retries++;
+        systemMonitor.resetWatchdog();
+    }
+    
+    if (retries >= maxRetries) {
+        LOG_ERROR("[NTP] Failed to synchronize time");
+        if (debugPrintFunc) debugPrintFunc("NTP sync failed", COLOR_RED);
+    } else {
+        char timeStr[64];
+        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S %Z", &timeinfo);
+        LOG_INFO_F("[NTP] ✓ Time synchronized: %s\n", timeStr);
+        if (debugPrintfFunc && !firstImageLoaded) {
+            debugPrintfFunc(COLOR_GREEN, "Time: %s", timeStr);
+        }
+    }
+}
+
+bool WiFiManager::isTimeValid() {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo, 0)) {
+        return false;
+    }
+    // Check if year is reasonable (>2020)
+    return (timeinfo.tm_year + 1900) > 2020;
 }

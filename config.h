@@ -33,7 +33,7 @@ enum LogSeverity {
 #define SCALED_BUFFER_MULTIPLIER 4       // 4x display size to handle large scale factors
 
 // System timing intervals (milliseconds)
-#define UPDATE_INTERVAL 300000           // 5 minutes between image updates
+#define UPDATE_INTERVAL 120000           // 2 minutes between image updates
 #define FORCE_CHECK_INTERVAL 900000      // Force check every 15 minutes regardless of cache headers
 #define WATCHDOG_RESET_INTERVAL 1000     // Reset watchdog every 1 second
 #define MEMORY_CHECK_INTERVAL 30000      // Check memory every 30 seconds
@@ -120,10 +120,10 @@ extern const bool DEFAULT_RANDOM_ORDER;
 #define DEFAULT_BRIGHTNESS 50            // Default brightness percentage
 
 // Debug display settings
-#define DEBUG_START_Y 50                 // Starting Y position for debug text
-#define DEBUG_LINE_HEIGHT 30             // Height between debug lines
+#define DEBUG_START_Y 150                // Starting Y position for debug text (centered vertically)
+#define DEBUG_LINE_HEIGHT 35             // Height between debug lines
 #define DEBUG_TEXT_SIZE 3                // Debug text size
-#define MAX_DEBUG_LINES 20               // Maximum lines to show on screen
+#define MAX_DEBUG_LINES 15               // Maximum lines to show on screen
 
 // Display colors (RGB565)
 #define COLOR_BLACK 0x0000
@@ -149,6 +149,48 @@ extern const bool DEFAULT_RANDOM_ORDER;
 #define WATCHDOG_TIMEOUT_MS 30000        // 30 second timeout to handle slow downloads
 #define WATCHDOG_IDLE_CORE_MASK 0        // Don't monitor idle tasks
 #define WATCHDOG_TRIGGER_PANIC false     // Don't panic on timeout, just reset
+
+// =============================================================================
+// TOUCH GESTURE TIMING CONFIGURATION
+// =============================================================================
+
+#define TOUCH_DEBOUNCE_MS 50             // Minimum time between touch events
+#define DOUBLE_TAP_TIMEOUT_MS 400        // Maximum time between taps for double-tap
+#define MIN_TAP_DURATION_MS 50           // Minimum press duration for valid tap
+#define MAX_TAP_DURATION_MS 1000         // Maximum press duration for valid tap
+
+// =============================================================================
+// DOWNLOAD CONFIGURATION
+// =============================================================================
+
+#define DOWNLOAD_CHUNK_SIZE 1024         // 1KB chunks for good performance
+#define DOWNLOAD_WATCHDOG_INTERVAL 50    // Reset watchdog every 50ms during download
+#define DOWNLOAD_NO_DATA_TIMEOUT 5000    // 5 seconds with no data before giving up
+#define DECODE_TIMEOUT 5000              // 5 second timeout for JPEG decode
+#define ABSOLUTE_DOWNLOAD_TIMEOUT 50000  // 50 second absolute timeout for entire download
+
+// =============================================================================
+// SYSTEM STARTUP DELAYS
+// =============================================================================
+
+#define SERIAL_INIT_DELAY 1000           // Delay after Serial.begin() for initialization
+#define WIFI_HARDWARE_INIT_DELAY 500     // Critical delay for WiFi hardware initialization
+#define CAPTIVE_PORTAL_TIMEOUT 300000    // 5 minutes timeout for captive portal
+#define WIFI_CONFIG_SUCCESS_DELAY 2000   // Delay after WiFi config before reboot
+#define CRASH_LOG_SAVE_DELAY 100         // Delay for crash log save before reboot
+#define GENERAL_ERROR_HALT_DELAY 1000    // Delay in error halt loops
+#define FINAL_STARTUP_DELAY 1000         // Final delay at end of setup()
+#define MESSAGE_SEND_DELAY 1000          // Delay to allow message transmission
+
+// =============================================================================
+// LOOP TIMING THRESHOLDS
+// =============================================================================
+
+#define LOOP_WARNING_THRESHOLD 1000      // Log warning if loop takes more than 1 second
+#define MAIN_LOOP_DELAY 50               // Delay between main loop iterations
+#define CAPTIVE_PORTAL_LOOP_DELAY 10     // Delay in captive portal handling loop
+#define DOWNLOAD_CHECK_INTERVAL 1000     // Log download progress every 1 second
+#define DOWNLOAD_WARNING_THRESHOLD 15000 // Warn if download takes more than 15 seconds
 
 // =============================================================================
 // NETWORK TIMEOUT CONFIGURATION

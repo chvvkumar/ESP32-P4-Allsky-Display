@@ -133,6 +133,14 @@ public:
     // Log severity filtering
     void setMinLogSeverity(int severity);
     int getMinLogSeverity();
+    
+    // Time settings
+    void setNTPServer(const String& server);
+    String getNTPServer();
+    void setTimezone(const String& tz);
+    String getTimezone();
+    void setNTPEnabled(bool enabled);
+    bool getNTPEnabled();
 
 private:
     Preferences preferences;
@@ -202,6 +210,11 @@ private:
         
         // Logging settings
         int minLogSeverity;  // Minimum severity level for WebSocket console
+        
+        // Time settings
+        String ntpServer;
+        String timezone;  // POSIX timezone string
+        bool ntpEnabled;
     } config;
     
     void setDefaults();

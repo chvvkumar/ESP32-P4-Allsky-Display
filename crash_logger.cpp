@@ -1,6 +1,9 @@
 #include "crash_logger.h"
+#include "build_info.h"
 #include <stdarg.h>
 #include <esp_system.h>
+#include <rom/rtc.h>
+#include <soc/rtc.h>
 
 // Static RTC memory (survives reboot but not power cycle)
 RTC_DATA_ATTR char CrashLogger::rtcLogBuffer[RTC_BUFFER_SIZE] = {0};
@@ -44,15 +47,95 @@ void CrashLogger::begin() {
     
     initialized = true;
     
-    // Log boot event
-    char bootMsg[128];
-    snprintf(bootMsg, sizeof(bootMsg), "\n===== BOOT #%lu at %lu ms =====\n", 
-             bootCount, sessionStartTime);
+    // Check reset reason to detect crashes
+    esp_reset_reason_t reset_reason = esp_reset_reason();
+    bool wasCrash = false;
+    
+    switch (reset_reason) {
+        case ESP_RST_PANIC:
+        case ESP_RST_INT_WDT:
+        case ESP_RST_TASK_WDT:
+        case ESP_RST_WDT:
+            wasCrash = true;
+            crashMarker = 0xDEADBEEF;  // Mark as crash
+            break;
+        case ESP_RST_POWERON:
+        case ESP_RST_SW:
+        case ESP_RST_SDIO:
+        case ESP_RST_BROWNOUT:
+        case ESP_RST_DEEPSLEEP:
+        case ESP_RST_USB:
+        case ESP_RST_JTAG:
+        case ESP_RST_UNKNOWN:
+        default:
+            break;
+    }
+    
+    // Log boot event with timestamp
+    char bootMsg[256];
+    time_t now = time(nullptr);
+    struct tm timeinfo;
+    if (localtime_r(&now, &timeinfo) && timeinfo.tm_year > (2016 - 1900)) {
+        char timestamp[32];
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &timeinfo);
+        snprintf(bootMsg, sizeof(bootMsg), "\n===== BOOT #%lu at %lu ms [%s] =====\n", 
+                 bootCount, sessionStartTime, timestamp);
+    } else {
+        snprintf(bootMsg, sizeof(bootMsg), "\n===== BOOT #%lu at %lu ms =====\n", 
+                 bootCount, sessionStartTime);
+    }
     log(bootMsg);
     
     // Check for crash
-    if (crashMarker != 0) {
-        log("[CrashLogger] !!! PREVIOUS BOOT WAS A CRASH !!!\n");
+    if (crashMarker != 0 || wasCrash) {
+        const char* resetReasonStr = "UNKNOWN";
+        switch (reset_reason) {
+            case ESP_RST_POWERON: resetReasonStr = "POWERON"; break;
+            case ESP_RST_SW: resetReasonStr = "SOFTWARE"; break;
+            case ESP_RST_PANIC: resetReasonStr = "PANIC/EXCEPTION"; break;
+            case ESP_RST_INT_WDT: resetReasonStr = "INTERRUPT_WATCHDOG"; break;
+            case ESP_RST_TASK_WDT: resetReasonStr = "TASK_WATCHDOG"; break;
+            case ESP_RST_WDT: resetReasonStr = "WATCHDOG"; break;
+            case ESP_RST_DEEPSLEEP: resetReasonStr = "DEEPSLEEP"; break;
+            case ESP_RST_BROWNOUT: resetReasonStr = "BROWNOUT"; break;
+            case ESP_RST_SDIO: resetReasonStr = "SDIO"; break;
+            case ESP_RST_USB: resetReasonStr = "USB"; break;
+            case ESP_RST_JTAG: resetReasonStr = "JTAG"; break;
+            default: resetReasonStr = "UNKNOWN"; break;
+        }
+        
+        char crashMsg[256];
+        snprintf(crashMsg, sizeof(crashMsg), 
+                 "[CrashLogger] !!! CRASH DETECTED !!! Reset reason: %s\n", resetReasonStr);
+        log(crashMsg);
+        
+        // Get CPU frequency and other system info
+        rtc_cpu_freq_config_t cpu_freq_config;
+        rtc_clk_cpu_freq_get_config(&cpu_freq_config);
+        snprintf(crashMsg, sizeof(crashMsg), 
+                 "[CrashLogger] CPU Freq: %d MHz, XTAL: %d MHz\n", 
+                 cpu_freq_config.freq_mhz, rtc_clk_xtal_freq_get());
+        log(crashMsg);
+        
+        // Get heap info at crash time
+        snprintf(crashMsg, sizeof(crashMsg),
+                 "[CrashLogger] Heap at crash: %d bytes free, Largest block: %d bytes\n",
+                 ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+        log(crashMsg);
+        
+        // Get PSRAM info if available
+        if (ESP.getPsramSize() > 0) {
+            snprintf(crashMsg, sizeof(crashMsg),
+                     "[CrashLogger] PSRAM at crash: %d bytes free of %d total\n",
+                     ESP.getFreePsram(), ESP.getPsramSize());
+            log(crashMsg);
+        }
+        
+        // Note: Backtrace functions not available on ESP32-P4
+        // Use Serial Monitor during crash to see register dump and backtrace
+        // Use Arduino IDE's ESP Exception Decoder to convert addresses to source lines
+        log("[CrashLogger] For backtrace: Monitor serial output during crash\n");
+        log("[CrashLogger] Use Tools->ESP Exception Decoder to decode addresses\n");
         
         // Save crash logs to NVS immediately
         saveToNVS();
@@ -60,9 +143,14 @@ void CrashLogger::begin() {
         // Clear crash marker
         crashMarker = 0;
         
-        Serial.println("[CrashLogger] Crash detected - logs preserved in RTC and NVS");
+        Serial.printf("[CrashLogger] Crash detected - Reset reason: %s - Logs preserved\n", resetReasonStr);
     } else {
         log("[CrashLogger] Normal boot\n");
+        // Log firmware version on normal boot
+        char versionMsg[128];
+        snprintf(versionMsg, sizeof(versionMsg), "Firmware: %s (%s) - Built: %s %s\n", 
+                 GIT_BRANCH, GIT_COMMIT_HASH, BUILD_DATE, BUILD_TIME);
+        log(versionMsg);
     }
     
     // Report buffer status
@@ -124,11 +212,31 @@ void CrashLogger::log(const char* message) {
     size_t msgLen = strlen(message);
     if (msgLen == 0) return;
     
+    // Prepend timestamp if NTP is synchronized and message starts with '[' (structured log)
+    char timestampedMsg[512];
+    const char* msgToWrite = message;
+    
+    time_t now = time(nullptr);
+    struct tm timeinfo;
+    if (localtime_r(&now, &timeinfo) && timeinfo.tm_year > (2016 - 1900)) {
+        // NTP is synchronized - add timestamp
+        if (message[0] == '[') {
+            // Format: [YYYY-MM-DD HH:MM:SS] [original message]
+            char timestamp[24];
+            strftime(timestamp, sizeof(timestamp), "[%Y-%m-%d %H:%M:%S] ", &timeinfo);
+            
+            // Combine timestamp with original message
+            snprintf(timestampedMsg, sizeof(timestampedMsg), "%s%s", timestamp, message);
+            msgToWrite = timestampedMsg;
+            msgLen = strlen(msgToWrite);
+        }
+    }
+    
     // Write to RTC buffer (survives reboot)
-    writeToRingBuffer(rtcLogBuffer, rtcWritePos, rtcLength, RTC_BUFFER_SIZE, message, msgLen);
+    writeToRingBuffer(rtcLogBuffer, rtcWritePos, rtcLength, RTC_BUFFER_SIZE, msgToWrite, msgLen);
     
     // Write to RAM buffer (current session)
-    writeToRingBuffer(ramLogBuffer, ramWritePos, ramLength, RAM_BUFFER_SIZE, message, msgLen);
+    writeToRingBuffer(ramLogBuffer, ramWritePos, ramLength, RAM_BUFFER_SIZE, msgToWrite, msgLen);
 }
 
 void CrashLogger::logf(const char* format, ...) {
@@ -217,8 +325,27 @@ String CrashLogger::getNVSLogs() {
     size_t readLen = prefs.getBytes("log_data", buffer, logSize);
     buffer[readLen] = '\0';
     
+    // Get save timestamp if available
+    unsigned long saveTime = prefs.getULong("log_time", 0);
+    unsigned long saveTimestamp = prefs.getULong("log_timestamp", 0);
+    
     String result = String("[CrashLogger] NVS logs from boot #") + 
-                    String(prefs.getUInt("log_boot", 0)) + ":\n" + String(buffer);
+                    String(prefs.getUInt("log_boot", 0));
+    
+    if (saveTimestamp > 0) {
+        // We have a real timestamp
+        time_t savedAt = (time_t)saveTimestamp;
+        struct tm timeinfo;
+        char timestampStr[32];
+        if (localtime_r(&savedAt, &timeinfo) && timeinfo.tm_year > (2016 - 1900)) {
+            strftime(timestampStr, sizeof(timestampStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
+            result += String(" (saved at ") + timestampStr + ")";
+        }
+    } else if (saveTime > 0) {
+        result += String(" (saved at uptime ") + String(saveTime) + " ms)";
+    }
+    
+    result += ":\n" + String(buffer);
     free(buffer);
     
     return result;
@@ -230,19 +357,32 @@ String CrashLogger::getRecentLogs(size_t maxBytes) {
     
     // Start with header
     result += "===== CRASH LOGGER DUMP =====\n";
+    
+    // Add current timestamp if NTP is synchronized
+    time_t now = time(nullptr);
+    struct tm timeinfo;
+    if (localtime_r(&now, &timeinfo) && timeinfo.tm_year > (2016 - 1900)) {
+        char timestamp[32];
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &timeinfo);
+        result += "Current Time: " + String(timestamp) + "\n";
+    }
+    
     result += "Boot Count: " + String(bootCount) + "\n";
     result += "Session Uptime: " + String(millis() - sessionStartTime) + " ms\n";
     result += "Last Boot Crash: " + String(crashMarker == 0xDEADBEEF ? "YES" : "NO") + "\n";
-    result += "\n--- RAM Logs (Current Session) ---\n";
-    result += getRAMLogs();
-    result += "\n--- RTC Logs (Since Last Reboot) ---\n";
-    result += getRTCLogs();
     
-    // Check if we have NVS logs from a crash
+    // Show logs in chronological order: oldest (NVS) → middle (RTC) → newest (RAM)
+    // Check if we have NVS logs from previous boot (oldest)
     if (prefs.isKey("log_data")) {
         result += "\n--- NVS Logs (Preserved from Previous Boot) ---\n";
         result += getNVSLogs();
     }
+    
+    result += "\n--- RTC Logs (Since Last Reboot) ---\n";
+    result += getRTCLogs();
+    
+    result += "\n--- RAM Logs (Current Session) ---\n";
+    result += getRAMLogs();
     
     result += "\n===== END CRASH LOGGER DUMP =====\n";
     
@@ -270,6 +410,13 @@ void CrashLogger::saveToNVS() {
             prefs.putBytes("log_data", buffer, len);
             prefs.putUInt("log_boot", bootCount);
             prefs.putULong("log_time", millis());
+            
+            // Save actual timestamp if NTP is synchronized
+            time_t now = time(nullptr);
+            struct tm timeinfo;
+            if (localtime_r(&now, &timeinfo) && timeinfo.tm_year > (2016 - 1900)) {
+                prefs.putULong("log_timestamp", (unsigned long)now);
+            }
             
             free(buffer);
             Serial.printf("[CrashLogger] ✓ Saved %d bytes to NVS\n", len);

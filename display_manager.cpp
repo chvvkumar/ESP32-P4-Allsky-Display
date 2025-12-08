@@ -156,8 +156,8 @@ void DisplayManager::debugPrint(const char* message, uint16_t color) {
     debugY += DEBUG_LINE_HEIGHT;
     debugLineCount++;
     
-    // Scroll if we reach the bottom
-    if (debugY > displayHeight - 50 || debugLineCount > MAX_DEBUG_LINES) {
+    // Scroll if we reach the bottom (unless auto-scroll is disabled for WiFi setup)
+    if (!disableAutoScroll && (debugY > displayHeight - 50 || debugLineCount > MAX_DEBUG_LINES)) {
         // Clear screen and reset
         clearScreen();
         debugY = DEBUG_START_Y;
@@ -199,6 +199,10 @@ void DisplayManager::setFirstImageLoaded(bool loaded) {
 void DisplayManager::setDebugY(int y) {
     debugY = y;
     debugLineCount = 0;
+}
+
+void DisplayManager::setDisableAutoScroll(bool disable) {
+    disableAutoScroll = disable;
 }
 
 void DisplayManager::clearScreen(uint16_t color) {

@@ -15,6 +15,7 @@
 #include "task_retry_handler.h"
 #include "wifi_qr_code.h"
 #include "crash_logger.h"
+#include "command_interpreter.h"
 
 // Additional required libraries
 #include <HTTPClient.h>
@@ -32,8 +33,8 @@ size_t imageBufferSize = 0;
 // Image transformation variables
 float scaleX = DEFAULT_SCALE_X;
 float scaleY = DEFAULT_SCALE_Y;
-int16_t offsetX = DEFAULT_OFFSET_X;
-int16_t offsetY = DEFAULT_OFFSET_Y;
+int offsetX = DEFAULT_OFFSET_X;
+int offsetY = DEFAULT_OFFSET_Y;
 float rotationAngle = DEFAULT_ROTATION;
 
 // Dynamic configuration variables
@@ -100,12 +101,6 @@ unsigned long firstTapTime = 0;
 bool touchPressed = false;
 bool touchWasPressed = false;
 
-// Touch timing configuration
-const unsigned long TOUCH_DEBOUNCE_MS = 50;        // Minimum time between touch events
-const unsigned long DOUBLE_TAP_TIMEOUT_MS = 400;   // Maximum time between taps for double-tap
-const unsigned long MIN_TAP_DURATION_MS = 50;      // Minimum press duration for valid tap
-const unsigned long MAX_TAP_DURATION_MS = 2000;    // Maximum press duration for tap (vs hold)
-
 // Touch actions triggered flags
 bool touchTriggeredNextImage = false;
 bool touchTriggeredModeToggle = false;
@@ -120,7 +115,6 @@ int JPEGDraw(JPEGDRAW *pDraw);
 int JPEGDrawQR(JPEGDRAW *pDraw);
 int16_t displayWiFiQRCode();
 void downloadAndDisplayImage();
-void processSerialCommands();
 void renderFullImage();
 void loadCyclingConfiguration();
 void advanceToNextImage();
@@ -136,11 +130,12 @@ void handleDoubleTap();
 
 // Universal logging function - sends to Serial AND WebSocket console
 // Default parameter defined in logging.h
+// Note: broadcastLog() adds timestamps and severity prefixes automatically
 void logPrint(const char* message, LogSeverity severity) {
     Serial.print(message);
     // Log to crash logger (survives reboot)
     crashLogger.log(message);
-    // Send to WebSocket console clients with severity filtering
+    // Send to WebSocket console clients with severity filtering (adds timestamp + severity prefix)
     webConfig.broadcastLog(message, COLOR_WHITE, severity);
 }
 
@@ -154,24 +149,26 @@ void logPrintf(LogSeverity severity, const char* format, ...) {
     Serial.print(buffer);
     // Log to crash logger (survives reboot)
     crashLogger.log(buffer);
-    // Send to WebSocket console clients with severity filtering
+    // Send to WebSocket console clients with severity filtering (adds timestamp + severity prefix)
     webConfig.broadcastLog(buffer, COLOR_WHITE, severity);
 }
 
 // Debug output wrapper functions (also show on display)
+// Note: broadcastLog() adds timestamps and severity prefixes automatically
 void debugPrint(const char* message, uint16_t color) {
     displayManager.debugPrint(message, color);
+    
     // Log to crash logger (survives reboot)
     crashLogger.log(message);
     crashLogger.log("\n");
     
     // Intelligently detect severity from message content
-    LogSeverity severity = LOG_INFO;  // Default
+    LogSeverity severity = LOG_DEBUG;  // Default to DEBUG for debugPrint calls
     String msg = String(message);
     msg.toLowerCase();
     
-    if (msg.indexOf("debug:") >= 0 || msg.indexOf("trace") >= 0) {
-        severity = LOG_DEBUG;
+    if (msg.indexOf("info") >= 0 || msg.indexOf("✓") >= 0) {
+        severity = LOG_INFO;
     } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
         severity = LOG_ERROR;
     } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
@@ -180,7 +177,7 @@ void debugPrint(const char* message, uint16_t color) {
         severity = LOG_CRITICAL;
     }
     
-    // Send to WebSocket console clients with detected severity
+    // Send to WebSocket console clients with detected severity (broadcastLog adds timestamp)
     webConfig.broadcastLog(message, color, severity);
 }
 
@@ -192,17 +189,18 @@ void debugPrintf(uint16_t color, const char* format, ...) {
     va_end(args);
     
     displayManager.debugPrint(buffer, color);
+    
     // Log to crash logger (survives reboot)
     crashLogger.log(buffer);
     crashLogger.log("\n");
     
     // Intelligently detect severity from message content
-    LogSeverity severity = LOG_INFO;  // Default
+    LogSeverity severity = LOG_DEBUG;  // Default to DEBUG for debugPrintf calls
     String msg = String(buffer);
     msg.toLowerCase();
     
-    if (msg.indexOf("debug:") >= 0 || msg.indexOf("trace") >= 0) {
-        severity = LOG_DEBUG;
+    if (msg.indexOf("info") >= 0 || msg.indexOf("✓") >= 0) {
+        severity = LOG_INFO;
     } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
         severity = LOG_ERROR;
     } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
@@ -211,7 +209,7 @@ void debugPrintf(uint16_t color, const char* format, ...) {
         severity = LOG_CRITICAL;
     }
     
-    // Send to WebSocket console clients with detected severity
+    // Send to WebSocket console clients with detected severity (broadcastLog adds timestamp)
     webConfig.broadcastLog(buffer, color, severity);
 }
 
@@ -362,7 +360,13 @@ int16_t displayWiFiQRCode() {
                 
                 // Draw scaled QR code
                 displayManager.drawBitmap(qrX, qrY, scaledQR, scaledWidth, scaledHeight);
-                Serial.printf("DEBUG: Scaled QR code drawn at (%d, %d)\n", qrX, qrY);
+                
+                // Flush to ensure QR code is visible immediately
+                if (gfx) {
+                    gfx->flush();
+                }
+                
+                Serial.printf("DEBUG: Scaled QR code drawn and flushed at (%d, %d)\n", qrX, qrY);
                 
                 // Calculate where text should start (below QR code + small margin)
                 textStartY = qrY + scaledHeight + 15;
@@ -378,6 +382,12 @@ int16_t displayWiFiQRCode() {
                 }
                 
                 displayManager.drawBitmap(qrX, qrY, qrCodeBuffer, qrCodeWidth, qrCodeHeight);
+                
+                // Flush to ensure QR code is visible
+                if (gfx) {
+                    gfx->flush();
+                }
+                
                 textStartY = qrY + qrCodeHeight + 15;
             }
             
@@ -394,6 +404,12 @@ int16_t displayWiFiQRCode() {
             }
             
             displayManager.drawBitmap(qrX, qrY, qrCodeBuffer, qrCodeWidth, qrCodeHeight);
+            
+            // Flush to ensure QR code is visible
+            if (gfx) {
+                gfx->flush();
+            }
+            
             textStartY = qrY + qrCodeHeight + 15;
         }
         
@@ -440,8 +456,10 @@ void setup() {
     // Initialize configuration system first
     initializeConfiguration();
     
-    // Initialize system monitor
-    if (!systemMonitor.begin()) {
+    // Initialize system monitor with configured watchdog timeout
+    unsigned long watchdogTimeout = configStorage.getWatchdogTimeout();
+    Serial.printf("Initializing system monitor with watchdog timeout: %lu ms\n", watchdogTimeout);
+    if (!systemMonitor.begin(watchdogTimeout)) {
         Serial.println("CRITICAL: System monitor initialization failed!");
         while(1) delay(1000);
     }
@@ -545,16 +563,22 @@ void setup() {
     bool needsWiFiSetup = !configStorage.isWiFiProvisioned();
     
     if (!needsWiFiSetup) {
-        // Only show startup banner if WiFi is already configured
-        debugPrint("=== ESP32 Modular AllSky Display ===", COLOR_CYAN);
-        debugPrint("Display initialized!", COLOR_GREEN);
-        debugPrintf(COLOR_WHITE, "Display: %dx%d pixels", w, h);
-        debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
-        debugPrintf(COLOR_WHITE, "Free PSRAM: %d bytes", systemMonitor.getCurrentFreePsram());
+        // Show simplified startup banner centered on screen
+        // Set starting position lower to avoid cutoff at top
+        displayManager.setDebugY(150);  // Start at 150px from top (centered vertically)
+        
+        debugPrint("ESP32 AllSky Display", COLOR_CYAN);
+        debugPrint(" ", COLOR_WHITE);  // Spacing
+        debugPrint("Initializing...", COLOR_GREEN);
     }
     
     // Buffers already allocated before display init - just initialize PPA hardware acceleration
     ppaAccelerator.begin(w, h);
+    
+    if (!needsWiFiSetup) {
+        // Show hardware initialization status
+        debugPrint("Hardware ready", COLOR_GREEN);
+    }
     
     // Initialize brightness control
     displayManager.initBrightness();
@@ -577,6 +601,9 @@ void setup() {
             
             // Reset debug Y position to place text below QR code
             displayManager.setDebugY(textY);
+            
+            // Disable auto-scroll to prevent QR code from being cleared
+            displayManager.setDisableAutoScroll(true);
             
             // Show compact centered text instructions below QR code
             debugPrint(" ", COLOR_WHITE);  // Small space
@@ -604,13 +631,19 @@ void setup() {
                 debugPrint("Restarting device...", COLOR_YELLOW);
                 captivePortal.stop();
                 delay(2000);
+                crashLogger.saveBeforeReboot();
+                delay(100);
                 ESP.restart();
             } else {
                 debugPrint("Configuration timeout - continuing without WiFi", COLOR_RED);
                 captivePortal.stop();
+                // Re-enable auto-scroll after WiFi setup
+                displayManager.setDisableAutoScroll(false);
             }
         } else {
             debugPrint("ERROR: Failed to start captive portal", COLOR_RED);
+            // Re-enable auto-scroll
+            displayManager.setDisableAutoScroll(false);
         }
     }
     
@@ -621,6 +654,11 @@ void setup() {
     } else {
         // Try to connect to WiFi with watchdog protection
         systemMonitor.forceResetWatchdog();
+        
+        // CRITICAL: Allow WiFi hardware to fully initialize before connection attempt
+        // Without this delay, MAC address may show as 00:00:00:00:00:00 and connection fails
+        delay(500);
+        
         wifiManager.connectToWiFi();
         systemMonitor.forceResetWatchdog();  // Reset after WiFi connect attempt
         
@@ -631,9 +669,7 @@ void setup() {
     }
     
     // Initialize MQTT manager
-    if (!mqttManager.begin()) {
-        debugPrint("ERROR: MQTT initialization failed!", COLOR_RED);
-    }
+    mqttManager.begin();
     
     // Initialize OTA manager
     otaManager.begin();
@@ -641,12 +677,14 @@ void setup() {
     
     // Start web configuration server if WiFi is connected
     if (wifiManager.isConnected()) {
-        if (!webConfig.begin(8080)) {
-            debugPrint("ERROR: Web config server failed to start", COLOR_RED);
-        }
-        
-        // Initialize ArduinoOTA for network updates
+        webConfig.begin(8080);
         wifiManager.initOTA();
+        
+        if (!needsWiFiSetup) {
+            debugPrint(" ", COLOR_WHITE);
+            debugPrint("System Ready!", COLOR_GREEN);
+            debugPrintf(COLOR_CYAN, "IP: %s", WiFi.localIP().toString().c_str());
+        }
     }
     
     // Load cycling configuration after all modules are initialized
@@ -1045,11 +1083,17 @@ void downloadAndDisplayImage() {
     size_t size = http.getSize();
     
     Serial.printf("[Image] Content-Length: %d bytes\n", size);
-    Serial.printf("[Image] Source: Image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
-    debugPrintf(COLOR_WHITE, "Image %d/%d: %d bytes", currentImageIndex + 1, imageSourceCount, size);
+    if (cyclingEnabled && imageSourceCount > 1) {
+        Serial.printf("[Image] Source: Image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+        debugPrintf(COLOR_WHITE, "Image %d/%d: %d bytes", currentImageIndex + 1, imageSourceCount, size);
+    } else {
+        Serial.printf("[Image] Source: %s\n", currentImageURL);
+        debugPrintf(COLOR_WHITE, "Image: %d bytes", size);
+    }
     
     // Validate size before proceeding
     if (size <= 0) {
+        LOG_WARNING("[ImageDownload] Content-Length missing or zero - aborting download");
         Serial.println("[Image] ⚠ Content-Length missing or zero - will download until stream ends");
         Serial.printf("[Image] Buffer capacity: %d bytes\n", imageBufferSize);
         debugPrintf(COLOR_RED, "Invalid size: %d bytes", size);
@@ -1059,6 +1103,7 @@ void downloadAndDisplayImage() {
     }
     
     if (size >= imageBufferSize) {
+        LOG_ERROR_F("[ImageDownload] Image too large: %d bytes exceeds buffer capacity of %d bytes\n", size, imageBufferSize);
         Serial.printf("[Image] ✗ Image too large! %d bytes exceeds buffer %d bytes\n", size, imageBufferSize);
         debugPrintf(COLOR_RED, "Invalid size: %d bytes", size);
         http.end();
@@ -1078,7 +1123,7 @@ void downloadAndDisplayImage() {
     
     // Use configuration values for better consistency
     const size_t ULTRA_CHUNK_SIZE = 1024;  // 1KB chunks for good performance
-    const unsigned long DOWNLOAD_WATCHDOG_INTERVAL = 50;  // Reset every 50ms for more frequent resets
+
     const unsigned long NO_DATA_TIMEOUT = 5000;  // 5 seconds with no data before giving up (increased for slow connections)
     
     unsigned long downloadStartTime = millis();
@@ -1293,7 +1338,7 @@ void downloadAndDisplayImage() {
             unsigned long decodeStart = millis();
             
             // JPEG decode with timeout monitoring
-            const unsigned long DECODE_TIMEOUT = 5000;  // 5 second timeout for decode
+
             unsigned long decodeStartTime = millis();
             
             // Pause display during decode to prevent LCD underrun from memory contention
@@ -1315,8 +1360,13 @@ void downloadAndDisplayImage() {
                 
                 // Mark image as ready to display (but don't display yet - let loop handle it)
                 imageReadyToDisplay = true;
-                Serial.printf("[Image] Image %d/%d ready to display - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
-                debugPrintf(COLOR_GREEN, "Image %d/%d ready", currentImageIndex + 1, imageSourceCount);
+                if (cyclingEnabled && imageSourceCount > 1) {
+                    Serial.printf("[Image] Image %d/%d ready to display - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+                    debugPrintf(COLOR_GREEN, "Image %d/%d ready", currentImageIndex + 1, imageSourceCount);
+                } else {
+                    Serial.printf("[Image] Image ready to display - %s\n", currentImageURL);
+                    debugPrintf(COLOR_GREEN, "Image ready");
+                }
                 Serial.println("Image fully decoded and ready for display");
                 
                 // Mark first image as loaded (only once) - happens before actual display
@@ -1468,239 +1518,7 @@ String getCurrentImageURL() {
     return configStorage.getImageURL();
 }
 
-void processSerialCommands() {
-    if (Serial.available()) {
-        char command = Serial.read();
-        
-        switch (command) {
-            // Scaling commands
-            case '+':
-                scaleX = constrain(scaleX + SCALE_STEP, MIN_SCALE, MAX_SCALE);
-                scaleY = constrain(scaleY + SCALE_STEP, MIN_SCALE, MAX_SCALE);
-                configStorage.setImageScaleX(currentImageIndex, scaleX);
-                configStorage.setImageScaleY(currentImageIndex, scaleY);
-                configStorage.saveConfig();
-                renderFullImage();
-                Serial.printf("Scale both: %.1fx%.1f (saved for image %d)\n", scaleX, scaleY, currentImageIndex + 1);
-                break;
-            case '-':
-                scaleX = constrain(scaleX - SCALE_STEP, MIN_SCALE, MAX_SCALE);
-                scaleY = constrain(scaleY - SCALE_STEP, MIN_SCALE, MAX_SCALE);
-                configStorage.setImageScaleX(currentImageIndex, scaleX);
-                configStorage.setImageScaleY(currentImageIndex, scaleY);
-                configStorage.saveConfig();
-                renderFullImage();
-                Serial.printf("Scale both: %.1fx%.1f (saved for image %d)\n", scaleX, scaleY, currentImageIndex + 1);
-                break;
-                
-            // Movement commands
-            case 'W':
-            case 'w':
-                offsetY -= MOVE_STEP;
-                configStorage.setImageOffsetY(currentImageIndex, offsetY);
-                configStorage.saveConfig();
-                renderFullImage();
-                Serial.printf("Move up, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
-                break;
-            case 'S':
-            case 's':
-                offsetY += MOVE_STEP;
-                configStorage.setImageOffsetY(currentImageIndex, offsetY);
-                configStorage.saveConfig();
-                renderFullImage();
-                Serial.printf("Move down, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
-                break;
-            case 'A':
-            case 'a':
-                offsetX -= MOVE_STEP;
-                configStorage.setImageOffsetX(currentImageIndex, offsetX);
-                configStorage.saveConfig();
-                renderFullImage();
-                Serial.printf("Move left, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
-                break;
-            case 'D':
-            case 'd':
-                offsetX += MOVE_STEP;
-                configStorage.setImageOffsetX(currentImageIndex, offsetX);
-                configStorage.saveConfig();
-                renderFullImage();
-                Serial.printf("Move right, offset: %d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
-                break;
-                
-            // Rotation commands
-            case 'Q':
-            case 'q':
-                rotationAngle -= ROTATION_STEP;
-                if (rotationAngle < 0) rotationAngle += 360.0;
-                configStorage.setImageRotation(currentImageIndex, rotationAngle);
-                configStorage.saveConfig();
-                renderFullImage();
-                Serial.printf("Rotate CCW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
-                break;
-            case 'E':
-            case 'e':
-                rotationAngle += ROTATION_STEP;
-                if (rotationAngle >= 360.0) rotationAngle -= 360.0;
-                configStorage.setImageRotation(currentImageIndex, rotationAngle);
-                configStorage.saveConfig();
-                renderFullImage();
-                Serial.printf("Rotate CW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
-                break;
-                
-            // Next image command
-            case 'N':
-            case 'n':
-                if (cyclingEnabled && imageSourceCount > 1) {
-                    advanceToNextImage();
-                    lastCycleTime = millis(); // Reset cycle timer for fresh interval
-                    lastUpdate = 0; // Force immediate image download
-                    Serial.printf("Serial: Advancing to next image (image %d of %d)\n", currentImageIndex + 1, imageSourceCount);
-                } else {
-                    Serial.println("Serial: Cycling not enabled or only one source configured");
-                }
-                break;
-            
-            // Refresh current image
-            case 'F':
-            case 'f':
-                lastUpdate = 0; // Force immediate refresh
-                Serial.println("Serial: Forcing image refresh");
-                break;
-                
-            // Reset command
-            case 'R':
-            case 'r':
-                scaleX = DEFAULT_SCALE_X;
-                scaleY = DEFAULT_SCALE_Y;
-                offsetX = DEFAULT_OFFSET_X;
-                offsetY = DEFAULT_OFFSET_Y;
-                rotationAngle = DEFAULT_ROTATION;
-                configStorage.setImageScaleX(currentImageIndex, scaleX);
-                configStorage.setImageScaleY(currentImageIndex, scaleY);
-                configStorage.setImageOffsetX(currentImageIndex, offsetX);
-                configStorage.setImageOffsetY(currentImageIndex, offsetY);
-                configStorage.setImageRotation(currentImageIndex, rotationAngle);
-                configStorage.saveConfig();
-                renderFullImage();
-                Serial.printf("Reset all transformations (saved for image %d)\n", currentImageIndex + 1);
-                break;
-                
-            // Save current transform settings to config for this image
-            case 'V':
-            case 'v':
-                configStorage.setImageScaleX(currentImageIndex, scaleX);
-                configStorage.setImageScaleY(currentImageIndex, scaleY);
-                configStorage.setImageOffsetX(currentImageIndex, offsetX);
-                configStorage.setImageOffsetY(currentImageIndex, offsetY);
-                configStorage.setImageRotation(currentImageIndex, rotationAngle);
-                configStorage.saveConfig();
-                Serial.printf("Saved transform settings for image %d: scale=%.1fx%.1f, offset=%d,%d, rotation=%.0f°\n",
-                             currentImageIndex + 1, scaleX, scaleY, offsetX, offsetY, rotationAngle);
-                break;
-                
-            // Brightness commands
-            case 'L':
-            case 'l':
-                displayManager.setBrightness(min(displayManager.getBrightness() + 10, 100));
-                Serial.printf("Brightness up: %d%%\n", displayManager.getBrightness());
-                break;
-            case 'K':
-            case 'k':
-                displayManager.setBrightness(max(displayManager.getBrightness() - 10, 0));
-                Serial.printf("Brightness down: %d%%\n", displayManager.getBrightness());
-                break;
-                
-            // Reboot command
-            case 'B':
-            case 'b':
-                Serial.println("Rebooting device...");
-                delay(1000); // Give time for message to be sent
-                ESP.restart();
-                break;
-                
-            // Help command
-            case 'H':
-            case 'h':
-            case '?':
-                Serial.println("\n=== Image Control Commands ===");
-                Serial.println("Navigation:");
-                Serial.println("  N   : Next image (resets cycle timer)");
-                Serial.println("  F   : Force refresh current image");
-                Serial.println("Scaling:");
-                Serial.println("  +/- : Scale both axes");
-                Serial.println("Movement:");
-                Serial.println("  W/S : Move up/down");
-                Serial.println("  A/D : Move left/right");
-                Serial.println("Rotation:");
-                Serial.println("  Q/E : Rotate 90° CCW/CW");
-                Serial.println("Reset:");
-                Serial.println("  R   : Reset all transformations");
-                Serial.println("  V   : Save (persist) current transform settings for this image");
-                Serial.println("Brightness:");
-                Serial.println("  L/K : Brightness up/down");
-                Serial.println("System:");
-                Serial.println("  B   : Reboot device");
-                Serial.println("  M   : Memory info");
-                Serial.println("  I   : Network info");
-                Serial.println("  P   : PPA info");
-                Serial.println("  T   : MQTT info");
-                Serial.println("  X   : Web server status/restart");
-                Serial.println("Touch:");
-                Serial.println("  Single tap : Next image");
-                Serial.println("  Double tap : Toggle cycling/single refresh mode");
-                Serial.println("Help:");
-                Serial.println("  H/? : Show this help");
-                break;
-                
-            // System info commands
-            case 'M':
-            case 'm':
-                systemMonitor.printMemoryStatus();
-                break;
-            case 'I':
-            case 'i':
-                wifiManager.printConnectionInfo();
-                break;
-            case 'P':
-            case 'p':
-                ppaAccelerator.printStatus();
-                break;
-            case 'T':
-            case 't':
-                mqttManager.printConnectionInfo();
-                break;
-            case 'X':
-            case 'x':
-                // Web server status and restart
-                Serial.println("\n=== Web Server Status ===");
-                Serial.printf("WiFi connected: %s\n", wifiManager.isConnected() ? "YES" : "NO");
-                if (wifiManager.isConnected()) {
-                    Serial.printf("IP Address: %s\n", WiFi.localIP().toString().c_str());
-                }
-                Serial.printf("Web server running: %s\n", webConfig.isRunning() ? "YES" : "NO");
-                
-                // Try to restart web server
-                if (wifiManager.isConnected()) {
-                    Serial.println("Attempting to restart web server...");
-                    webConfig.stop();
-                    delay(500);
-                    if (webConfig.begin(8080)) {
-                        Serial.printf("Web server restarted successfully at: http://%s:8080\n", WiFi.localIP().toString().c_str());
-                    } else {
-                        Serial.println("ERROR: Failed to restart web server");
-                    }
-                } else {
-                    Serial.println("Cannot start web server - WiFi not connected");
-                }
-                break;
-        }
-        
-        // Clear any remaining characters
-        while (Serial.available()) {
-            Serial.read();
-        }
-    }
-}
+
 
 void loop() {
     // Force watchdog reset at start of each loop iteration
@@ -1803,7 +1621,7 @@ void loop() {
     }
     
     // Process serial commands for image control
-    processSerialCommands();
+    commandInterpreter.processCommands();
     systemMonitor.forceResetWatchdog();
     
     // Update touch state and process gestures
@@ -1906,7 +1724,7 @@ void loop() {
             
             // Wrap download in timeout protection with absolute timeout
             unsigned long downloadStartTime = millis();
-            const unsigned long ABSOLUTE_DOWNLOAD_TIMEOUT = 50000; // 50 second absolute timeout (increased for slow connections)
+
             
             // Create a flag to track download completion
             bool downloadCompleted = false;
@@ -1973,8 +1791,13 @@ void loop() {
         systemMonitor.forceResetWatchdog();
         
         // Now render the new image to display (single seamless update, no clearing artifacts)
-        Serial.printf("[Image] Rendering image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
-        debugPrintf(COLOR_GREEN, "Rendering image %d/%d", currentImageIndex + 1, imageSourceCount);
+        if (cyclingEnabled && imageSourceCount > 1) {
+            Serial.printf("[Image] Rendering image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+            debugPrintf(COLOR_GREEN, "Rendering image %d/%d", currentImageIndex + 1, imageSourceCount);
+        } else {
+            Serial.printf("[Image] Rendering image - %s\n", currentImageURL);
+            debugPrintf(COLOR_GREEN, "Rendering image");
+        }
         renderFullImage();
         systemMonitor.forceResetWatchdog();
         

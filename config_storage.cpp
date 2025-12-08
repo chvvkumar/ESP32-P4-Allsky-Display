@@ -81,6 +81,11 @@ void ConfigStorage::setDefaults() {
     
     // Logging defaults
     config.minLogSeverity = DEFAULT_LOG_LEVEL;
+    
+    // Time settings
+    config.ntpServer = "pool.ntp.org";
+    config.timezone = "CST6CDT,M3.2.0,M11.1.0";  // US Central Time by default
+    config.ntpEnabled = true;
 }
 
 void ConfigStorage::loadConfig() {
@@ -147,6 +152,11 @@ void ConfigStorage::loadConfig() {
         
         // Load logging settings
         config.minLogSeverity = preferences.getInt("log_min_sev", config.minLogSeverity);
+        
+        // Load time settings
+        config.ntpServer = preferences.getString("ntp_server", config.ntpServer);
+        config.timezone = preferences.getString("timezone", config.timezone);
+        config.ntpEnabled = preferences.getBool("ntp_enabled", config.ntpEnabled);
     }
     
     preferences.end();
@@ -215,6 +225,11 @@ void ConfigStorage::saveConfig() {
     
     // Save logging settings
     preferences.putInt("log_min_sev", config.minLogSeverity);
+    
+    // Save time settings
+    preferences.putString("ntp_server", config.ntpServer);
+    preferences.putString("timezone", config.timezone);
+    preferences.putBool("ntp_enabled", config.ntpEnabled);
     
     preferences.end();
 }
@@ -543,4 +558,28 @@ void ConfigStorage::setMinLogSeverity(int severity) {
 
 int ConfigStorage::getMinLogSeverity() {
     return config.minLogSeverity;
+}
+
+void ConfigStorage::setNTPServer(const String& server) {
+    config.ntpServer = server;
+}
+
+String ConfigStorage::getNTPServer() {
+    return config.ntpServer;
+}
+
+void ConfigStorage::setTimezone(const String& tz) {
+    config.timezone = tz;
+}
+
+String ConfigStorage::getTimezone() {
+    return config.timezone;
+}
+
+void ConfigStorage::setNTPEnabled(bool enabled) {
+    config.ntpEnabled = enabled;
+}
+
+bool ConfigStorage::getNTPEnabled() {
+    return config.ntpEnabled;
 }
