@@ -173,7 +173,7 @@ void WebConfig::handleRoot() {
     LOG_DEBUG("[WebServer] Dashboard page accessed");
     String html = generateHeader("Dashboard");
     html += generateNavigation("dashboard");
-    html += generateStatusPage();
+    html += generateMainPage();
     html += generateFooter();
     sendResponse(200, "text/html", html);
 }

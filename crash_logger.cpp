@@ -2,6 +2,7 @@
 #include "build_info.h"
 #include <stdarg.h>
 #include <esp_system.h>
+#include <rom/rtc.h>
 
 // Static RTC memory (survives reboot but not power cycle)
 RTC_DATA_ATTR char CrashLogger::rtcLogBuffer[RTC_BUFFER_SIZE] = {0};
@@ -45,6 +46,30 @@ void CrashLogger::begin() {
     
     initialized = true;
     
+    // Check reset reason to detect crashes
+    esp_reset_reason_t reset_reason = esp_reset_reason();
+    bool wasCrash = false;
+    
+    switch (reset_reason) {
+        case ESP_RST_PANIC:
+        case ESP_RST_INT_WDT:
+        case ESP_RST_TASK_WDT:
+        case ESP_RST_WDT:
+            wasCrash = true;
+            crashMarker = 0xDEADBEEF;  // Mark as crash
+            break;
+        case ESP_RST_POWERON:
+        case ESP_RST_SW:
+        case ESP_RST_SDIO:
+        case ESP_RST_BROWNOUT:
+        case ESP_RST_DEEPSLEEP:
+        case ESP_RST_USB:
+        case ESP_RST_JTAG:
+        case ESP_RST_UNKNOWN:
+        default:
+            break;
+    }
+    
     // Log boot event with timestamp
     char bootMsg[256];
     time_t now = time(nullptr);
@@ -61,8 +86,27 @@ void CrashLogger::begin() {
     log(bootMsg);
     
     // Check for crash
-    if (crashMarker != 0) {
-        log("[CrashLogger] !!! PREVIOUS BOOT WAS A CRASH !!!\n");
+    if (crashMarker != 0 || wasCrash) {
+        const char* resetReasonStr = "UNKNOWN";
+        switch (reset_reason) {
+            case ESP_RST_POWERON: resetReasonStr = "POWERON"; break;
+            case ESP_RST_SW: resetReasonStr = "SOFTWARE"; break;
+            case ESP_RST_PANIC: resetReasonStr = "PANIC/EXCEPTION"; break;
+            case ESP_RST_INT_WDT: resetReasonStr = "INTERRUPT_WATCHDOG"; break;
+            case ESP_RST_TASK_WDT: resetReasonStr = "TASK_WATCHDOG"; break;
+            case ESP_RST_WDT: resetReasonStr = "WATCHDOG"; break;
+            case ESP_RST_DEEPSLEEP: resetReasonStr = "DEEPSLEEP"; break;
+            case ESP_RST_BROWNOUT: resetReasonStr = "BROWNOUT"; break;
+            case ESP_RST_SDIO: resetReasonStr = "SDIO"; break;
+            case ESP_RST_USB: resetReasonStr = "USB"; break;
+            case ESP_RST_JTAG: resetReasonStr = "JTAG"; break;
+            default: resetReasonStr = "UNKNOWN"; break;
+        }
+        
+        char crashMsg[256];
+        snprintf(crashMsg, sizeof(crashMsg), 
+                 "[CrashLogger] !!! CRASH DETECTED !!! Reset reason: %s\n", resetReasonStr);
+        log(crashMsg);
         
         // Save crash logs to NVS immediately
         saveToNVS();
@@ -70,7 +114,7 @@ void CrashLogger::begin() {
         // Clear crash marker
         crashMarker = 0;
         
-        Serial.println("[CrashLogger] Crash detected - logs preserved in RTC and NVS");
+        Serial.printf("[CrashLogger] Crash detected - Reset reason: %s - Logs preserved\n", resetReasonStr);
     } else {
         log("[CrashLogger] Normal boot\n");
         // Log firmware version on normal boot

@@ -614,6 +614,8 @@ void setup() {
                 debugPrint("Restarting device...", COLOR_YELLOW);
                 captivePortal.stop();
                 delay(2000);
+                crashLogger.saveBeforeReboot();
+                delay(100);
                 ESP.restart();
             } else {
                 debugPrint("Configuration timeout - continuing without WiFi", COLOR_RED);
@@ -1643,6 +1645,8 @@ void processSerialCommands() {
             case 'b':
                 LOG_WARNING("[Serial] Device reboot requested via serial command");
                 delay(1000); // Give time for message to be sent
+                crashLogger.saveBeforeReboot();
+                delay(100);
                 ESP.restart();
                 break;
                 
