@@ -5,7 +5,7 @@
 // Global instance
 DisplayManager displayManager;
 
-DisplayManager::DisplayManager() :
+DisplayManager::DisplayManager() : 
     dsipanel(nullptr),
     gfx(nullptr),
     displayWidth(0),
@@ -14,9 +14,10 @@ DisplayManager::DisplayManager() :
     brightnessInitialized(false),
     debugY(DEBUG_START_Y),
     debugLineCount(0),
-    firstImageLoaded(false)
-{
-}
+    firstImageLoaded(false),
+    otaScreenInitialized(false),
+    lastOTAPercent(255)
+{}
 
 DisplayManager::~DisplayManager() {
     cleanup();
@@ -318,4 +319,86 @@ void DisplayManager::drawOverlayMessage(const char* message, int x, int y, uint1
 void DisplayManager::clearStatusOverlay() {
     // Overlay is cleared by redrawing the last image
     // This is done by calling renderFullImage() from the main loop
+}
+
+void DisplayManager::showOTAProgress(const char* title, uint8_t percent, const char* message) {
+    if (!gfx) return;
+    
+    // Only draw the screen once at the start
+    if (!otaScreenInitialized) {
+        // Calculate center positions
+        int centerX = displayWidth / 2;
+        int centerY = displayHeight / 2;
+        
+        int16_t x1, y1;
+        uint16_t w, h;
+        
+        // Clear screen with dark background
+        clearScreen(0x1082); // Dark blue background
+        
+        // Draw title
+        gfx->setTextSize(4);
+        gfx->setTextColor(COLOR_WHITE);
+        const char* mainMsg = "OTA Update";
+        gfx->getTextBounds(mainMsg, 0, 0, &x1, &y1, &w, &h);
+        gfx->setCursor(centerX - w/2, centerY - 60);
+        gfx->println(mainMsg);
+        
+        // Draw in progress message
+        gfx->setTextSize(3);
+        gfx->setTextColor(COLOR_CYAN);
+        const char* statusMsg = "In Progress...";
+        gfx->getTextBounds(statusMsg, 0, 0, &x1, &y1, &w, &h);
+        gfx->setCursor(centerX - w/2, centerY + 20);
+        gfx->println(statusMsg);
+        
+        // Draw warning message
+        gfx->setTextSize(2);
+        gfx->setTextColor(COLOR_RED);
+        const char* warning = "Do not power off device";
+        gfx->getTextBounds(warning, 0, 0, &x1, &y1, &w, &h);
+        gfx->setCursor(centerX - w/2, centerY + 100);
+        gfx->println(warning);
+        
+        // Flush all drawing operations to screen at once
+        if (gfx) {
+            gfx->flush();
+        }
+        
+        otaScreenInitialized = true;
+    }
+    
+    // Special handling for completion or error
+    if (percent == 100 && !otaScreenInitialized) {
+        int centerX = displayWidth / 2;
+        int centerY = displayHeight / 2;
+        int16_t x1, y1;
+        uint16_t w, h;
+        
+        clearScreen(0x1082);
+        
+        gfx->setTextSize(4);
+        gfx->setTextColor(COLOR_GREEN);
+        const char* completeMsg = "OTA Complete!";
+        gfx->getTextBounds(completeMsg, 0, 0, &x1, &y1, &w, &h);
+        gfx->setCursor(centerX - w/2, centerY - 30);
+        gfx->println(completeMsg);
+        
+        gfx->setTextSize(3);
+        gfx->setTextColor(COLOR_WHITE);
+        const char* rebootMsg = "Rebooting...";
+        gfx->getTextBounds(rebootMsg, 0, 0, &x1, &y1, &w, &h);
+        gfx->setCursor(centerX - w/2, centerY + 30);
+        gfx->println(rebootMsg);
+        
+        // Flush completion screen to display
+        if (gfx) {
+            gfx->flush();
+        }
+    }
+    
+    // Reset screen initialized flag when OTA completes (100%)
+    if (percent == 100) {
+        otaScreenInitialized = false;
+    }
 }

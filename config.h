@@ -5,12 +5,31 @@
 #include <Arduino.h>
 
 // =============================================================================
+// LOG SEVERITY LEVELS
+// =============================================================================
+
+enum LogSeverity {
+    LOG_DEBUG = 0,      // Verbose debugging information
+    LOG_INFO = 1,       // General informational messages
+    LOG_WARNING = 2,    // Warning messages (non-critical issues)
+    LOG_ERROR = 3,      // Error messages (failures, but system continues)
+    LOG_CRITICAL = 4    // Critical errors (system instability)
+};
+
+// Default log level for WebSocket console filtering
+#define DEFAULT_LOG_LEVEL LOG_DEBUG  // Show all messages by default
+
+// =============================================================================
 // SYSTEM CONFIGURATION
 // =============================================================================
 
 // Memory allocation sizes
+// NOTE: These values automatically control PPA hardware accelerator buffer sizes:
+//   - PPA source buffer = FULL_IMAGE_BUFFER_SIZE
+//   - PPA destination buffer = display_size * SCALED_BUFFER_MULTIPLIER * 2
+//   Changing these values will automatically adjust all dependent allocations
 #define IMAGE_BUFFER_MULTIPLIER 1        // Display size multiplier for image buffer
-#define FULL_IMAGE_BUFFER_SIZE (1024 * 1024)  // 1MB for full image buffer (512x512 max image at 16-bit)
+#define FULL_IMAGE_BUFFER_SIZE (4 * 1024 * 1024)  // 4MB for full image buffer (1448x1448 max image at RGB565)
 #define SCALED_BUFFER_MULTIPLIER 4       // 4x display size to handle large scale factors
 
 // System timing intervals (milliseconds)
@@ -80,8 +99,14 @@ extern const bool DEFAULT_RANDOM_ORDER;
 #define SCALE_STEP 0.1f                  // Scale increment/decrement
 #define MOVE_STEP 10                     // Movement step in pixels
 #define MIN_SCALE 0.1f                   // Minimum scale factor
-#define MAX_SCALE 3.0f                   // Maximum scale factor
+// MAX_SCALE calculated dynamically from SCALED_BUFFER_MULTIPLIER to prevent buffer overflow
+// Formula: sqrt(SCALED_BUFFER_MULTIPLIER) gives max scale before exceeding buffer
+// Example: SCALED_BUFFER_MULTIPLIER=4 allows 2.0x scale (4x pixels), =9 allows 3.0x, etc.
+#define MAX_SCALE (sqrtf((float)SCALED_BUFFER_MULTIPLIER))  // Maximum scale factor (dynamic)
 #define ROTATION_STEP 90.0f              // Rotation increment in degrees
+
+// Helper macros for buffer size calculations
+#define MAX_IMAGE_DIMENSION (int)(sqrtf(FULL_IMAGE_BUFFER_SIZE / 2))  // Max width or height (RGB565 = 2 bytes/pixel)
 
 // =============================================================================
 // DISPLAY CONFIGURATION
@@ -121,7 +146,7 @@ extern const bool DEFAULT_RANDOM_ORDER;
 // WATCHDOG CONFIGURATION
 // =============================================================================
 
-#define WATCHDOG_TIMEOUT_MS 15000        // 15 second timeout for faster recovery
+#define WATCHDOG_TIMEOUT_MS 30000        // 30 second timeout to handle slow downloads
 #define WATCHDOG_IDLE_CORE_MASK 0        // Don't monitor idle tasks
 #define WATCHDOG_TRIGGER_PANIC false     // Don't panic on timeout, just reset
 
@@ -134,8 +159,8 @@ extern const bool DEFAULT_RANDOM_ORDER;
 #define DNS_RESOLUTION_TIMEOUT 5000      // 5 second DNS timeout
 #define NETWORK_CHECK_TIMEOUT 3000       // 3 second network connectivity check
 #define HTTP_BEGIN_TIMEOUT 5000          // 5 second timeout for http.begin()
-#define DOWNLOAD_CHUNK_TIMEOUT 2000      // 2 second timeout per download chunk
-#define TOTAL_DOWNLOAD_TIMEOUT 15000     // 15 second total download timeout
+#define DOWNLOAD_CHUNK_TIMEOUT 8000      // 8 second timeout per download chunk (for larger 4MB images)
+#define TOTAL_DOWNLOAD_TIMEOUT 90000     // 90 second total download timeout (for larger 4MB images)
 
 // =============================================================================
 // CONFIGURATION FUNCTIONS

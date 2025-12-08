@@ -129,6 +129,10 @@ public:
     // WiFi provisioning status
     bool isWiFiProvisioned();
     void setWiFiProvisioned(bool provisioned);
+    
+    // Log severity filtering
+    void setMinLogSeverity(int severity);
+    int getMinLogSeverity();
 
 private:
     Preferences preferences;
@@ -195,6 +199,9 @@ private:
         unsigned long watchdogTimeout;
         size_t criticalHeapThreshold;
         size_t criticalPSRAMThreshold;
+        
+        // Logging settings
+        int minLogSeverity;  // Minimum severity level for WebSocket console
     } config;
     
     void setDefaults();

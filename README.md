@@ -1,6 +1,7 @@
 # ESP32-P4 AllSky Display
 
-Transform your ESP32-P4 display into a powerful all-sky camera viewer with multi-image cycling, hardware acceleration, and seamless Home Assistant integration.
+
+Transform your ESP32-P4 display into a all-sky camera viewer with multi-image cycling, hardware acceleration, and seamless Home Assistant integration.
 
 <img src="images/display.jpg" alt="Display in Action" width="600">
 
@@ -24,11 +25,14 @@ Transform your ESP32-P4 display into a powerful all-sky camera viewer with multi
 ![Flash Usage](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/badges/.github/badges/flash-usage.json&query=$.message&label=Flash&labelColor=1a1a2e&color=16537e)
 ![RAM Usage](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/badges/.github/badges/ram-usage.json&query=$.message&label=RAM&labelColor=1a1a2e&color=16537e)
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/chvvkumar/ESP32-P4-Allsky-Display)
+
 ## ✨ Features
 
 ### Core Functionality
 - **Multi-Image Display** - Cycle through up to 10 image sources automatically
-- **Hardware Accelerated** - ESP32-P4 PPA for fast scaling and rotation
+- **Hardware Accelerated** - ESP32-P4 PPA for fast scaling and rotation (385-507ms render time)
+- **High Resolution Support** - Up to 1448×1448 pixel images with 2× scaling capability
 - **Per-Image Transforms** - Individual scale, offset, and rotation settings
 - **Touch Controls** - Tap to navigate, double-tap to toggle modes
 - **Easy Setup** - Captive portal WiFi configuration with QR code
@@ -117,11 +121,27 @@ Modern, responsive configuration portal at `http://[device-ip]:8080/`
 
 **Configuration Pages:**
 - **Home** - System status and quick actions
+- **Console** - Real-time serial output monitoring over WiFi
 - **WiFi** - Network settings
 - **MQTT** - Home Assistant integration
 - **Images** - Multi-image sources (up to 10)
 - **Display** - Brightness and transforms
 - **Advanced** - Intervals and thresholds
+
+### Remote Serial Monitoring
+
+**WebSocket Console:** Access `http://[device-ip]:8080/console` to view real-time serial output over WiFi
+
+<img src="images/config-console.png" alt="WebSocket Console Interface" width="600">
+
+**Features:**
+- No USB connection required
+- Real-time log streaming via WebSocket (port 81)
+- Auto-scroll, message counter, log filtering
+- Download logs to file
+- Connect/disconnect on demand
+
+**Use Cases:** Monitor debug output remotely, troubleshoot network issues, verify system behavior
 
 ### OTA Updates
 
@@ -142,9 +162,25 @@ Wireless firmware updates without USB cable - see detailed [OTA_GUIDE.md](OTA_GU
 
 **Entities:** Light (brightness), Switches (cycling, random), Numbers (transforms), Select (image picker), Buttons (actions), Sensors (WiFi, memory, uptime)
 
-## 📷 AllSky Image Optimization
+## 📷 Image Size & Resolution Limits
 
-**⚠️ Important:** Resize images to ≤1MB to prevent crashes. Use 720×720 (4") or 800×800 (3.4") dimensions.
+### Supported Image Sizes
+
+| Configuration | Max Image Dimensions | Max File Size | Buffer Size | Recommended Use |
+|--------------|---------------------|---------------|-------------|-----------------|
+| **Current (Default)** | **1448×1448 pixels** | **~4MB** | 4MB | High-resolution AllSky images |
+| Conservative | 1024×1024 pixels | ~2MB | 2MB | Standard quality |
+| Legacy | 512×512 pixels | ~512KB | 1MB | Low memory systems |
+
+**Current Setup:** The firmware is configured to support images up to **1448×1448 pixels** with hardware-accelerated scaling up to **2.0×** (1600×1600 output).
+
+**Scale Limits:** Maximum scale factor is automatically calculated as `sqrt(buffer_multiplier)`. With the default 4× buffer multiplier, you can scale images up to 2.0× their original size.
+
+### AllSky Image Optimization
+
+**Recommended Dimensions:**
+- 3.4" display (800×800): Use **800×800 to 1200×1200** source images
+- 4.0" display (720×720): Use **720×720 to 1200×1200** source images
 
 **Quick Setup Script:**
 
@@ -172,14 +208,15 @@ mkdir -p "${OUTPUT_DIR}"
 ### Serial Commands (9600 baud)
 
 ```
-Scale & Transform:        Navigation:           System:
-+/-  : Scale ±0.1         N : Next image        B : Reboot
-WASD : Move 10px          R : Refresh           C : Clear config
-QE   : Rotate 90°         T : Toggle cycling    F : Factory reset
+Navigation:               Scale & Transform:    Display:
+N : Next image (reset)    +/-  : Scale ±0.1     L/K  : Brightness ±10%
+F : Refresh current       WASD : Move 10px      X    : Reset transforms
+T : Toggle cycling        QE   : Rotate 90°     
+                          R    : Reset all
 
-Display:                  Info:
-L/K  : Brightness ±10%    I : Status            H/? : Help
-X    : Reset transforms   M : Memory            V : Version
+System:                   Info:
+B : Reboot                I : Status            H/? : Help
+                          M : Memory            V : Version
 ```
 
 ### Configuration Screenshots
@@ -191,13 +228,17 @@ X    : Reset transforms   M : Memory            V : Version
 | Issue | Solution |
 |-------|----------|
 | **Won't compile** | Enable PSRAM in Arduino IDE, verify ESP32 core 3.3.4+ |
-| **Out of memory** | Resize images to ≤1MB, monitor PSRAM in serial output |
+| **Out of memory** | Images up to 4MB supported; check free PSRAM in `/api/info` |
 | **WiFi won't connect** | Check credentials, verify 2.4GHz network, check serial output |
 | **Touch not working** | Verify GT911 I2C connections, check debug output |
 | **Images won't load** | Verify URL accessible, check image size, use resized images |
 | **OTA fails** | See [OTA_GUIDE.md](OTA_GUIDE.md) troubleshooting section |
 
-**Debug Tools:** Serial monitor (9600 baud), web interface status page, memory monitoring
+**Debug Tools:** 
+- Serial monitor (9600 baud) - Comprehensive debug output for all operations
+- WebSocket console at `/console` - Real-time remote monitoring without USB
+- Web interface status page - System health and metrics
+- Detailed logging for: WiFi connections, MQTT operations, HTTP downloads, image processing, memory allocations
 
 ## 🤝 Contributing
 

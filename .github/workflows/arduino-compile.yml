@@ -182,10 +182,23 @@ jobs:
           arduino-cli lib install "ElegantOTA@3.1.7"
         fi
         
+        # Check and install WebSockets 2.7.1
+        if [ -d ~/Arduino/libraries/WebSockets ]; then
+          INSTALLED_VERSION=$(arduino-cli lib list | grep "WebSockets" | awk '{print $2}')
+          if [ "$INSTALLED_VERSION" = "2.7.1" ]; then
+            echo "✅ WebSockets 2.7.1 already installed (cached)"
+          else
+            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 2.7.1"
+            arduino-cli lib install "WebSockets@2.7.1"
+          fi
+        else
+          arduino-cli lib install "WebSockets@2.7.1"
+        fi
+        
         # Verify installed versions
         echo ""
         echo "📦 Final installed library versions:"
-        arduino-cli lib list | grep -E "GFX Library|JPEGDEC|PubSubClient|ElegantOTA"
+        arduino-cli lib list | grep -E "GFX Library|JPEGDEC|PubSubClient|ElegantOTA|WebSockets"
     
     - name: Patch GFX Library for ESP32-P4 compatibility
       run: |

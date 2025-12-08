@@ -1,11 +1,16 @@
 #include "web_config.h"
 #include "web_config_html.h"
 #include "system_monitor.h"
+#include "config_storage.h"
 #include "network_manager.h"
+#include "crash_logger.h"
 #include "mqtt_manager.h"
 #include "display_manager.h"
 #include "ota_manager.h"
 #include <Update.h>
+
+// External global instances
+extern CrashLogger crashLogger;
 
 // System monitor is needed for watchdog resets during OTA
 
@@ -109,7 +114,11 @@ void WebConfig::handleSaveConfig() {
     
     // Handle checkbox parameters - HTML forms only send checked checkbox values
     // If a checkbox parameter is not present, it means the checkbox was unchecked
-    configStorage.setCyclingEnabled(server->hasArg("cycling_enabled"));
+    bool wasCycling = configStorage.getCyclingEnabled();
+    bool nowCycling = server->hasArg("cycling_enabled");
+    bool modeChanged = (wasCycling != nowCycling);
+    
+    configStorage.setCyclingEnabled(nowCycling);
     configStorage.setRandomOrder(server->hasArg("random_order"));
     configStorage.setBrightnessAutoMode(server->hasArg("brightness_auto_mode"));
     configStorage.setHADiscoveryEnabled(server->hasArg("ha_discovery_enabled"));
@@ -129,6 +138,29 @@ void WebConfig::handleSaveConfig() {
         applyImageSettings();
     }
     
+    // Switch images immediately when mode changes
+    if (modeChanged) {
+        extern void advanceToNextImage();
+        extern void downloadAndDisplayImage();
+        extern unsigned long lastUpdate;
+        extern unsigned long lastCycleTime;
+        
+        if (nowCycling) {
+            // Switched to multi-image mode: reset to first image (index 0)
+            Serial.println("Mode switched to multi-image: resetting to first source");
+            configStorage.setCurrentImageIndex(0);
+            configStorage.saveConfig();
+            lastCycleTime = millis();
+        } else {
+            // Switched to single-image mode: load the single image URL
+            Serial.println("Mode switched to single-image: loading primary URL");
+        }
+        
+        // Force immediate download
+        lastUpdate = 0;
+        downloadAndDisplayImage();
+    }
+    
     // Prepare response message
     String message = "Configuration saved successfully";
     if (needsRestart) message += " (restart required for network/MQTT changes)";
@@ -145,6 +177,7 @@ void WebConfig::handleRestart() {
     displayManager.debugPrint("Device restart requested...", COLOR_YELLOW);
     
     delay(500);
+    crashLogger.saveBeforeReboot();
     ESP.restart();
 }
 
@@ -202,9 +235,13 @@ void WebConfig::handleNextImage() {
     extern void advanceToNextImage();
     extern void updateCyclingVariables();
     extern void downloadAndDisplayImage();
+    extern unsigned long lastUpdate;
+    extern unsigned long lastCycleTime;
     
     updateCyclingVariables();
     advanceToNextImage();
+    lastCycleTime = millis(); // Reset cycle timer for fresh interval
+    lastUpdate = 0; // Force immediate image download
     downloadAndDisplayImage();
     
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Switched to next image and refreshed display\"}");
@@ -331,7 +368,38 @@ void WebConfig::handleFactoryReset() {
     displayManager.debugPrint("WiFi setup portal will run on restart", COLOR_CYAN);
     
     delay(500);
+    crashLogger.saveBeforeReboot();
     ESP.restart();
+}
+
+void WebConfig::handleSetLogSeverity() {
+    if (!server->hasArg("severity")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing severity parameter\"}");
+        return;
+    }
+    
+    int severity = server->arg("severity").toInt();
+    
+    // Validate severity range (0=DEBUG, 1=INFO, 2=WARNING, 3=ERROR, 4=CRITICAL)
+    if (severity < 0 || severity > 4) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid severity level. Must be 0-4\"}");
+        return;
+    }
+    
+    // Update configuration
+    configStorage.setMinLogSeverity(severity);
+    configStorage.saveConfig();
+    
+    const char* severityNames[] = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"};
+    String json = "{";
+    json += "\"status\":\"success\",";
+    json += "\"message\":\"Log severity filter updated to " + String(severityNames[severity]) + "\",";
+    json += "\"severity\":" + String(severity);
+    json += "}";
+    
+    sendResponse(200, "application/json", json);
+    
+    Serial.printf("[WebConfig] Log severity filter updated to %s (%d)\n", severityNames[severity], severity);
 }
 
 void WebConfig::applyImageSettings() {

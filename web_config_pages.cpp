@@ -245,84 +245,187 @@ String WebConfig::generateMQTTPage() {
     return html;
 }
 
-String WebConfig::generateImageSourcesPage() {
+String WebConfig::generateImagePage() {
     String html = "<div class='main'><div class='container'>";
-    html += "<form id='cyclingForm'><div class='card'><h2>🔄 Image Cycling Configuration</h2>";
-    html += "<p style='color:#94a3b8;margin-bottom:1rem;font-size:0.9rem;background:rgba(56,189,248,0.1);padding:0.75rem;border-radius:6px;border-left:4px solid #38bdf8'>ℹ️ Maximum supported image size: <strong>724x724 pixels</strong> (1MB buffer limit). Images larger than this will fail to display.</p>";
-    html += "<div class='form-group'><div style='display:flex;align-items:center;margin-bottom:1rem'>";
-    html += "<input type='checkbox' id='cycling_enabled' name='cycling_enabled' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px' " + String(configStorage.getCyclingEnabled() ? "checked" : "") + ">";
-    html += "<label for='cycling_enabled' style='margin-bottom:0;cursor:pointer;font-size:1rem'>Enable automatic cycling through multiple image sources</label></div></div>";
-    html += "<div class='grid' style='margin-bottom:1rem'>";
-    html += "<div class='form-group'><label for='cycle_interval'>Cycle Interval (seconds)</label>";
-    html += "<input type='number' id='cycle_interval' name='cycle_interval' class='form-control' value='" + String(configStorage.getCycleInterval() / 1000) + "' min='10' max='3600'></div>";
-    html += "<div class='form-group'><div style='display:flex;align-items:center;height:100%'>";
-    html += "<input type='checkbox' id='random_order' name='random_order' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px' " + String(configStorage.getRandomOrder() ? "checked" : "") + ">";
-    html += "<label for='random_order' style='margin-bottom:0;cursor:pointer'>Randomize image order</label></div></div></div>";
-    html += "<button type='submit' class='btn btn-primary'>💾 Save Cycling Settings</button></div></form>";
     
-    html += "<div class='card'><h2>📋 Image Sources & Transformations</h2><div id='imageSourcesList'>";
+    // Mode Selection Card
+    html += "<div class='card'><h2>🖼️ Image Configuration</h2>";
+    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1.5rem'>Configure single image display or cycle through multiple sources</p>";
+    
+    // Radio button mode selector
+    html += "<form id='imageForm'>";
+    html += "<div style='display:flex;gap:1.25rem;margin-bottom:1.5rem;padding:1rem;background:#1e293b;border-radius:8px'>";
+    bool isCycling = configStorage.getCyclingEnabled();
+    
+    // Hidden checkbox for form submission (updated by toggleImageMode)
+    html += "<input type='checkbox' id='cycling_enabled' name='cycling_enabled' style='display:none'" + String(isCycling ? " checked" : "") + ">";
+    
+    html += "<label style='display:flex;align-items:center;cursor:pointer;flex:1;padding:0.75rem;background:" + String(isCycling ? "#0f172a" : "#1e3a8a") + ";border:2px solid " + String(isCycling ? "#334155" : "#3b82f6") + ";border-radius:6px;transition:all 0.3s'>";
+    html += "<input type='radio' name='mode' value='single' style='width:20px;height:20px;margin-right:0.75rem;accent-color:#3b82f6'" + String(isCycling ? "" : " checked") + " onchange='toggleImageMode(false)'>";
+    html += "<div><strong style='color:#e2e8f0;font-size:1rem'>Single Image</strong><br><span style='color:#94a3b8;font-size:0.85rem'>One URL, periodic updates</span></div></label>";
+    
+    html += "<label style='display:flex;align-items:center;cursor:pointer;flex:1;padding:0.75rem;background:" + String(isCycling ? "#1e3a8a" : "#0f172a") + ";border:2px solid " + String(isCycling ? "#3b82f6" : "#334155") + ";border-radius:6px;transition:all 0.3s'>";
+    html += "<input type='radio' name='mode' value='multi' style='width:20px;height:20px;margin-right:0.75rem;accent-color:#3b82f6'" + String(isCycling ? " checked" : "") + " onchange='toggleImageMode(true)'>";
+    html += "<div><strong style='color:#e2e8f0;font-size:1rem'>Multi-Image Cycling</strong><br><span style='color:#94a3b8;font-size:0.85rem'>Rotate through multiple sources</span></div></label>";
+    html += "</div>";
+    
+    // Single Image Section (conditional visibility)
+    html += "<div id='singleImageSection' style='display:" + String(isCycling ? "none" : "block") + "'>";
+    html += "<div style='padding:1rem;background:#0f172a;border-radius:8px;border:1px solid #334155'>";
+    html += "<div class='form-group'><label for='image_url'>Image URL</label>";
+    html += "<input type='url' id='image_url' name='image_url' class='form-control' value='" + escapeHtml(configStorage.getImageURL()) + "' placeholder='http://allsky.local/image.jpg'></div>";
+    html += "<div class='form-group'><label for='update_interval'>";
+    html += "<span style='color:#38bdf8'>Download Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
+    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
+    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
+    html += "<i class='fas fa-download' style='margin-right:6px;color:#0ea5e9'></i>";
+    html += "How often to <strong>re-download</strong> this URL to fetch updated content (e.g., latest AllSky image)";
+    html += "</p></div></div></div>";
+    
+    // Multi-Image Section (conditional visibility)
+    html += "<div id='multiImageSection' style='display:" + String(isCycling ? "block" : "none") + "'>";
+    html += "<div style='padding:1rem;background:#0f172a;border-radius:8px;border:1px solid #334155'>";
+    
+    // Explanation card for multi-image timing
+    html += "<div style='padding:1rem;background:#0f172a;border-radius:8px;border-left:4px solid #3b82f6;margin-bottom:1rem'>";
+    html += "<h4 style='color:#38bdf8;margin-top:0;display:flex;align-items:center;gap:0.5rem'>";
+    html += "<i class='fas fa-info-circle'></i>Understanding Multi-Image Timing</h4>";
+    html += "<div style='display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:0.75rem'>";
+    html += "<div style='padding:0.75rem;background:#1e293b;border-radius:6px;border:1px solid #334155'>";
+    html += "<div style='display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem'>";
+    html += "<i class='fas fa-sync-alt' style='color:#22c55e;font-size:1.2rem'></i>";
+    html += "<strong style='color:#e2e8f0'>Display Cycle</strong></div>";
+    html += "<p style='color:#94a3b8;font-size:0.85rem;margin:0'>Controls how fast you <strong>rotate</strong> through sources</p>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.5rem;font-style:italic'>Example: Show each image for 30 seconds</p></div>";
+    html += "<div style='padding:0.75rem;background:#1e293b;border-radius:6px;border:1px solid #334155'>";
+    html += "<div style='display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem'>";
+    html += "<i class='fas fa-download' style='color:#0ea5e9;font-size:1.2rem'></i>";
+    html += "<strong style='color:#e2e8f0'>Download Refresh</strong></div>";
+    html += "<p style='color:#94a3b8;font-size:0.85rem;margin:0'>Controls how often you <strong>fetch new</strong> content</p>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.5rem;font-style:italic'>Example: Re-download every 2 minutes</p></div>";
+    html += "</div></div>";
+    
+    // Cycling controls
+    html += "<div class='grid' style='margin-bottom:1rem'>";
+    html += "<div class='form-group'><label for='cycle_interval'>";
+    html += "<span style='color:#38bdf8'>Display Cycle Interval</span> <span style='color:#94a3b8'>(seconds)</span></label>";
+    html += "<input type='number' id='cycle_interval' name='cycle_interval' class='form-control' value='" + String(configStorage.getCycleInterval() / 1000) + "' min='10' max='3600'>";
+    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
+    html += "<i class='fas fa-sync-alt' style='margin-right:6px;color:#22c55e'></i>";
+    html += "How long to <strong>display</strong> each image before switching to the next source";
+    html += "</p></div>";
+    html += "<div class='form-group'><label for='cycle_update_interval'>";
+    html += "<span style='color:#38bdf8'>Download Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
+    html += "<input type='number' id='cycle_update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
+    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
+    html += "<i class='fas fa-download' style='margin-right:6px;color:#0ea5e9'></i>";
+    html += "How often to <strong>re-download</strong> each source URL to fetch updated content";
+    html += "</p></div></div>";
+    
+    html += "<div class='form-group'><div style='display:flex;align-items:center'>";
+    html += "<input type='checkbox' id='random_order' name='random_order' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'" + String(configStorage.getRandomOrder() ? " checked" : "") + ">";
+    html += "<label for='random_order' style='margin-bottom:0;cursor:pointer'>Randomize display order</label></div></div>";
+    
+    // Image sources list
+    html += "<h3 style='color:#38bdf8;margin-top:1.5rem;margin-bottom:1rem'>Image Sources</h3>";
+    html += "<div id='imageSourcesList'>";
+    
     int sourceCount = configStorage.getImageSourceCount();
     for (int i = 0; i < sourceCount; i++) {
         String url = configStorage.getImageSource(i);
-        html += "<div class='image-source-item' style='margin-bottom:1.5rem;padding:1rem;border:1px solid #334155;border-radius:8px;background:#0f172a;'>";
-        html += "<div style='display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;flex-wrap:wrap'>";
-        html += "<span style='font-weight:bold;color:#38bdf8;font-size:1.1rem'>" + String(i + 1) + ".</span>";
-        html += "<input type='url' class='form-control' id='imageUrl_" + String(i) + "' style='flex:1;min-width:200px' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this)'>";
-        html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(" + String(i) + ")'><i class='fas fa-cog'></i> Options</button>";
+        html += "<div class='image-source-item' style='margin-bottom:1rem;padding:1rem;border:1px solid #334155;border-radius:6px;background:#1e293b'>";
+        html += "<div style='display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem'>";
+        html += "<span style='font-weight:bold;color:#38bdf8;min-width:2rem'>" + String(i + 1) + ".</span>";
+        html += "<input type='url' class='form-control' id='imageUrl_" + String(i) + "' style='flex:1' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this)'>";
+        html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(" + String(i) + ")'><i class='fas fa-sliders-h'></i></button>";
         if (sourceCount > 1) {
             html += "<button type='button' class='btn btn-danger' onclick='removeImageSource(" + String(i) + ", this)'><i class='fas fa-trash'></i></button>";
         }
         html += "</div>";
-        html += "<div id='imageError_" + String(i) + "' style='display:none;margin-left:2.5rem;padding:0.5rem;background:rgba(239,68,68,0.1);border-left:3px solid #ef4444;border-radius:4px;font-size:0.85rem;color:#fca5a5;margin-bottom:0.5rem'></div>";
-        html += "<div id='transformSection_" + String(i) + "' class='transform-section' style='display:none;margin-top:1rem;padding:1.5rem;background:#1e293b;border-radius:8px;border:1px solid #475569;'>";
-        html += "<h3 style='margin-top:0;font-size:1rem;color:#cbd5e1;margin-bottom:1rem;border-bottom:1px solid #334155;padding-bottom:0.5rem'>Transform Settings</h3>";
-        html += "<div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:1rem;'>";
-        html += "<div class='form-group'><label>Scale X</label><input type='number' class='form-control' value='" + String(configStorage.getImageScaleX(i)) + "' step='0.1' min='0.1' max='5.0' onchange='updateImageTransform(" + String(i) + ", \"scaleX\", this)'></div>";
-        html += "<div class='form-group'><label>Scale Y</label><input type='number' class='form-control' value='" + String(configStorage.getImageScaleY(i)) + "' step='0.1' min='0.1' max='5.0' onchange='updateImageTransform(" + String(i) + ", \"scaleY\", this)'></div>";
-        html += "<div class='form-group'><label>Offset X</label><input type='number' class='form-control' value='" + String(configStorage.getImageOffsetX(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetX\", this)'></div>";
-        html += "<div class='form-group'><label>Offset Y</label><input type='number' class='form-control' value='" + String(configStorage.getImageOffsetY(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetY\", this)'></div>";
-        html += "<div class='form-group'><label>Rotation</label><select class='form-control' onchange='updateImageTransform(" + String(i) + ", \"rotation\", this)'>";
+        
+        // Collapsible transform section
+        html += "<div id='transformSection_" + String(i) + "' style='display:none;margin-top:0.75rem;padding:1rem;background:#0f172a;border-radius:4px;border-left:3px solid #3b82f6'>";
+        html += "<p style='color:#64748b;font-size:0.85rem;margin-bottom:0.75rem'><i class='fas fa-info-circle' style='margin-right:6px'></i>Override default transformations for this source</p>";
+        html += "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.75rem'>";
+        
+        html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale X</label>";
+        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleX(i)) + "' step='0.1' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(" + String(i) + ", \"scaleX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
+        
+        html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale Y</label>";
+        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleY(i)) + "' step='0.1' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(" + String(i) + ", \"scaleY\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
+        
+        html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Offset X</label>";
+        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageOffsetX(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
+        
+        html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Offset Y</label>";
+        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageOffsetY(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetY\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
+        
+        html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Rotation</label>";
+        html += "<select class='form-control' onchange='updateImageTransform(" + String(i) + ", \"rotation\", this)' style='font-size:0.9rem;padding:0.5rem'>";
         int rotation = (int)configStorage.getImageRotation(i);
         html += String("<option value='0'") + (rotation == 0 ? " selected" : "") + ">0°</option>";
         html += String("<option value='90'") + (rotation == 90 ? " selected" : "") + ">90°</option>";
         html += String("<option value='180'") + (rotation == 180 ? " selected" : "") + ">180°</option>";
         html += String("<option value='270'") + (rotation == 270 ? " selected" : "") + ">270°</option>";
-        html += "</select></div></div>";
-        html += "<div style='margin-top:1rem;display:flex;gap:0.5rem;'>";
-        html += "<button type='button' class='btn btn-secondary' onclick='copyDefaultsToImage(" + String(i) + ", this)'>Copy Defaults</button>";
-        html += "<button type='button' class='btn btn-secondary' onclick='applyTransformImmediately(" + String(i) + ", this)'>Apply Now</button>";
-        html += "</div></div></div>";
+        html += "</select></div>";
+        
+        html += "</div>";
+        html += "<div style='margin-top:0.75rem;display:flex;gap:0.5rem'>";
+        html += "<button type='button' class='btn btn-secondary' onclick='copyDefaultsToImage(" + String(i) + ", this)' style='font-size:0.85rem;padding:0.5rem 0.75rem'>Reset to Defaults</button>";
+        html += "<button type='button' class='btn btn-secondary' onclick='applyTransformImmediately(" + String(i) + ", this)' style='font-size:0.85rem;padding:0.5rem 0.75rem'>Apply Now</button>";
+        html += "</div></div>";
+        
+        html += "</div>";
     }
-    html += "</div><div style='margin-top:1rem;'>";
-    html += "<button type='button' class='btn btn-success' onclick='addImageSource(this)'>➕ Add Image Source</button>";
+    
+    html += "</div>";
+    html += "<button type='button' class='btn btn-success' onclick='addImageSource(this)' style='margin-top:1rem'><i class='fas fa-plus' style='margin-right:6px'></i>Add Image Source</button>";
     if (sourceCount > 1) {
-        html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources(this)' style='margin-left:1rem;'>🗑️ Clear All</button>";
+        html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources(this)' style='margin-left:0.75rem;margin-top:1rem'><i class='fas fa-broom' style='margin-right:6px'></i>Clear All</button>";
     }
-    html += "</div></div></div></div>";
-    return html;
-}
-
-String WebConfig::generateImagePage() {
-    String html = "<div class='main'><div class='container'><form id='imageForm'><div class='grid'>";
-    html += "<div class='card'><h2>🖼️ Image Source</h2>";
-    html += "<p style='color:#f59e0b;margin-bottom:1rem;background:rgba(245,158,11,0.1);padding:0.75rem;border-radius:6px;border-left:4px solid #f59e0b'>⚠️ For multiple image sources, use the <a href='/config/sources' style='color:#38bdf8;font-weight:bold'>Multi-Image</a> page.</p>";
-    html += "<div class='form-group'><label for='image_url'>Image URL</label>";
-    html += "<input type='url' id='image_url' name='image_url' class='form-control' value='" + escapeHtml(configStorage.getImageURL()) + "' required></div>";
-    html += "<div class='form-group'><label for='update_interval'>Image Update Interval (minutes)</label>";
-    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'></div></div>";
-    html += "<div class='card'><h2>🔄 Default Transformations</h2>";
+    
+    html += "</div></div>";
+    
+    html += "</div>"; // Close card
+    
+    // Default Transformations (always visible)
+    html += "<div class='card' style='margin-top:1.5rem'><h2>🎨 Default Transformations</h2>";
+    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1rem'>These settings apply to all images unless overridden per-source</p>";
+    html += "<div class='grid'>";
     html += "<div class='form-group'><label for='default_scale_x'>Scale X</label>";
-    html += "<input type='number' id='default_scale_x' name='default_scale_x' class='form-control' value='" + String(configStorage.getDefaultScaleX()) + "' step='0.1' min='0.1' max='5.0'></div>";
+    html += "<input type='number' id='default_scale_x' name='default_scale_x' class='form-control' value='" + String(configStorage.getDefaultScaleX()) + "' step='0.1' min='0.1' max='" + String(MAX_SCALE, 1) + "'></div>";
     html += "<div class='form-group'><label for='default_scale_y'>Scale Y</label>";
-    html += "<input type='number' id='default_scale_y' name='default_scale_y' class='form-control' value='" + String(configStorage.getDefaultScaleY()) + "' step='0.1' min='0.1' max='5.0'></div>";
-    html += "<div class='form-group'><label for='default_offset_x'>Offset X (pixels)</label>";
+    html += "<input type='number' id='default_scale_y' name='default_scale_y' class='form-control' value='" + String(configStorage.getDefaultScaleY()) + "' step='0.1' min='0.1' max='" + String(MAX_SCALE, 1) + "'></div>";
+    html += "<div class='form-group'><label for='default_offset_x'>Offset X</label>";
     html += "<input type='number' id='default_offset_x' name='default_offset_x' class='form-control' value='" + String(configStorage.getDefaultOffsetX()) + "'></div>";
-    html += "<div class='form-group'><label for='default_offset_y'>Offset Y (pixels)</label>";
+    html += "<div class='form-group'><label for='default_offset_y'>Offset Y</label>";
     html += "<input type='number' id='default_offset_y' name='default_offset_y' class='form-control' value='" + String(configStorage.getDefaultOffsetY()) + "'></div>";
-    html += "<div class='form-group'><label for='default_rotation'>Rotation (degrees)</label>";
-    html += "<input type='number' id='default_rotation' name='default_rotation' class='form-control' value='" + String(configStorage.getDefaultRotation()) + "' step='90' min='0' max='270'></div></div>";
-    html += "</div><div class='card' style='margin-top:1.5rem'>";
-    html += "<button type='submit' class='btn btn-primary'>💾 Save Image Settings</button></div></form></div></div>";
+    html += "<div class='form-group'><label for='default_rotation'>Rotation</label>";
+    html += "<select id='default_rotation' name='default_rotation' class='form-control'>";
+    int defRot = (int)configStorage.getDefaultRotation();
+    html += String("<option value='0'") + (defRot == 0 ? " selected" : "") + ">0°</option>";
+    html += String("<option value='90'") + (defRot == 90 ? " selected" : "") + ">90°</option>";
+    html += String("<option value='180'") + (defRot == 180 ? " selected" : "") + ">180°</option>";
+    html += String("<option value='270'") + (defRot == 270 ? " selected" : "") + ">270°</option>";
+    html += "</select></div>";
+    html += "</div></div>";
+    
+    // Save button
+    html += "<div class='card' style='margin-top:1.5rem'>";
+    html += "<button type='submit' class='btn btn-primary'><i class='fas fa-save' style='margin-right:6px'></i>Save All Settings</button>";
+    html += "</div>";
+    
+    html += "</form></div></div>";
+    
+    // JavaScript for mode toggle
+    html += "<script>";
+    html += "function toggleImageMode(enableCycling) {";
+    html += "  document.getElementById('singleImageSection').style.display = enableCycling ? 'none' : 'block';";
+    html += "  document.getElementById('multiImageSection').style.display = enableCycling ? 'block' : 'none';";
+    html += "  document.getElementById('cycling_enabled').checked = enableCycling;";
+    html += "}";
+    html += "</script>";
+    
     return html;
 }
 
@@ -891,5 +994,204 @@ String WebConfig::generateAPIReferencePage() {
     html += "</ul></div>";
     
     html += "</div></div>";
+    return html;
+}
+
+String WebConfig::generateConsolePage() {
+    String html = "<div class='main'><div class='container'>";
+    html += "<div class='card'>";
+    html += "<h2>🖥️ Serial Console</h2>";
+    
+    // Info box
+    html += "<div style='background:rgba(56,189,248,0.1);border:1px solid #38bdf8;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
+    html += "<p style='color:#38bdf8;margin:0;font-size:0.9rem'><i class='fas fa-info-circle' style='margin-right:8px'></i>";
+    html += "<strong>Real-time Monitoring:</strong> View serial debug output from the device in real-time over WiFi. ";
+    html += "No USB connection required. Messages appear as they are logged by the system.</p>";
+    html += "</div>";
+    
+    // Control buttons and severity filter
+    html += "<div style='display:flex;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center'>";
+    html += "<button class='btn btn-success' onclick='connectConsole()' id='connectBtn'><i class='fas fa-plug' style='margin-right:0.5rem'></i>Connect</button>";
+    html += "<button class='btn btn-danger' onclick='disconnectConsole()' id='disconnectBtn' disabled><i class='fas fa-times' style='margin-right:0.5rem'></i>Disconnect</button>";
+    html += "<button class='btn btn-secondary' onclick='clearConsole()'><i class='fas fa-eraser' style='margin-right:0.5rem'></i>Clear</button>";
+    html += "<button class='btn btn-secondary' onclick='toggleAutoscroll()' id='autoscrollBtn'><i class='fas fa-arrow-down' style='margin-right:0.5rem'></i>Auto-scroll: ON</button>";
+    html += "<button class='btn btn-secondary' onclick='downloadLogs()'><i class='fas fa-download' style='margin-right:0.5rem'></i>Download</button>";
+    
+    // Severity filter dropdown
+    html += "<div style='display:flex;align-items:center;gap:0.5rem;margin-left:auto'>";
+    html += "<label for='severityFilter' style='color:#94a3b8;font-size:0.9rem;white-space:nowrap'><i class='fas fa-filter' style='margin-right:0.5rem'></i>Min Severity:</label>";
+    html += "<select id='severityFilter' onchange='updateSeverityFilter()' style='background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:0.5rem;font-size:0.9rem;cursor:pointer'>";
+    
+    int currentSeverity = configStorage.getMinLogSeverity();
+    html += "<option value='0'" + String(currentSeverity == 0 ? " selected" : "") + ">DEBUG</option>";
+    html += "<option value='1'" + String(currentSeverity == 1 ? " selected" : "") + ">INFO</option>";
+    html += "<option value='2'" + String(currentSeverity == 2 ? " selected" : "") + ">WARNING</option>";
+    html += "<option value='3'" + String(currentSeverity == 3 ? " selected" : "") + ">ERROR</option>";
+    html += "<option value='4'" + String(currentSeverity == 4 ? " selected" : "") + ">CRITICAL</option>";
+    html += "</select>";
+    html += "</div>";
+    html += "</div>";
+    
+    // Status indicator
+    html += "<div style='margin-bottom:1rem;padding:0.75rem;background:#1e293b;border-radius:8px;display:flex;align-items:center;gap:0.75rem'>";
+    html += "<span id='wsStatus' class='status-indicator status-offline'></span>";
+    html += "<span id='wsStatusText' style='color:#94a3b8;font-size:0.9rem'>Disconnected</span>";
+    html += "<span id='wsStats' style='margin-left:auto;color:#64748b;font-size:0.85rem'>0 messages</span>";
+    html += "</div>";
+    
+    // Console output area
+    html += "<div id='consoleOutput' style='";
+    html += "background:#0f172a;";
+    html += "border:1px solid #334155;";
+    html += "border-radius:8px;";
+    html += "padding:1rem;";
+    html += "height:600px;";
+    html += "overflow-y:auto;";
+    html += "font-family:\"Courier New\",monospace;";
+    html += "font-size:0.85rem;";
+    html += "line-height:1.5;";
+    html += "color:#e2e8f0;";
+    html += "white-space:pre-wrap;";
+    html += "word-wrap:break-word;";
+    html += "'></div>";
+    
+    html += "</div></div></div>";
+    
+    // WebSocket JavaScript
+    html += "<script>";
+    html += "let ws = null;";
+    html += "let messageCount = 0;";
+    html += "let autoscroll = true;";
+    html += "let reconnectAttempts = 0;";
+    html += "let reconnectTimer = null;";
+    html += "let manualDisconnect = false;";
+    html += "const MAX_MESSAGES = 1000;";
+    html += "const consoleOutput = document.getElementById('consoleOutput');";
+    html += "const wsStatus = document.getElementById('wsStatus');";
+    html += "const wsStatusText = document.getElementById('wsStatusText');";
+    html += "const wsStats = document.getElementById('wsStats');";
+    html += "const connectBtn = document.getElementById('connectBtn');";
+    html += "const disconnectBtn = document.getElementById('disconnectBtn');";
+    html += "const autoscrollBtn = document.getElementById('autoscrollBtn');";
+    
+    html += "function connectConsole() {";
+    html += "  if (ws && ws.readyState === WebSocket.OPEN) return;";
+    html += "  manualDisconnect = false;";
+    html += "  if (reconnectTimer) clearTimeout(reconnectTimer);";
+    html += "  const wsUrl = 'ws://' + window.location.hostname + ':81';";
+    html += "  consoleOutput.textContent += '[CLIENT] Connecting to ' + wsUrl + '...\\n';";
+    html += "  ws = new WebSocket(wsUrl);";
+    html += "  ws.onopen = function() {";
+    html += "    wsStatus.className = 'status-indicator status-online';";
+    html += "    wsStatusText.textContent = 'Connected';";
+    html += "    connectBtn.disabled = true;";
+    html += "    disconnectBtn.disabled = false;";
+    html += "    consoleOutput.textContent += '[CLIENT] Connected successfully\\n';";
+    html += "    if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
+    html += "  };";
+    html += "  ws.onmessage = function(event) {";
+    html += "    messageCount++;";
+    html += "    reconnectAttempts = 0;";
+    html += "    wsStats.textContent = messageCount + ' messages';";
+    html += "    let msg = event.data;";
+    // Add color coding for special markers
+    html += "    if (msg.includes('╔══════')) {";
+    html += "      msg = '<span style=\"color:#10b981;font-weight:bold\">' + msg.replace(/\\n/g, '</span>\\n<span style=\"color:#10b981;font-weight:bold\">') + '</span>';";
+    html += "      consoleOutput.innerHTML += msg;";
+    html += "    } else if (msg.includes('BUFFERED LOGS') || msg.includes('END OF BUFFERED')) {";
+    html += "      msg = '<span style=\"color:#06b6d4;font-weight:bold\">' + msg + '</span>';";
+    html += "      consoleOutput.innerHTML += msg;";
+    html += "    } else if (msg.includes('CRASH') || msg.includes('crash')) {";
+    html += "      msg = '<span style=\"color:#f59e0b;font-weight:bold\">' + msg + '</span>';";
+    html += "      consoleOutput.innerHTML += msg;";
+    html += "    } else {";
+    html += "      const textNode = document.createTextNode(msg);";
+    html += "      consoleOutput.appendChild(textNode);";
+    html += "    }";
+    html += "    const lines = consoleOutput.textContent.split('\\n');";
+    html += "    if (lines.length > MAX_MESSAGES) {";
+    html += "      const keepLines = lines.slice(-MAX_MESSAGES).join('\\n');";
+    html += "      consoleOutput.textContent = keepLines;";
+    html += "    }";
+    html += "    if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
+    html += "  };";
+    html += "  ws.onerror = function(error) {";
+    html += "    consoleOutput.textContent += '[CLIENT] WebSocket error\\n';";
+    html += "    if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
+    html += "  };";
+    html += "  ws.onclose = function() {";
+    html += "    wsStatus.className = 'status-indicator status-offline';";
+    html += "    wsStatusText.textContent = 'Disconnected';";
+    html += "    connectBtn.disabled = false;";
+    html += "    disconnectBtn.disabled = true;";
+    html += "    consoleOutput.textContent += '[CLIENT] Disconnected\\n';";
+    html += "    if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
+    html += "    if (!manualDisconnect && reconnectAttempts < 5) {";
+    html += "      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);";
+    html += "      reconnectAttempts++;";
+    html += "      wsStatusText.textContent = 'Reconnecting in ' + (delay/1000) + 's...';";
+    html += "      reconnectTimer = setTimeout(connectConsole, delay);";
+    html += "    }";
+    html += "  };";
+    html += "}";
+    
+    html += "function disconnectConsole() {";
+    html += "  manualDisconnect = true;";
+    html += "  reconnectAttempts = 0;";
+    html += "  if (reconnectTimer) {";
+    html += "    clearTimeout(reconnectTimer);";
+    html += "    reconnectTimer = null;";
+    html += "  }";
+    html += "  if (ws) {";
+    html += "    ws.close();";
+    html += "    ws = null;";
+    html += "  }";
+    html += "}";
+    
+    html += "function clearConsole() {";
+    html += "  consoleOutput.textContent = '';";
+    html += "  messageCount = 0;";
+    html += "  wsStats.textContent = '0 messages';";
+    html += "}";
+    
+    html += "function toggleAutoscroll() {";
+    html += "  autoscroll = !autoscroll;";
+    html += "  autoscrollBtn.innerHTML = '<i class=\"fas fa-arrow-down\" style=\"margin-right:0.5rem\"></i>Auto-scroll: ' + (autoscroll ? 'ON' : 'OFF');";
+    html += "  autoscrollBtn.className = autoscroll ? 'btn btn-secondary' : 'btn btn-warning';";
+    html += "}";
+    
+    html += "function downloadLogs() {";
+    html += "  const blob = new Blob([consoleOutput.textContent], {type: 'text/plain'});";
+    html += "  const url = URL.createObjectURL(blob);";
+    html += "  const a = document.createElement('a');";
+    html += "  a.href = url;";
+    html += "  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');";
+    html += "  a.download = 'esp32-console-' + timestamp + '.txt';";
+    html += "  a.click();";
+    html += "  URL.revokeObjectURL(url);";
+    html += "}";
+    
+    html += "function updateSeverityFilter() {";
+    html += "  const severity = parseInt(document.getElementById('severityFilter').value);";
+    html += "  fetch('/api/set-log-severity', {";
+    html += "    method: 'POST',";
+    html += "    headers: {'Content-Type': 'application/x-www-form-urlencoded'},";
+    html += "    body: 'severity=' + severity";
+    html += "  }).then(response => response.json())";
+    html += "    .then(data => {";
+    html += "      if (data.status === 'success') {";
+    html += "        const levels = ['DEBUG','INFO','WARNING','ERROR','CRITICAL'];";
+    html += "        consoleOutput.textContent += '[CLIENT] Severity filter updated to ' + levels[severity] + '\\n';";
+    html += "        if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
+    html += "      }";
+    html += "    });";
+    html += "}";
+    
+    html += "window.addEventListener('beforeunload', function() {";
+    html += "  if (ws) ws.close();";
+    html += "});";
+    
+    html += "</script>";
+    
     return html;
 }

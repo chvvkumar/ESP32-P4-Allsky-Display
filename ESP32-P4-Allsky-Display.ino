@@ -1,6 +1,7 @@
 // Include all our modular components
 #include "config.h"
 #include "config_storage.h"
+#include "logging.h"  // Logging macros and functions
 #include "web_config.h"
 #include "system_monitor.h"
 #include "network_manager.h"
@@ -13,6 +14,7 @@
 #include "i2c.h"
 #include "task_retry_handler.h"
 #include "wifi_qr_code.h"
+#include "crash_logger.h"
 
 // Additional required libraries
 #include <HTTPClient.h>
@@ -132,9 +134,54 @@ void processTouchGestures();
 void handleSingleTap();
 void handleDoubleTap();
 
-// Debug output wrapper functions
+// Universal logging function - sends to Serial AND WebSocket console
+// Default parameter defined in logging.h
+void logPrint(const char* message, LogSeverity severity) {
+    Serial.print(message);
+    // Log to crash logger (survives reboot)
+    crashLogger.log(message);
+    // Send to WebSocket console clients with severity filtering
+    webConfig.broadcastLog(message, COLOR_WHITE, severity);
+}
+
+void logPrintf(LogSeverity severity, const char* format, ...) {
+    char buffer[384];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    
+    Serial.print(buffer);
+    // Log to crash logger (survives reboot)
+    crashLogger.log(buffer);
+    // Send to WebSocket console clients with severity filtering
+    webConfig.broadcastLog(buffer, COLOR_WHITE, severity);
+}
+
+// Debug output wrapper functions (also show on display)
 void debugPrint(const char* message, uint16_t color) {
     displayManager.debugPrint(message, color);
+    // Log to crash logger (survives reboot)
+    crashLogger.log(message);
+    crashLogger.log("\n");
+    
+    // Intelligently detect severity from message content
+    LogSeverity severity = LOG_INFO;  // Default
+    String msg = String(message);
+    msg.toLowerCase();
+    
+    if (msg.indexOf("debug:") >= 0 || msg.indexOf("trace") >= 0) {
+        severity = LOG_DEBUG;
+    } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
+        severity = LOG_ERROR;
+    } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
+        severity = LOG_WARNING;
+    } else if (msg.indexOf("critical") >= 0 || msg.indexOf("fatal") >= 0 || msg.indexOf("panic") >= 0) {
+        severity = LOG_CRITICAL;
+    }
+    
+    // Send to WebSocket console clients with detected severity
+    webConfig.broadcastLog(message, color, severity);
 }
 
 void debugPrintf(uint16_t color, const char* format, ...) {
@@ -145,6 +192,27 @@ void debugPrintf(uint16_t color, const char* format, ...) {
     va_end(args);
     
     displayManager.debugPrint(buffer, color);
+    // Log to crash logger (survives reboot)
+    crashLogger.log(buffer);
+    crashLogger.log("\n");
+    
+    // Intelligently detect severity from message content
+    LogSeverity severity = LOG_INFO;  // Default
+    String msg = String(buffer);
+    msg.toLowerCase();
+    
+    if (msg.indexOf("debug:") >= 0 || msg.indexOf("trace") >= 0) {
+        severity = LOG_DEBUG;
+    } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
+        severity = LOG_ERROR;
+    } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
+        severity = LOG_WARNING;
+    } else if (msg.indexOf("critical") >= 0 || msg.indexOf("fatal") >= 0 || msg.indexOf("panic") >= 0) {
+        severity = LOG_CRITICAL;
+    }
+    
+    // Send to WebSocket console clients with detected severity
+    webConfig.broadcastLog(buffer, color, severity);
 }
 
 // JPEG callback function to collect pixels into PENDING image buffer (not displayed yet)
@@ -358,6 +426,17 @@ void setup() {
     Serial.begin(9600);
     delay(1000); // Give serial time to initialize
     
+    // Initialize crash logger FIRST to capture ALL boot messages
+    crashLogger.begin();
+    
+    // Check if last boot was a crash
+    if (crashLogger.wasLastBootCrash()) {
+        Serial.println("\n**************************************************");
+        Serial.println("***  WARNING: PREVIOUS BOOT ENDED IN CRASH!   ***");
+        Serial.println("***  Crash logs preserved in RTC memory/NVS   ***");
+        Serial.println("**************************************************\n");
+    }
+    
     // Initialize configuration system first
     initializeConfiguration();
     
@@ -376,37 +455,71 @@ void setup() {
     const int16_t w = 800;  // Will be verified after display init
     const int16_t h = 800;
     
+    Serial.println("[Memory] Allocating image buffers...");
+    Serial.printf("[Memory] Pre-allocation state: Heap=%d bytes, PSRAM=%d bytes\n", 
+                 ESP.getFreeHeap(), ESP.getFreePsram());
+    
     imageBufferSize = w * h * IMAGE_BUFFER_MULTIPLIER * 2;
+    Serial.printf("[Memory] Allocating image buffer: %d bytes (%.1f KB)\n", 
+                 imageBufferSize, imageBufferSize / 1024.0);
     imageBuffer = (uint8_t*)ps_malloc(imageBufferSize);
     if (!imageBuffer) {
+        Serial.printf("[Memory] ✗ CRITICAL: Image buffer allocation failed!\n");
         Serial.printf("CRITICAL: Image buffer pre-allocation failed! Size: %d bytes\n", imageBufferSize);
+        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), imageBufferSize);
+        Serial.printf("[Memory] Free Heap: %d bytes\n", ESP.getFreeHeap());
+        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
         while(1) delay(1000);
     }
+    Serial.printf("[Memory] ✓ Image buffer: %d bytes (%.1f KB)\n", imageBufferSize, imageBufferSize / 1024.0);
     Serial.printf("✓ Image buffer allocated: %d bytes\n", imageBufferSize);
     
     fullImageBufferSize = FULL_IMAGE_BUFFER_SIZE;
+    Serial.printf("[Memory] Allocating full image buffer: %d bytes (%.1f KB, max 512x512)\n", 
+                 fullImageBufferSize, fullImageBufferSize / 1024.0);
     fullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
     if (!fullImageBuffer) {
+        Serial.printf("[Memory] ✗ CRITICAL: Full image buffer allocation failed!\n");
         Serial.printf("CRITICAL: Full image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
+        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), fullImageBufferSize);
+        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
         while(1) delay(1000);
     }
+    Serial.printf("[Memory] ✓ Full image buffer: %d bytes (%.1f KB)\n", fullImageBufferSize, fullImageBufferSize / 1024.0);
     Serial.printf("✓ Full image buffer allocated: %d bytes\n", fullImageBufferSize);
     
+    Serial.printf("[Memory] Allocating pending buffer: %d bytes (double-buffer for flicker-free)\n", 
+                 fullImageBufferSize);
     pendingFullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
     if (!pendingFullImageBuffer) {
+        Serial.printf("[Memory] ✗ CRITICAL: Pending buffer allocation failed!\n");
         Serial.printf("CRITICAL: Pending image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
+        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), fullImageBufferSize);
+        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
         while(1) delay(1000);
     }
+    Serial.printf("[Memory] ✓ Pending buffer: %d bytes (%.1f KB)\n", fullImageBufferSize, fullImageBufferSize / 1024.0);
     Serial.printf("✓ Pending image buffer allocated: %d bytes\n", fullImageBufferSize);
     
     scaledBufferSize = w * h * SCALED_BUFFER_MULTIPLIER * 2;
+    Serial.printf("[Memory] Allocating scaled buffer: %d bytes (%.1f KB, 4x display for PPA)\n", 
+                 scaledBufferSize, scaledBufferSize / 1024.0);
     scaledBuffer = (uint16_t*)ps_malloc(scaledBufferSize);
     if (!scaledBuffer) {
+        Serial.printf("[Memory] ✗ CRITICAL: Scaled buffer allocation failed!\n");
         Serial.printf("CRITICAL: Scaled buffer pre-allocation failed! Size: %d bytes\n", scaledBufferSize);
+        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), scaledBufferSize);
+        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
         while(1) delay(1000);
     }
+    Serial.printf("[Memory] ✓ Scaled buffer: %d bytes (%.1f KB)\n", scaledBufferSize, scaledBufferSize / 1024.0);
     Serial.printf("✓ Scaled buffer allocated: %d bytes\n", scaledBufferSize);
     
+    size_t totalAllocated = imageBufferSize + (fullImageBufferSize * 2) + scaledBufferSize;
+    Serial.printf("[Memory] ✓ All buffers allocated: %d bytes total (%.1f MB)\n", 
+                 totalAllocated, totalAllocated / (1024.0 * 1024.0));
+    Serial.printf("[Memory] Free PSRAM remaining: %d bytes (%.1f MB)\n", 
+                 ESP.getFreePsram(), ESP.getFreePsram() / (1024.0 * 1024.0));
     Serial.printf("PSRAM pre-allocation complete - Free PSRAM remaining: %d bytes\n", ESP.getFreePsram());
     
     // NOW initialize display - it should have plenty of contiguous PSRAM remaining
@@ -610,6 +723,10 @@ void renderFullImage() {
         // No scaling or rotation needed, direct copy
         displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
         
+        // Flush to display
+        Arduino_DSI_Display* gfx = displayManager.getGFX();
+        if (gfx) gfx->flush();
+        
         systemMonitor.forceResetWatchdog();
         
         // Update tracking variables for next transition
@@ -621,6 +738,13 @@ void renderFullImage() {
         // Try hardware acceleration first if available
         size_t scaledImageSize = scaledWidth * scaledHeight * 2;
         
+        Serial.printf("[Render] Image: %dx%d -> Scaled: %dx%d (rot:%.0f) = %d bytes vs buffer %d bytes\n",
+                     fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, 
+                     rotationAngle, scaledImageSize, scaledBufferSize);
+        Serial.printf("[Render] PPA available: %s, Size check: %s\n", 
+                     ppaAccelerator.isAvailable() ? "YES" : "NO",
+                     scaledImageSize <= scaledBufferSize ? "PASS" : "FAIL");
+        
         if (ppaAccelerator.isAvailable() && scaledImageSize <= scaledBufferSize) {
             systemMonitor.forceResetWatchdog();
             
@@ -629,6 +753,9 @@ void renderFullImage() {
             // Pause display during heavy PPA operations to prevent LCD underrun
             displayManager.pauseDisplay();
             
+            Serial.printf("[PPA] Attempting hardware scale+rotate: %dx%d -> %dx%d (%.0f°)\n",
+                         fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, rotationAngle);
+            
             if (ppaAccelerator.scaleRotateImage(fullImageBuffer, fullImageWidth, fullImageHeight,
                                               scaledBuffer, scaledWidth, scaledHeight, rotationAngle)) {
                 // Resume display after heavy operation
@@ -636,8 +763,16 @@ void renderFullImage() {
                 
                 systemMonitor.forceResetWatchdog();
                 
+                unsigned long hwTime = millis() - hwStart;
+                Serial.printf("[PPA] ✓ Hardware acceleration successful in %lu ms\n", hwTime);
+                debugPrintf(COLOR_GREEN, "PPA hardware render: %lu ms", hwTime);
+                
                 // Draw the hardware-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
+                
+                // Flush to display
+                Arduino_DSI_Display* gfx = displayManager.getGFX();
+                if (gfx) gfx->flush();
                 
                 systemMonitor.forceResetWatchdog();
                 
@@ -648,8 +783,16 @@ void renderFullImage() {
                 prevImageHeight = scaledHeight;
                 return;
             } else {
+                Serial.println("[PPA] ✗ Hardware acceleration failed, falling back to software");
                 debugPrint("DEBUG: PPA scale+rotate failed, falling back to software", COLOR_YELLOW);
+                displayManager.resumeDisplay();  // Resume display if PPA failed
                 systemMonitor.forceResetWatchdog();
+            }
+        } else {
+            if (!ppaAccelerator.isAvailable()) {
+                Serial.println("[PPA] Hardware acceleration not available");
+            } else {
+                Serial.printf("[PPA] Scaled image too large: %d > %d bytes\n", scaledImageSize, scaledBufferSize);
             }
         }
         
@@ -661,6 +804,10 @@ void renderFullImage() {
             // Simple software scaling (simplified version)
             displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
             
+            // Flush to display
+            Arduino_DSI_Display* gfx = displayManager.getGFX();
+            if (gfx) gfx->flush();
+            
             systemMonitor.forceResetWatchdog();
             
             // Update tracking variables for next transition
@@ -671,6 +818,10 @@ void renderFullImage() {
         } else {
             // Just draw original image as fallback
             displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+            
+            // Flush to display
+            Arduino_DSI_Display* gfx = displayManager.getGFX();
+            if (gfx) gfx->flush();
             
             systemMonitor.forceResetWatchdog();
             
@@ -748,12 +899,18 @@ void downloadAndDisplayImage() {
     // Reset watchdog before HTTP operations
     systemMonitor.forceResetWatchdog();
     
+    Serial.println("[Image] ===== Starting Image Download =====");
+    Serial.printf("[Image] URL: %s\n", imageURL);
+    Serial.printf("[Image] Buffer size: %d bytes\n", imageBufferSize);
+    Serial.printf("[Image] Free heap: %d bytes, Free PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
+    
     HTTPClient http;
     
     // Reset watchdog before potentially blocking http.begin() call
     systemMonitor.forceResetWatchdog();
     
     unsigned long httpBeginStart = millis();
+    Serial.println("[Image] Initializing HTTP client...");
     
     // Enhanced HTTP begin operation with task-based timeout protection
     bool httpBeginSuccess = false;
@@ -819,12 +976,16 @@ void downloadAndDisplayImage() {
     systemMonitor.forceResetWatchdog();
     
     // Start GET request with enhanced error handling
+    Serial.println("[Image] Sending HTTP GET request...");
     try {
         httpCode = http.GET();
-        // Debug: Print the response code and final URL after redirects
-        Serial.printf("DEBUG: HTTP response code: %d\n", httpCode);
-        Serial.printf("DEBUG: Final URL after redirects: %s\n", http.getLocation().c_str());
+        Serial.printf("[Image] HTTP response code: %d\n", httpCode);
+        String finalURL = http.getLocation();
+        if (finalURL.length() > 0 && finalURL != imageURL) {
+            Serial.printf("[Image] Redirected to: %s\n", finalURL.c_str());
+        }
     } catch (...) {
+        Serial.println("[Image] ✗ EXCEPTION during HTTP GET!");
         debugPrint("ERROR: Exception during HTTP GET", COLOR_RED);
         http.end();
         systemMonitor.forceResetWatchdog();
@@ -846,13 +1007,28 @@ void downloadAndDisplayImage() {
     
     // Enhanced error handling for different HTTP codes
     if (httpCode != HTTP_CODE_OK) {
+        Serial.printf("[Image] ✗ HTTP request failed with code: %d\n", httpCode);
         if (httpCode == HTTP_CODE_NOT_FOUND) {
+            Serial.println("[Image] Error: Image not found (404) - Check URL");
             debugPrint("ERROR: Image not found (404)", COLOR_RED);
         } else if (httpCode == HTTP_CODE_INTERNAL_SERVER_ERROR) {
+            Serial.println("[Image] Error: Server error (500) - Try again later");
             debugPrint("ERROR: Server error (500)", COLOR_RED);
         } else if (httpCode < 0) {
+            Serial.print("[Image] Connection error: ");
+            if (httpCode == -1) Serial.println("HTTPC_ERROR_CONNECTION_FAILED");
+            else if (httpCode == -2) Serial.println("HTTPC_ERROR_SEND_HEADER_FAILED");
+            else if (httpCode == -3) Serial.println("HTTPC_ERROR_SEND_PAYLOAD_FAILED");
+            else if (httpCode == -4) Serial.println("HTTPC_ERROR_NOT_CONNECTED");
+            else if (httpCode == -5) Serial.println("HTTPC_ERROR_CONNECTION_LOST");
+            else if (httpCode == -6) Serial.println("HTTPC_ERROR_NO_STREAM");
+            else if (httpCode == -7) Serial.println("HTTPC_ERROR_NO_HTTP_SERVER");
+            else if (httpCode == -8) Serial.println("HTTPC_ERROR_TOO_LESS_RAM");
+            else if (httpCode == -11) Serial.println("HTTPC_ERROR_READ_TIMEOUT");
+            else Serial.printf("Unknown error code: %d\n", httpCode);
             debugPrintf(COLOR_RED, "ERROR: Connection error: %d", httpCode);
         } else {
+            Serial.printf("[Image] HTTP error code: %d\n", httpCode);
             debugPrintf(COLOR_RED, "ERROR: HTTP error: %d", httpCode);
         }
         http.end();
@@ -860,22 +1036,40 @@ void downloadAndDisplayImage() {
         return;
     }
     
+    Serial.println("[Image] ✓ HTTP request successful");
+    
     // Reset watchdog before processing response
     systemMonitor.forceResetWatchdog();
     
     WiFiClient* stream = http.getStreamPtr();
     size_t size = http.getSize();
     
-    debugPrintf(COLOR_WHITE, "Image size: %d bytes", size);
+    Serial.printf("[Image] Content-Length: %d bytes\n", size);
+    Serial.printf("[Image] Source: Image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+    debugPrintf(COLOR_WHITE, "Image %d/%d: %d bytes", currentImageIndex + 1, imageSourceCount, size);
     
     // Validate size before proceeding
-    if (size <= 0 || size >= imageBufferSize) {
+    if (size <= 0) {
+        Serial.println("[Image] ⚠ Content-Length missing or zero - will download until stream ends");
+        Serial.printf("[Image] Buffer capacity: %d bytes\n", imageBufferSize);
         debugPrintf(COLOR_RED, "Invalid size: %d bytes", size);
         http.end();
         systemMonitor.forceResetWatchdog();
         return;
     }
     
+    if (size >= imageBufferSize) {
+        Serial.printf("[Image] ✗ Image too large! %d bytes exceeds buffer %d bytes\n", size, imageBufferSize);
+        debugPrintf(COLOR_RED, "Invalid size: %d bytes", size);
+        http.end();
+        systemMonitor.forceResetWatchdog();
+        return;
+    }
+    
+    Serial.printf("[Image] ✓ Size OK: %d/%d bytes (%.1f%% of buffer)\n", size, imageBufferSize, (size * 100.0) / imageBufferSize);
+    
+    Serial.println("[Image] Starting download stream...");
+    Serial.printf("[Image] Download config: 1KB chunks, 50ms watchdog, 5s timeout\n");
     debugPrint("Downloading image data...", COLOR_YELLOW);
     
     size_t bytesRead = 0;
@@ -885,12 +1079,14 @@ void downloadAndDisplayImage() {
     // Use configuration values for better consistency
     const size_t ULTRA_CHUNK_SIZE = 1024;  // 1KB chunks for good performance
     const unsigned long DOWNLOAD_WATCHDOG_INTERVAL = 50;  // Reset every 50ms for more frequent resets
-    const unsigned long NO_DATA_TIMEOUT = 2000;  // 2 seconds with no data before giving up
+    const unsigned long NO_DATA_TIMEOUT = 5000;  // 5 seconds with no data before giving up (increased for slow connections)
     
     unsigned long downloadStartTime = millis();
     unsigned long lastProgressTime = millis();
     unsigned long lastWatchdogReset = millis();
     unsigned long lastDataTime = millis();  // Track when we last received data
+    
+    Serial.printf("[Image] Download started at %lu ms uptime\n", downloadStartTime);
     
     while (http.connected() && bytesRead < size) {
         // Ultra-frequent watchdog reset - every 50ms
@@ -901,12 +1097,19 @@ void downloadAndDisplayImage() {
         
         // Check for overall download timeout
         if (millis() - downloadStartTime > TOTAL_DOWNLOAD_TIMEOUT) {
+            Serial.printf("[Image] ✗ Total download timeout! Exceeded %lu ms limit\n", TOTAL_DOWNLOAD_TIMEOUT);
+            Serial.printf("[Image] Downloaded %d/%d bytes (%.1f%%) before timeout\n", 
+                         bytesRead, size, (bytesRead * 100.0) / size);
             debugPrint("ERROR: Download timeout - aborting", COLOR_RED);
             break;
         }
         
         // Check if connection is still alive
         if (!http.connected()) {
+            Serial.println("[Image] ✗ HTTP connection lost during download!");
+            Serial.printf("[Image] Downloaded %d/%d bytes (%.1f%%) before disconnection\n", 
+                         bytesRead, size, (bytesRead * 100.0) / size);
+            Serial.printf("[Image] Connection duration: %lu ms\n", millis() - downloadStartTime);
             debugPrint("ERROR: Connection lost during download", COLOR_RED);
             break;
         }
@@ -939,9 +1142,13 @@ void downloadAndDisplayImage() {
             
             // Check for chunk timeout
             if (chunkTime > DOWNLOAD_CHUNK_TIMEOUT) {
+                Serial.printf("[Image] ⚠ Slow chunk: %lu ms (limit %lu ms)\n", chunkTime, DOWNLOAD_CHUNK_TIMEOUT);
                 debugPrintf(COLOR_YELLOW, "WARNING: Chunk read took %lu ms", chunkTime);
                 // If chunks are consistently slow, abort
                 if (chunkTime > DOWNLOAD_CHUNK_TIMEOUT * 2) {  // More aggressive - 2x timeout
+                    Serial.printf("[Image] ✗ Chunk timeout exceeded! %lu ms > %lu ms\n", 
+                                 chunkTime, DOWNLOAD_CHUNK_TIMEOUT * 2);
+                    Serial.printf("[Image] Aborting slow download at %d/%d bytes\n", bytesRead, size);
                     debugPrint("ERROR: Chunk timeout - aborting", COLOR_RED);
                     break;
                 }
@@ -953,6 +1160,10 @@ void downloadAndDisplayImage() {
                 
                 // Show progress and reset watchdog
                 if (millis() - lastProgressTime > 1000) {  // Every 1 second
+                    float progress = (bytesRead * 100.0) / size;
+                    float speed = (bytesRead * 1000.0) / (millis() - downloadStartTime); // bytes/sec
+                    Serial.printf("[Image] Progress: %.1f%% (%d/%d bytes) @ %.1f KB/s\n", 
+                                 progress, bytesRead, size, speed / 1024.0);
                     lastProgressTime = millis();
                     systemMonitor.forceResetWatchdog();
                 }
@@ -965,6 +1176,9 @@ void downloadAndDisplayImage() {
         } else {
             // No data available - check for stall using lastDataTime
             if (millis() - lastDataTime > NO_DATA_TIMEOUT) {
+                Serial.printf("[Image] ✗ Download stalled! No data for %lu ms\n", millis() - lastDataTime);
+                Serial.printf("[Image] Downloaded %d/%d bytes before stall (%.1f%%)\n", 
+                             bytesRead, size, (bytesRead * 100.0) / size);
                 debugPrintf(COLOR_RED, "ERROR: No data received for %lu ms", millis() - lastDataTime);
                 break;
             }
@@ -984,10 +1198,16 @@ void downloadAndDisplayImage() {
     http.end();
     systemMonitor.forceResetWatchdog();
     
+    float avgSpeed = readTime > 0 ? (bytesRead * 1000.0) / readTime : 0; // bytes/sec
+    Serial.printf("[Image] ✓ Download complete: %d bytes in %lu ms (%.1f KB/s avg)\n", 
+                 bytesRead, readTime, avgSpeed / 1024.0);
     Serial.printf("DEBUG: Download complete - Read %d bytes (expected %d)\n", bytesRead, size);
     
     // Validate download completeness
     if (bytesRead < size) {
+        float percentComplete = (bytesRead * 100.0) / size;
+        Serial.printf("[Image] ✗ Incomplete download! Got %d/%d bytes (%.1f%%)\n", bytesRead, size, percentComplete);
+        Serial.printf("[Image] Missing %d bytes\n", size - bytesRead);
         debugPrintf(COLOR_RED, "Incomplete download: %d/%d bytes", bytesRead, size);
         Serial.printf("ERROR: Incomplete download: %d/%d bytes\n", bytesRead, size);
         systemMonitor.forceResetWatchdog();
@@ -996,11 +1216,14 @@ void downloadAndDisplayImage() {
     
     // Additional validation: ensure we have enough data for JPEG processing
     if (bytesRead < 1024) {  // Minimum reasonable JPEG size
+        Serial.printf("[Image] ✗ Image too small! %d bytes (minimum 1024 for valid JPEG)\n", bytesRead);
         debugPrintf(COLOR_RED, "Downloaded data too small: %d bytes", bytesRead);
         Serial.printf("ERROR: Downloaded data too small: %d bytes (minimum 1024)\n", bytesRead);
         systemMonitor.forceResetWatchdog();
         return;
     }
+    
+    Serial.println("[Image] ✓ Download size validated");
     
     Serial.println("DEBUG: Size validation passed");
     
@@ -1009,39 +1232,54 @@ void downloadAndDisplayImage() {
     
     // Check JPEG header first
     if (bytesRead < 10) {
+        Serial.printf("[Image] ✗ Data too small for header validation: %d bytes (need 10)\n", bytesRead);
         debugPrintf(COLOR_RED, "ERROR: Downloaded data too small: %d bytes", bytesRead);
         Serial.printf("ERROR: Downloaded data too small for header check: %d bytes\n", bytesRead);
         return;
     }
     
+    Serial.println("[Image] Validating image format...");
+    Serial.printf("[Image] Header bytes: %02X %02X %02X %02X %02X %02X %02X %02X\n",
+                 imageBuffer[0], imageBuffer[1], imageBuffer[2], imageBuffer[3],
+                 imageBuffer[4], imageBuffer[5], imageBuffer[6], imageBuffer[7]);
     Serial.printf("DEBUG: Checking image format (first 4 bytes: %02X %02X %02X %02X)...\n",
                  imageBuffer[0], imageBuffer[1], imageBuffer[2], imageBuffer[3]);
     
     // Check for PNG magic numbers first
     if (imageBuffer[0] == 0x89 && imageBuffer[1] == 0x50 && imageBuffer[2] == 0x4E && imageBuffer[3] == 0x47) {
+        Serial.println("[Image] ✗ PNG format detected (0x89504E47)");
         debugPrint("ERROR: PNG format detected - not supported (JPEG only)", COLOR_RED);
         Serial.println("ERROR: PNG format detected - not supported (JPEG only)");
         Serial.println("This device only supports JPEG images. Please use a JPEG format image URL.");
         return;
     }
     
+    Serial.println("[Image] Not PNG, checking for JPEG...");
     Serial.println("DEBUG: Not PNG format, checking for JPEG...");
     
     // Check for JPEG magic numbers
     if (imageBuffer[0] != 0xFF || imageBuffer[1] != 0xD8) {
+        Serial.printf("[Image] ✗ Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)\n", imageBuffer[0], imageBuffer[1]);
         debugPrintf(COLOR_RED, "ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)", imageBuffer[0], imageBuffer[1]);
         Serial.printf("ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)\n", imageBuffer[0], imageBuffer[1]);
         return;
     }
     
+    Serial.println("[Image] ✓ Valid JPEG header (0xFFD8)");
+    
+    Serial.println("[Image] Opening JPEG decoder...");
+    Serial.printf("[Image] JPEG data: %d bytes in RAM\n", bytesRead);
     Serial.printf("DEBUG: Opening JPEG in RAM (%d bytes)...\n", bytesRead);
     if (jpeg.openRAM(imageBuffer, bytesRead, JPEGDraw)) {
+        Serial.println("[Image] ✓ JPEG decoder opened");
+        Serial.printf("[Image] Dimensions: %dx%d pixels\n", jpeg.getWidth(), jpeg.getHeight());
         Serial.printf("DEBUG: JPEG opened successfully - %dx%d\n", jpeg.getWidth(), jpeg.getHeight());
         pendingImageWidth = jpeg.getWidth();
         pendingImageHeight = jpeg.getHeight();
         
         // Check if image fits in our pending buffer
         size_t requiredSize = pendingImageWidth * pendingImageHeight * 2;
+        Serial.printf("[Image] Buffer check: %d bytes required, %d bytes available\n", requiredSize, fullImageBufferSize);
         Serial.printf("DEBUG: Image size check - Required: %d bytes, Available: %d bytes\n", requiredSize, fullImageBufferSize);
         
         if (requiredSize <= fullImageBufferSize) {
@@ -1061,16 +1299,24 @@ void downloadAndDisplayImage() {
             // Pause display during decode to prevent LCD underrun from memory contention
             displayManager.pauseDisplay();
             
+            Serial.println("[Image] Decoding JPEG to RGB565...");
             if (jpeg.decode(0, 0, 0)) {
                 // Resume display after decode completes
                 displayManager.resumeDisplay();
+                
+                unsigned long decodeTime = millis() - decodeStart;
+                Serial.printf("[Image] ✓ Decode complete in %lu ms\n", decodeTime);
+                Serial.printf("[Image] Decoded %dx%d pixels (%d bytes RGB565)\n", 
+                             pendingImageWidth, pendingImageHeight, 
+                             pendingImageWidth * pendingImageHeight * 2);
                 
                 // Reset watchdog after decode
                 systemMonitor.forceResetWatchdog();
                 
                 // Mark image as ready to display (but don't display yet - let loop handle it)
                 imageReadyToDisplay = true;
-                debugPrint("DEBUG: Image ready to display - pending buffer prepared", COLOR_GREEN);
+                Serial.printf("[Image] Image %d/%d ready to display - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+                debugPrintf(COLOR_GREEN, "Image %d/%d ready", currentImageIndex + 1, imageSourceCount);
                 Serial.println("Image fully decoded and ready for display");
                 
                 // Mark first image as loaded (only once) - happens before actual display
@@ -1083,14 +1329,32 @@ void downloadAndDisplayImage() {
                     Serial.println("Image prepared successfully - ready for seamless display");
                 }
             } else {
+                // Resume display even on error
+                displayManager.resumeDisplay();
+                
+                unsigned long decodeAttemptTime = millis() - decodeStart;
+                Serial.printf("[Image] ✗ JPEG decode failed after %lu ms\n", decodeAttemptTime);
+                Serial.printf("[Image] Image was: %dx%d pixels, %d bytes\n", 
+                             pendingImageWidth, pendingImageHeight, bytesRead);
+                Serial.println("[Image] Possible causes:");
+                Serial.println("  - Corrupted JPEG data");
+                Serial.println("  - Unsupported JPEG format/encoding");
+                Serial.println("  - Progressive JPEG (not supported)");
+                Serial.println("  - Memory allocation failure during decode");
+                
                 debugPrint("ERROR: JPEG decode() function failed!", COLOR_RED);
                 Serial.println("ERROR: JPEG decode() function failed!");
-                displayManager.resumeDisplay();  // Make sure to resume even on error
             }
             
             jpeg.close();
             systemMonitor.forceResetWatchdog();
         } else {
+            // Image too large for buffer
+            Serial.printf("[Image] ✗ Image exceeds buffer capacity!\n");
+            Serial.printf("[Image] Required: %d bytes (%dx%d @ 2 bytes/pixel)\n", 
+                         requiredSize, pendingImageWidth, pendingImageHeight);
+            Serial.printf("[Image] Available: %d bytes (max 512x512 pixels)\n", fullImageBufferSize);
+            Serial.printf("[Image] Overflow: %d bytes\n", requiredSize - fullImageBufferSize);
             debugPrintf(COLOR_RED, "ERROR: Image too large for buffer! Required: %d, Available: %d", 
                        requiredSize, fullImageBufferSize);
             Serial.printf("ERROR: Image too large for buffer! Required: %d bytes, Available: %d bytes\n", 
@@ -1098,6 +1362,15 @@ void downloadAndDisplayImage() {
             jpeg.close();
         }
     } else {
+        Serial.printf("[Image] ✗ JPEG decoder failed to open image\n");
+        Serial.printf("[Image] Data size: %d bytes\n", bytesRead);
+        Serial.printf("[Image] Header: %02X %02X %02X %02X\n", 
+                     imageBuffer[0], imageBuffer[1], imageBuffer[2], imageBuffer[3]);
+        Serial.println("[Image] Possible causes:");
+        Serial.println("  - Corrupted download");
+        Serial.println("  - Incomplete file");
+        Serial.println("  - Not a valid JPEG despite header");
+        Serial.println("  - Memory allocation failure");
         debugPrint("ERROR: JPEG openRAM() failed!", COLOR_RED);
         debugPrintf(COLOR_RED, "Downloaded %d bytes, buffer size: %d", bytesRead, imageBufferSize);
         Serial.printf("ERROR: JPEG openRAM() failed! Downloaded %d bytes, buffer size: %d\n", bytesRead, imageBufferSize);
@@ -1111,6 +1384,7 @@ void downloadAndDisplayImage() {
     // Final watchdog reset and cleanup
     systemMonitor.forceResetWatchdog();
     debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
+    Serial.printf("[Image] Download cycle completed for image %d/%d\n", currentImageIndex + 1, imageSourceCount);
     debugPrint("Download cycle completed", COLOR_GREEN);
 }
 
@@ -1273,6 +1547,26 @@ void processSerialCommands() {
                 Serial.printf("Rotate CW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
                 break;
                 
+            // Next image command
+            case 'N':
+            case 'n':
+                if (cyclingEnabled && imageSourceCount > 1) {
+                    advanceToNextImage();
+                    lastCycleTime = millis(); // Reset cycle timer for fresh interval
+                    lastUpdate = 0; // Force immediate image download
+                    Serial.printf("Serial: Advancing to next image (image %d of %d)\n", currentImageIndex + 1, imageSourceCount);
+                } else {
+                    Serial.println("Serial: Cycling not enabled or only one source configured");
+                }
+                break;
+            
+            // Refresh current image
+            case 'F':
+            case 'f':
+                lastUpdate = 0; // Force immediate refresh
+                Serial.println("Serial: Forcing image refresh");
+                break;
+                
             // Reset command
             case 'R':
             case 'r':
@@ -1329,6 +1623,9 @@ void processSerialCommands() {
             case 'h':
             case '?':
                 Serial.println("\n=== Image Control Commands ===");
+                Serial.println("Navigation:");
+                Serial.println("  N   : Next image (resets cycle timer)");
+                Serial.println("  F   : Force refresh current image");
                 Serial.println("Scaling:");
                 Serial.println("  +/- : Scale both axes");
                 Serial.println("Movement:");
@@ -1486,11 +1783,20 @@ void loop() {
     // Additional web server handling to prevent empty responses
     if (wifiManager.isConnected() && webConfig.isRunning()) {
         webConfig.handleClient();
+        webConfig.loopWebSocket();  // Handle WebSocket events
+    }
+    
+    // Periodically save crash logs to NVS (every hour to reduce flash wear)
+    static unsigned long lastNVSSave = 0;
+    if (millis() - lastNVSSave > 3600000) {  // 1 hour
+        crashLogger.saveToNVS();
+        lastNVSSave = millis();
     }
     
     // Check for critical system health issues
     if (!systemMonitor.isSystemHealthy()) {
         Serial.println("CRITICAL: System health compromised, attempting recovery...");
+        crashLogger.log("CRITICAL: System health compromised\n");
         systemMonitor.forceResetWatchdog();
         systemMonitor.safeDelay(5000);
         systemMonitor.forceResetWatchdog();
@@ -1538,6 +1844,8 @@ void loop() {
         // If cycling is enabled, advance to next image
         if (cyclingEnabled && imageSourceCount > 1) {
             advanceToNextImage();
+            // Reset cycle timer to start fresh interval
+            lastCycleTime = millis();
             // Force immediate image download
             lastUpdate = 0;
         } else {
@@ -1581,7 +1889,8 @@ void loop() {
     }
     
     // Check if it's time to update the image (either scheduled update or cycling)
-    if (!imageProcessing && (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0)) {
+    // Skip image processing during OTA to prevent interference
+    if (!imageProcessing && !webConfig.isOTAInProgress() && (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0)) {
         // Pre-download system health check
         if (!wifiManager.isConnected()) {
             Serial.println("WARNING: WiFi disconnected, skipping image download");
@@ -1597,7 +1906,7 @@ void loop() {
             
             // Wrap download in timeout protection with absolute timeout
             unsigned long downloadStartTime = millis();
-            const unsigned long ABSOLUTE_DOWNLOAD_TIMEOUT = 20000; // 20 second absolute timeout
+            const unsigned long ABSOLUTE_DOWNLOAD_TIMEOUT = 50000; // 50 second absolute timeout (increased for slow connections)
             
             // Create a flag to track download completion
             bool downloadCompleted = false;
@@ -1640,7 +1949,8 @@ void loop() {
     }
     
     // Check if new image is ready to display - swap buffers for seamless transition (NO FLICKER!)
-    if (imageReadyToDisplay) {
+    // Skip image rendering during OTA to prevent display interference
+    if (imageReadyToDisplay && !webConfig.isOTAInProgress()) {
         imageReadyToDisplay = false;  // Clear the flag immediately
         
         Serial.println("=== SWAPPING IMAGE BUFFERS FOR SEAMLESS DISPLAY ===");
@@ -1663,7 +1973,8 @@ void loop() {
         systemMonitor.forceResetWatchdog();
         
         // Now render the new image to display (single seamless update, no clearing artifacts)
-        debugPrint("Rendering swapped image...", COLOR_GREEN);
+        Serial.printf("[Image] Rendering image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+        debugPrintf(COLOR_GREEN, "Rendering image %d/%d", currentImageIndex + 1, imageSourceCount);
         renderFullImage();
         systemMonitor.forceResetWatchdog();
         

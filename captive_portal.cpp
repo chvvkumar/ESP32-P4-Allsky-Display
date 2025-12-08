@@ -1,8 +1,10 @@
 #include "captive_portal.h"
+#include "crash_logger.h"
 #include <esp_task_wdt.h>
 
-// Global instance
+// Global instances
 CaptivePortal captivePortal;
+extern CrashLogger crashLogger;
 
 // DNS Server settings
 const byte DNS_PORT = 53;
@@ -214,6 +216,9 @@ void CaptivePortal::handleConnect() {
     
     // Wait for HTTP response to be fully sent
     delay(2000);
+    
+    // Save crash logs before intentional reboot
+    crashLogger.saveBeforeReboot();
     
     // Clean reboot
     ESP.restart();
