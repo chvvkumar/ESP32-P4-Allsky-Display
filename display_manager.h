@@ -25,6 +25,7 @@ private:
     int debugY;
     int debugLineCount;
     bool firstImageLoaded;
+    bool disableAutoScroll;  // Prevents auto-scroll during WiFi setup with QR code
     
     // OTA progress tracking (to avoid unnecessary redraws)
     bool otaScreenInitialized;
@@ -54,6 +55,7 @@ public:
     void clearDebugArea();
     void setFirstImageLoaded(bool loaded);
     void setDebugY(int y);
+    void setDisableAutoScroll(bool disable);
     
     // Screen operations
     void clearScreen(uint16_t color = COLOR_BLACK);

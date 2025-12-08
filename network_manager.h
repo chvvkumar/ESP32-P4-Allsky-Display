@@ -41,6 +41,10 @@ public:
     // Update function - call this in main loop
     void update();
     
+    // Time synchronization
+    void syncNTPTime();
+    bool isTimeValid();
+    
     // Print connection info
     void printConnectionInfo();
     

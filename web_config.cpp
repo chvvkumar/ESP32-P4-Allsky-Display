@@ -6,6 +6,8 @@
 #include "mqtt_manager.h"
 #include "display_manager.h"
 #include "crash_logger.h"
+#include "logging.h"
+#include <time.h>
 
 // Global instance
 WebConfig webConfig;
@@ -13,18 +15,21 @@ WebConfig webConfig;
 WebConfig::WebConfig() : server(nullptr), wsServer(nullptr), serverRunning(false), otaInProgress(false) {}
 
 bool WebConfig::begin(int port) {
-    if (serverRunning) return true;
+    if (serverRunning) {
+        LOG_DEBUG_F("[WebServer] Already running on port %d\n", port);
+        return true;
+    }
     
     try {
-        Serial.printf("Creating WebServer on port %d...\n", port);
+        LOG_INFO_F("[WebServer] Initializing web server on port %d\n", port);
         server = new WebServer(port);
         
         if (!server) {
-            Serial.println("ERROR: Failed to allocate WebServer memory!");
+            LOG_CRITICAL("[WebServer] Failed to allocate WebServer memory!");
             return false;
         }
         
-        Serial.println("Setting up routes...");
+        LOG_DEBUG("[WebServer] Setting up HTTP routes");
         
         // Setup routes
         server->on("/", [this]() { handleRoot(); });
@@ -48,13 +53,19 @@ bool WebConfig::begin(int port) {
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
         server->on("/api/set-log-severity", HTTP_POST, [this]() { handleSetLogSeverity(); });
+        server->on("/api/clear-crash-logs", HTTP_POST, [this]() { handleClearCrashLogs(); });
         server->on("/api/info", HTTP_GET, [this]() { handleGetAllInfo(); });
         server->on("/api/current-image", HTTP_GET, [this]() { handleCurrentImage(); });
+        
+        // Favicon handler (prevents 404 log clutter when browsers request favicon)
+        server->on("/favicon.ico", HTTP_GET, [this]() { 
+            server->send(204); // No Content - silently ignore favicon requests
+        });
         
         // Initialize ElegantOTA
         ElegantOTA.begin(server);
         ElegantOTA.onStart([]() {
-            Serial.println("ElegantOTA: Update started");
+            LOG_INFO("ElegantOTA: Update started");
             webConfig.setOTAInProgress(true);  // Suppress WebSocket during OTA
             displayManager.showOTAProgress("OTA Update", 0, "Starting...");
             systemMonitor.forceResetWatchdog();
@@ -67,7 +78,7 @@ bool WebConfig::begin(int port) {
             static uint8_t lastPercent = 0;
             uint8_t percent = (current * 100) / final;
             if (percent != lastPercent && percent % 10 == 0) {
-                Serial.printf("ElegantOTA Progress: %u%%\n", percent);
+                LOG_DEBUG_F("ElegantOTA Progress: %u%%\n", percent);
                 lastPercent = percent;
             }
         });
@@ -75,11 +86,11 @@ bool WebConfig::begin(int port) {
             systemMonitor.forceResetWatchdog();
             webConfig.setOTAInProgress(false);  // Re-enable WebSocket
             if (success) {
-                Serial.println("ElegantOTA: Update successful!");
+                LOG_INFO("ElegantOTA: Update successful!");
                 displayManager.showOTAProgress("OTA Complete!", 100, "Rebooting...");
                 delay(2000);
             } else {
-                Serial.println("ElegantOTA: Update failed!");
+                LOG_ERROR("ElegantOTA: Update failed!");
                 displayManager.showOTAProgress("OTA Failed", 0, "Update failed");
                 delay(3000);
             }
@@ -87,38 +98,38 @@ bool WebConfig::begin(int port) {
         server->on("/api-reference", [this]() { handleAPIReference(); });
         server->onNotFound([this]() { handleNotFound(); });
         
-        Serial.println("Starting WebServer...");
+        LOG_INFO("Starting WebServer...");
         server->begin();
         
         // Initialize WebSocket server on port 81
-        Serial.println("[WebSocket] Starting WebSocket server on port 81...");
-        Serial.printf("[WebSocket] Free heap before allocation: %d bytes\n", ESP.getFreeHeap());
+        LOG_INFO("[WebSocket] Starting WebSocket server on port 81");
+        LOG_DEBUG_F("[WebSocket] Free heap before allocation: %d bytes\n", ESP.getFreeHeap());
         wsServer = new WebSocketsServer(81);
         if (wsServer) {
-            Serial.println("[WebSocket] Server instance created successfully");
+            LOG_DEBUG("[WebSocket] Server instance created successfully");
             wsServer->begin();
             wsServer->onEvent(webSocketEvent);
-            Serial.println("[WebSocket] ✓ Server started and event handler registered");
-            Serial.printf("[WebSocket] Listening on port 81 (clients can connect to ws://%s:81)\n", WiFi.localIP().toString().c_str());
+            LOG_INFO("[WebSocket] ✓ Server started and event handler registered");
+            LOG_INFO_F("[WebSocket] Listening on port 81 (clients can connect to ws://%s:81)\n", WiFi.localIP().toString().c_str());
         } else {
-            Serial.println("[WebSocket] ERROR: Failed to allocate WebSocket server!");
-            Serial.printf("[WebSocket] Free heap: %d bytes, PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
+            LOG_ERROR("[WebSocket] ERROR: Failed to allocate WebSocket server!");
+            LOG_ERROR_F("[WebSocket] Free heap: %d bytes, PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
         }
         
         if (!server) {
-            Serial.println("ERROR: WebServer failed to start!");
+            LOG_ERROR("ERROR: WebServer failed to start!");
             return false;
         }
         
         serverRunning = true;
-        Serial.printf("✓ Web configuration server started successfully on port %d\n", port);
+        LOG_INFO_F("✓ Web configuration server started successfully on port %d\n", port);
         return true;
         
     } catch (const std::exception& e) {
-        Serial.printf("ERROR: Exception starting web server: %s\n", e.what());
+        LOG_ERROR_F("ERROR: Exception starting web server: %s\n", e.what());
         return false;
     } catch (...) {
-        Serial.println("ERROR: Unknown exception starting web server!");
+        LOG_ERROR("ERROR: Unknown exception starting web server!");
         return false;
     }
 }
@@ -159,6 +170,7 @@ void WebConfig::stop() {
 
 // Route handlers - these call the page generators from web_config_pages.cpp
 void WebConfig::handleRoot() {
+    LOG_DEBUG("[WebServer] Dashboard page accessed");
     String html = generateHeader("Dashboard");
     html += generateNavigation("dashboard");
     html += generateMainPage();
@@ -167,6 +179,7 @@ void WebConfig::handleRoot() {
 }
 
 void WebConfig::handleConsole() {
+    LOG_DEBUG("[WebServer] Serial console page accessed");
     String html = generateHeader("Serial Console");
     html += generateNavigation("console");
     html += generateConsolePage();
@@ -175,6 +188,7 @@ void WebConfig::handleConsole() {
 }
 
 void WebConfig::handleNetworkConfig() {
+    LOG_DEBUG("[WebServer] Network configuration page accessed");
     String html = generateHeader("Network Configuration");
     html += generateNavigation("network");
     html += generateNetworkPage();
@@ -183,6 +197,7 @@ void WebConfig::handleNetworkConfig() {
 }
 
 void WebConfig::handleMQTTConfig() {
+    LOG_DEBUG("[WebServer] MQTT configuration page accessed");
     String html = generateHeader("MQTT Configuration");
     html += generateNavigation("mqtt");
     html += generateMQTTPage();
@@ -191,7 +206,8 @@ void WebConfig::handleMQTTConfig() {
 }
 
 void WebConfig::handleImageConfig() {
-    String html = generateHeader("Image Configuration");
+    LOG_DEBUG("[WebServer] Image sources page accessed");
+    String html = generateHeader("Image Sources");
     html += generateNavigation("images");
     html += generateImagePage();
     html += generateFooter();
@@ -236,6 +252,8 @@ void WebConfig::handleAPIReference() {
 }
 
 void WebConfig::handleNotFound() {
+    String uri = server->uri();
+    LOG_WARNING_F("[WebServer] 404 Not Found: %s\n", uri.c_str());
     String html = generateHeader("Page Not Found");
     html += "<div class='container'><div class='card error'>";
     html += "<h2>🚫 Page Not Found</h2>";
@@ -385,36 +403,36 @@ void WebConfig::sendResponse(int code, const String& contentType, const String& 
 void WebConfig::webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length) {
     switch(type) {
         case WStype_DISCONNECTED:
-            Serial.printf("[WebSocket] Client #%u disconnected\n", num);
-            Serial.printf("[WebSocket] Active clients: %d\n", webConfig.wsServer->connectedClients());
+            LOG_DEBUG_F("[WebSocket] Client #%u disconnected\n", num);
+            LOG_DEBUG_F("[WebSocket] Active clients: %d\n", webConfig.wsServer->connectedClients());
             break;
         case WStype_CONNECTED:
             {
                 IPAddress ip = webConfig.wsServer->remoteIP(num);
-                Serial.printf("[WebSocket] Client #%u connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
-                Serial.printf("[WebSocket] Total active clients: %d\n", webConfig.wsServer->connectedClients());
+                LOG_INFO_F("[WebSocket] Client #%u connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
+                LOG_DEBUG_F("[WebSocket] Total active clients: %d\n", webConfig.wsServer->connectedClients());
                 // Send welcome message
                 String welcome = "[SYSTEM] Console connected. Monitoring serial output...\n";
                 webConfig.wsServer->sendTXT(num, welcome);
-                Serial.printf("[WebSocket] Welcome message sent to client #%u\n", num);
+                LOG_DEBUG_F("[WebSocket] Welcome message sent to client #%u\n", num);
                 // Send buffered crash logs to new client
                 webConfig.sendCrashLogsToClient(num);
             }
             break;
         case WStype_TEXT:
-            Serial.printf("[WebSocket] Received from client #%u: %s\n", num, payload);
+            LOG_DEBUG_F("[WebSocket] Received from client #%u: %s\n", num, payload);
             break;
         case WStype_ERROR:
-            Serial.printf("[WebSocket] ERROR on client #%u\n", num);
+            LOG_ERROR_F("[WebSocket] ERROR on client #%u\n", num);
             break;
         case WStype_PING:
-            Serial.printf("[WebSocket] Ping from client #%u\n", num);
+            LOG_DEBUG_F("[WebSocket] Ping from client #%u\n", num);
             break;
         case WStype_PONG:
-            Serial.printf("[WebSocket] Pong from client #%u\n", num);
+            LOG_DEBUG_F("[WebSocket] Pong from client #%u\n", num);
             break;
         default:
-            Serial.printf("[WebSocket] Unknown event type %d from client #%u\n", type, num);
+            LOG_WARNING_F("[WebSocket] Unknown event type %d from client #%u\n", type, num);
             break;
     }
 }
@@ -455,9 +473,20 @@ void WebConfig::broadcastLog(const char* message, uint16_t color, LogSeverity se
     
     // Use fixed buffer to avoid String heap fragmentation
     char buffer[384];
-    unsigned long ms = millis();
-    int written = snprintf(buffer, sizeof(buffer), "[%lu.%03lu] %s%s", 
-                          ms / 1000, ms % 1000, severityPrefix, message);
+    
+    // Get current time - always use real time
+    struct tm timeinfo;
+    char timeStr[32];
+    if (getLocalTime(&timeinfo, 0)) {
+        // Format: YYYY-MM-DD HH:MM:SS
+        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    } else {
+        // Show clear message that time is not synced yet
+        snprintf(timeStr, sizeof(timeStr), "TIME_NOT_SYNCED");
+    }
+    
+    int written = snprintf(buffer, sizeof(buffer), "[%s] %s%s", 
+                          timeStr, severityPrefix, message);
     
     // Ensure newline termination if there's room
     if (written > 0 && written < (int)sizeof(buffer) - 2) {

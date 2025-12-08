@@ -1,4 +1,5 @@
 #include "ppa_accelerator.h"
+#include "logging.h"
 
 // Global instance
 PPAAccelerator ppaAccelerator;
@@ -21,7 +22,7 @@ PPAAccelerator::~PPAAccelerator() {
 
 bool PPAAccelerator::begin(int16_t displayWidth, int16_t displayHeight) {
     if (debugPrintFunc) debugPrintFunc("Initializing PPA hardware...", COLOR_YELLOW);
-    Serial.println("Initializing PPA hardware acceleration...");
+    LOG_INFO("Initializing PPA hardware acceleration...");
     
     // Configure PPA client for scaling operations
     ppa_client_config_t ppa_client_config = {
@@ -30,7 +31,7 @@ bool PPAAccelerator::begin(int16_t displayWidth, int16_t displayHeight) {
     
     esp_err_t ret = ppa_register_client(&ppa_client_config, &ppa_scaling_handle);
     if (ret != ESP_OK) {
-        Serial.printf("PPA client registration failed: %s\n", esp_err_to_name(ret));
+        LOG_ERROR_F("PPA client registration failed: %s\n", esp_err_to_name(ret));
         if (debugPrintfFunc) {
             debugPrintfFunc(COLOR_RED, "PPA client registration failed: %s", esp_err_to_name(ret));
         }
@@ -44,7 +45,7 @@ bool PPAAccelerator::begin(int16_t displayWidth, int16_t displayHeight) {
                                                         MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
     
     if (!ppa_src_buffer) {
-        Serial.println("ERROR: PPA source buffer allocation failed!");
+        LOG_ERROR("ERROR: PPA source buffer allocation failed!");
         if (debugPrintFunc) debugPrintFunc("ERROR: PPA source buffer allocation failed!", COLOR_RED);
         ppa_unregister_client(ppa_scaling_handle);
         return false;
@@ -56,7 +57,7 @@ bool PPAAccelerator::begin(int16_t displayWidth, int16_t displayHeight) {
                                                         MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
     
     if (!ppa_dst_buffer) {
-        Serial.println("ERROR: PPA destination buffer allocation failed!");
+        LOG_ERROR("ERROR: PPA destination buffer allocation failed!");
         if (debugPrintFunc) debugPrintFunc("ERROR: PPA destination buffer allocation failed!", COLOR_RED);
         heap_caps_free(ppa_src_buffer);
         ppa_unregister_client(ppa_scaling_handle);
@@ -65,9 +66,9 @@ bool PPAAccelerator::begin(int16_t displayWidth, int16_t displayHeight) {
     
     ppa_available = true;
     
-    Serial.println("PPA hardware initialized successfully!");
-    Serial.printf("PPA src buffer: %d bytes\n", ppa_src_buffer_size);
-    Serial.printf("PPA dst buffer: %d bytes\n", ppa_dst_buffer_size);
+    LOG_INFO("PPA hardware initialized successfully!");
+    LOG_INFO_F("PPA src buffer: %d bytes\n", ppa_src_buffer_size);
+    LOG_INFO_F("PPA dst buffer: %d bytes\n", ppa_dst_buffer_size);
     
     if (debugPrintFunc) {
         debugPrintFunc("PPA hardware initialized successfully!", COLOR_GREEN);
@@ -105,14 +106,14 @@ bool PPAAccelerator::scaleRotateImage(uint16_t* srcPixels, int16_t srcWidth, int
                                      uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight, 
                                      float rotation) {
     if (!ppa_available || !ppa_scaling_handle) {
-        Serial.println("DEBUG: PPA not available or handle invalid");
+        LOG_DEBUG("DEBUG: PPA not available or handle invalid");
         return false; // Fall back to software scaling
     }
     
     // Convert rotation angle to PPA enum
     ppa_srm_rotation_angle_t ppa_rotation = convertRotationAngle(rotation);
     if (ppa_rotation == (ppa_srm_rotation_angle_t)-1) {
-        Serial.printf("DEBUG: Invalid rotation angle: %.1f\n", rotation);
+        LOG_DEBUG_F("DEBUG: Invalid rotation angle: %.1f\n", rotation);
         return false; // Invalid rotation angle
     }
     
@@ -124,7 +125,7 @@ bool PPAAccelerator::scaleRotateImage(uint16_t* srcPixels, int16_t srcWidth, int
         return false;
     }
     
-    Serial.printf("DEBUG: PPA scale+rotate %dx%d -> %dx%d (%.1f°, src:%d dst:%d bytes)\n", 
+    LOG_DEBUG_F("DEBUG: PPA scale+rotate %dx%d -> %dx%d (%.1f°, src:%d dst:%d bytes)\n", 
                  srcWidth, srcHeight, dstWidth, dstHeight, rotation, srcSize, dstSize);
     
     // Copy source data to DMA-aligned buffer
@@ -175,13 +176,13 @@ bool PPAAccelerator::scaleRotateImage(uint16_t* srcPixels, int16_t srcWidth, int
     srm_oper_config.mode = PPA_TRANS_MODE_BLOCKING;
     srm_oper_config.user_data = nullptr;
     
-    Serial.printf("DEBUG: PPA scale factors: x=%.3f, y=%.3f, rotation=%d\n", 
+    LOG_DEBUG_F("DEBUG: PPA scale factors: x=%.3f, y=%.3f, rotation=%d\n", 
                  srm_oper_config.scale_x, srm_oper_config.scale_y, (int)ppa_rotation);
     
     // Perform the scaling and rotation operation
     esp_err_t ret = ppa_do_scale_rotate_mirror(ppa_scaling_handle, &srm_oper_config);
     if (ret != ESP_OK) {
-        Serial.printf("PPA scale+rotate operation failed: %s (0x%x)\n", esp_err_to_name(ret), ret);
+        LOG_ERROR_F("PPA scale+rotate operation failed: %s (0x%x)\n", esp_err_to_name(ret), ret);
         return false;
     }
     
@@ -193,7 +194,7 @@ bool PPAAccelerator::scaleRotateImage(uint16_t* srcPixels, int16_t srcWidth, int
     // Copy result to destination buffer
     memcpy(dstPixels, ppa_dst_buffer, dstSize);
     
-    Serial.println("DEBUG: PPA scale+rotate successful!");
+    LOG_DEBUG("DEBUG: PPA scale+rotate successful!");
     return true;
 }
 
@@ -217,14 +218,14 @@ void PPAAccelerator::setDebugFunctions(void (*debugPrint)(const char*, uint16_t)
 }
 
 void PPAAccelerator::printStatus() {
-    Serial.println("=== PPA Hardware Accelerator Status ===");
-    Serial.printf("Available: %s\n", ppa_available ? "YES" : "NO");
+    LOG_INFO("=== PPA Hardware Accelerator Status ===");
+    LOG_INFO_F("Available: %s\n", ppa_available ? "YES" : "NO");
     if (ppa_available) {
-        Serial.printf("Source Buffer: %d bytes\n", ppa_src_buffer_size);
-        Serial.printf("Destination Buffer: %d bytes\n", ppa_dst_buffer_size);
-        Serial.printf("Handle: %p\n", ppa_scaling_handle);
+        LOG_INFO_F("Source Buffer: %d bytes\n", ppa_src_buffer_size);
+        LOG_INFO_F("Destination Buffer: %d bytes\n", ppa_dst_buffer_size);
+        LOG_INFO_F("Handle: %p\n", ppa_scaling_handle);
     }
-    Serial.println("======================================");
+    LOG_INFO("======================================");
 }
 
 ppa_srm_rotation_angle_t PPAAccelerator::convertRotationAngle(float rotation) {
@@ -243,12 +244,12 @@ ppa_srm_rotation_angle_t PPAAccelerator::convertRotationAngle(float rotation) {
 
 bool PPAAccelerator::validateBufferSizes(size_t srcSize, size_t dstSize) {
     if (srcSize > ppa_src_buffer_size) {
-        Serial.printf("DEBUG: Source too large for PPA (%d > %d)\n", srcSize, ppa_src_buffer_size);
+        LOG_DEBUG_F("DEBUG: Source too large for PPA (%d > %d)\n", srcSize, ppa_src_buffer_size);
         return false;
     }
     
     if (dstSize > ppa_dst_buffer_size) {
-        Serial.printf("DEBUG: Destination too large for PPA (%d > %d)\n", dstSize, ppa_dst_buffer_size);
+        LOG_DEBUG_F("DEBUG: Destination too large for PPA (%d > %d)\n", dstSize, ppa_dst_buffer_size);
         return false;
     }
     

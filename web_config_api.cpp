@@ -7,6 +7,7 @@
 #include "mqtt_manager.h"
 #include "display_manager.h"
 #include "ota_manager.h"
+#include "logging.h"
 #include <Update.h>
 
 // External global instances
@@ -18,6 +19,8 @@ extern CrashLogger crashLogger;
 // These functions process POST requests and handle configuration changes
 
 void WebConfig::handleSaveConfig() {
+    LOG_INFO("[WebAPI] Configuration save request received");
+    
     bool needsRestart = false;
     bool brightnessChanged = false;
     bool imageSettingsChanged = false;
@@ -30,25 +33,43 @@ void WebConfig::handleSaveConfig() {
         
         // Network settings
         if (name == "wifi_ssid") {
-            if (configStorage.getWiFiSSID() != value) needsRestart = true;
+            if (configStorage.getWiFiSSID() != value) {
+                LOG_INFO_F("[WebAPI] WiFi SSID updated: %s (restart required)\n", value.c_str());
+                needsRestart = true;
+            }
             configStorage.setWiFiSSID(value);
         }
         else if (name == "wifi_password") {
-            if (configStorage.getWiFiPassword() != value) needsRestart = true;
+            if (configStorage.getWiFiPassword() != value) {
+                LOG_INFO("[WebAPI] WiFi password updated (value hidden for security) - restart required");
+                needsRestart = true;
+            }
             configStorage.setWiFiPassword(value);
         }
         
         // MQTT settings
         else if (name == "mqtt_server") {
-            if (configStorage.getMQTTServer() != value) needsRestart = true;
+            if (configStorage.getMQTTServer() != value) {
+                LOG_INFO_F("[WebAPI] MQTT server updated: %s (restart required)\n", value.c_str());
+                needsRestart = true;
+            }
             configStorage.setMQTTServer(value);
         }
         else if (name == "mqtt_port") {
-            if (configStorage.getMQTTPort() != value.toInt()) needsRestart = true;
+            if (configStorage.getMQTTPort() != value.toInt()) {
+                LOG_INFO_F("[WebAPI] MQTT port updated: %d (restart required)\n", value.toInt());
+                needsRestart = true;
+            }
             configStorage.setMQTTPort(value.toInt());
         }
-        else if (name == "mqtt_user") configStorage.setMQTTUser(value);
-        else if (name == "mqtt_password") configStorage.setMQTTPassword(value);
+        else if (name == "mqtt_user") {
+            LOG_DEBUG_F("[WebAPI] MQTT username updated: %s\n", value.c_str());
+            configStorage.setMQTTUser(value);
+        }
+        else if (name == "mqtt_password") {
+            LOG_DEBUG("[WebAPI] MQTT password updated (value hidden for security)");
+            configStorage.setMQTTPassword(value);
+        }
         else if (name == "mqtt_client_id") configStorage.setMQTTClientID(value);
         
         // Home Assistant Discovery settings
@@ -59,7 +80,10 @@ void WebConfig::handleSaveConfig() {
         
         // Image settings
         else if (name == "image_url") {
-            if (configStorage.getImageURL() != value) imageSettingsChanged = true;
+            if (configStorage.getImageURL() != value) {
+                LOG_INFO_F("[WebAPI] Image URL updated: %s\n", value.c_str());
+                imageSettingsChanged = true;
+            }
             configStorage.setImageURL(value);
         }
         
@@ -67,6 +91,7 @@ void WebConfig::handleSaveConfig() {
         else if (name == "default_brightness") {
             int brightness = value.toInt();
             if (configStorage.getDefaultBrightness() != brightness) {
+                LOG_INFO_F("[WebAPI] Brightness updated: %d%% (applied immediately)\n", brightness);
                 brightnessChanged = true;
                 newBrightness = brightness;
             }
@@ -110,21 +135,65 @@ void WebConfig::handleSaveConfig() {
         else if (name == "watchdog_timeout") configStorage.setWatchdogTimeout(value.toInt() * 1000);
         else if (name == "critical_heap_threshold") configStorage.setCriticalHeapThreshold(value.toInt());
         else if (name == "critical_psram_threshold") configStorage.setCriticalPSRAMThreshold(value.toInt());
+        
+        // Time settings
+        else if (name == "ntp_server") configStorage.setNTPServer(value);
+        else if (name == "timezone") configStorage.setTimezone(value);
     }
     
     // Handle checkbox parameters - HTML forms only send checked checkbox values
     // If a checkbox parameter is not present, it means the checkbox was unchecked
-    bool wasCycling = configStorage.getCyclingEnabled();
-    bool nowCycling = server->hasArg("cycling_enabled");
-    bool modeChanged = (wasCycling != nowCycling);
+    // However, we need to distinguish between a full form submission and a partial update
+    // (e.g., when JavaScript sends only brightness_auto_mode without other checkboxes)
     
-    configStorage.setCyclingEnabled(nowCycling);
-    configStorage.setRandomOrder(server->hasArg("random_order"));
-    configStorage.setBrightnessAutoMode(server->hasArg("brightness_auto_mode"));
-    configStorage.setHADiscoveryEnabled(server->hasArg("ha_discovery_enabled"));
+    // Check which checkboxes are explicitly mentioned in the request (checked or with _present suffix)
+    bool hasCyclingEnabled = server->hasArg("cycling_enabled") || server->hasArg("cycling_enabled_present");
+    bool hasRandomOrder = server->hasArg("random_order") || server->hasArg("random_order_present");
+    bool hasBrightnessAutoMode = server->hasArg("brightness_auto_mode") || server->hasArg("brightness_auto_mode_present");
+    bool hasHADiscovery = server->hasArg("ha_discovery_enabled") || server->hasArg("ha_discovery_enabled_present");
+    bool hasNTPEnabled = server->hasArg("ntp_enabled") || server->hasArg("ntp_enabled_present");
+    
+    // Only update checkboxes that are explicitly present in this request
+    bool wasCycling = configStorage.getCyclingEnabled();
+    bool nowCycling = wasCycling;  // Default to current value
+    bool modeChanged = false;
+    
+    if (hasCyclingEnabled) {
+        nowCycling = server->hasArg("cycling_enabled");
+        modeChanged = (wasCycling != nowCycling);
+        
+        if (modeChanged) {
+            LOG_INFO_F("[WebAPI] Cycling mode changed: %s -> %s\n", 
+                       wasCycling ? "enabled" : "disabled", 
+                       nowCycling ? "enabled" : "disabled");
+        }
+        configStorage.setCyclingEnabled(nowCycling);
+    }
+    
+    if (hasRandomOrder) {
+        configStorage.setRandomOrder(server->hasArg("random_order"));
+    }
+    
+    if (hasBrightnessAutoMode) {
+        configStorage.setBrightnessAutoMode(server->hasArg("brightness_auto_mode"));
+    }
+    
+    if (hasHADiscovery) {
+        configStorage.setHADiscoveryEnabled(server->hasArg("ha_discovery_enabled"));
+    }
+    
+    if (hasNTPEnabled) {
+        configStorage.setNTPEnabled(server->hasArg("ntp_enabled"));
+    }
     
     // Save configuration to persistent storage
     configStorage.saveConfig();
+    
+    // Re-sync time if NTP settings changed
+    if (server->hasArg("ntp_server") || server->hasArg("timezone") || server->hasArg("ntp_enabled")) {
+        extern WiFiManager wifiManager;
+        wifiManager.syncNTPTime();
+    }
     
     // Reload configuration in the running system
     reloadConfiguration();
@@ -144,16 +213,24 @@ void WebConfig::handleSaveConfig() {
         extern void downloadAndDisplayImage();
         extern unsigned long lastUpdate;
         extern unsigned long lastCycleTime;
+        extern bool cyclingEnabled;
+        
+        // Update the global cycling state
+        cyclingEnabled = nowCycling;
         
         if (nowCycling) {
             // Switched to multi-image mode: reset to first image (index 0)
-            Serial.println("Mode switched to multi-image: resetting to first source");
+            Serial.println("[Mode] Switched to CYCLING mode (multi-image)");
+            char modeMsg[64];
+            snprintf(modeMsg, sizeof(modeMsg), "Mode: CYCLING (%d images)", configStorage.getImageSourceCount());
+            displayManager.debugPrint(modeMsg, COLOR_CYAN);
             configStorage.setCurrentImageIndex(0);
             configStorage.saveConfig();
             lastCycleTime = millis();
         } else {
             // Switched to single-image mode: load the single image URL
-            Serial.println("Mode switched to single-image: loading primary URL");
+            Serial.println("[Mode] Switched to SINGLE IMAGE mode");
+            displayManager.debugPrint("Mode: SINGLE IMAGE", COLOR_CYAN);
         }
         
         // Force immediate download
@@ -167,11 +244,14 @@ void WebConfig::handleSaveConfig() {
     if (brightnessChanged) message += " - brightness applied immediately";
     if (imageSettingsChanged) message += " - image settings applied immediately";
     
+    LOG_INFO_F("[WebAPI] Configuration save completed: %s\n", message.c_str());
+    
     String response = "{\"status\":\"success\",\"message\":\"" + message + "\"}";
     sendResponse(200, "application/json", response);
 }
 
 void WebConfig::handleRestart() {
+    LOG_WARNING("[WebAPI] Device restart requested via web interface");
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Device restarting now...\"}");
     
     displayManager.debugPrint("Device restart requested...", COLOR_YELLOW);
@@ -185,13 +265,17 @@ void WebConfig::handleAddImageSource() {
     if (server->hasArg("url")) {
         String url = server->arg("url");
         if (url.length() > 0) {
+            LOG_INFO_F("[WebAPI] Adding image source: %s\n", url.c_str());
             configStorage.addImageSource(url);
             configStorage.saveConfig();
+            LOG_INFO_F("[WebAPI] Image source added successfully (total: %d)\n", configStorage.getImageSourceCount());
             sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Image source added successfully\"}");
         } else {
+            LOG_WARNING("[WebAPI] Attempted to add empty image source URL");
             sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid URL\"}");
         }
     } else {
+        LOG_WARNING("[WebAPI] Add image source called without URL parameter");
         sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"URL parameter required\"}");
     }
 }
@@ -199,15 +283,18 @@ void WebConfig::handleAddImageSource() {
 void WebConfig::handleRemoveImageSource() {
     if (server->hasArg("index")) {
         int index = server->arg("index").toInt();
-        Serial.printf("API: Remove source request - index=%d\n", index);
+        LOG_INFO_F("[WebAPI] Remove image source request - index=%d\n", index);
         
         if (configStorage.removeImageSource(index)) {
             configStorage.saveConfig();
+            LOG_INFO_F("[WebAPI] Image source removed successfully (remaining: %d)\n", configStorage.getImageSourceCount());
             sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Image source removed successfully\"}");
         } else {
+            LOG_WARNING_F("[WebAPI] Failed to remove image source at index %d (invalid or last source)\n", index);
             sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Failed to remove source: invalid index or last source\"}");
         }
     } else {
+        LOG_WARNING("[WebAPI] Remove image source called without index parameter");
         sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
     }
 }
@@ -216,10 +303,13 @@ void WebConfig::handleUpdateImageSource() {
     if (server->hasArg("index") && server->hasArg("url")) {
         int index = server->arg("index").toInt();
         String url = server->arg("url");
+        LOG_INFO_F("[WebAPI] Updating image source %d to: %s\n", index, url.c_str());
         configStorage.setImageSource(index, url);
         configStorage.saveConfig();
+        LOG_DEBUG_F("[WebAPI] Image source %d updated successfully\n", index);
         sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Image source updated successfully\"}");
     } else {
+        LOG_WARNING("[WebAPI] Update image source called with missing parameters");
         sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index and URL parameters required\"}");
     }
 }
@@ -238,11 +328,13 @@ void WebConfig::handleNextImage() {
     extern unsigned long lastUpdate;
     extern unsigned long lastCycleTime;
     
+    LOG_INFO("[WebAPI] Next image requested via web interface");
     updateCyclingVariables();
     advanceToNextImage();
     lastCycleTime = millis(); // Reset cycle timer for fresh interval
     lastUpdate = 0; // Force immediate image download
     downloadAndDisplayImage();
+    LOG_DEBUG("[WebAPI] Image advance completed");
     
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Switched to next image and refreshed display\"}");
 }
@@ -252,6 +344,8 @@ void WebConfig::handleUpdateImageTransform() {
         int index = server->arg("index").toInt();
         String property = server->arg("property");
         String value = server->arg("value");
+        
+        LOG_DEBUG_F("[WebAPI] Transform update: image %d, %s = %s\n", index, property.c_str(), value.c_str());
         
         bool success = true;
         String message = "Transform updated successfully";
@@ -354,6 +448,7 @@ void WebConfig::handleApplyTransform() {
 }
 
 void WebConfig::handleFactoryReset() {
+    LOG_WARNING("[WebAPI] Factory reset requested via web interface");
     configStorage.resetToDefaults();
     
     // Clear WiFi credentials and provisioning flag to trigger captive portal on next boot
@@ -362,6 +457,7 @@ void WebConfig::handleFactoryReset() {
     configStorage.setWiFiProvisioned(false);
     configStorage.saveConfig();
     
+    LOG_WARNING("[WebAPI] Factory reset completed - WiFi setup will run on next boot");
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Factory reset completed. WiFi setup will run on next boot. Device restarting...\"}");
     
     displayManager.debugPrint("Factory reset in progress...", COLOR_YELLOW);
@@ -391,6 +487,8 @@ void WebConfig::handleSetLogSeverity() {
     configStorage.saveConfig();
     
     const char* severityNames[] = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"};
+    LOG_INFO_F("[WebAPI] Log severity filter changed to: %s (%d)\n", severityNames[severity], severity);
+    
     String json = "{";
     json += "\"status\":\"success\",";
     json += "\"message\":\"Log severity filter updated to " + String(severityNames[severity]) + "\",";
@@ -398,8 +496,20 @@ void WebConfig::handleSetLogSeverity() {
     json += "}";
     
     sendResponse(200, "application/json", json);
+}
+
+void WebConfig::handleClearCrashLogs() {
+    // Clear crash logs from device memory
+    crashLogger.clearAll();
     
-    Serial.printf("[WebConfig] Log severity filter updated to %s (%d)\n", severityNames[severity], severity);
+    String json = "{";
+    json += "\"status\":\"success\",";
+    json += "\"message\":\"Crash logs cleared from RTC and NVS storage\"";
+    json += "}";
+    
+    sendResponse(200, "application/json", json);
+    
+    LOG_INFO("[WebConfig] Crash logs cleared by user request");
 }
 
 void WebConfig::applyImageSettings() {
@@ -420,7 +530,7 @@ void WebConfig::applyImageSettings() {
 void WebConfig::reloadConfiguration() {
     extern void updateCyclingVariables();
     
-    Serial.println("Reloading configuration from web interface...");
+    LOG_INFO("[WebAPI] Reloading configuration from web interface");
     updateCyclingVariables();
     
     extern unsigned long currentUpdateInterval;
@@ -567,6 +677,13 @@ void WebConfig::handleGetAllInfo() {
     json += "\"watchdog_timeout\":" + String(configStorage.getWatchdogTimeout()) + ",";
     json += "\"critical_heap_threshold\":" + String(configStorage.getCriticalHeapThreshold()) + ",";
     json += "\"critical_psram_threshold\":" + String(configStorage.getCriticalPSRAMThreshold());
+    json += "},";
+    
+    // Time settings
+    json += "\"time\":{";
+    json += "\"ntp_enabled\":" + String(configStorage.getNTPEnabled() ? "true" : "false") + ",";
+    json += "\"ntp_server\":\"" + escapeJson(configStorage.getNTPServer()) + "\",";
+    json += "\"timezone\":\"" + escapeJson(configStorage.getTimezone()) + "\"";
     json += "}";
     
     json += "}";
