@@ -1,4 +1,5 @@
 #include "crash_logger.h"
+#include "build_info.h"
 #include <stdarg.h>
 #include <esp_system.h>
 
@@ -44,10 +45,19 @@ void CrashLogger::begin() {
     
     initialized = true;
     
-    // Log boot event
-    char bootMsg[128];
-    snprintf(bootMsg, sizeof(bootMsg), "\n===== BOOT #%lu at %lu ms =====\n", 
-             bootCount, sessionStartTime);
+    // Log boot event with timestamp
+    char bootMsg[256];
+    time_t now = time(nullptr);
+    struct tm timeinfo;
+    if (localtime_r(&now, &timeinfo) && timeinfo.tm_year > (2016 - 1900)) {
+        char timestamp[32];
+        strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &timeinfo);
+        snprintf(bootMsg, sizeof(bootMsg), "\n===== BOOT #%lu at %lu ms [%s] =====\n", 
+                 bootCount, sessionStartTime, timestamp);
+    } else {
+        snprintf(bootMsg, sizeof(bootMsg), "\n===== BOOT #%lu at %lu ms =====\n", 
+                 bootCount, sessionStartTime);
+    }
     log(bootMsg);
     
     // Check for crash
@@ -63,6 +73,11 @@ void CrashLogger::begin() {
         Serial.println("[CrashLogger] Crash detected - logs preserved in RTC and NVS");
     } else {
         log("[CrashLogger] Normal boot\n");
+        // Log firmware version on normal boot
+        char versionMsg[128];
+        snprintf(versionMsg, sizeof(versionMsg), "Firmware: %s (%s) - Built: %s %s\n", 
+                 GIT_BRANCH, GIT_COMMIT_HASH, BUILD_DATE, BUILD_TIME);
+        log(versionMsg);
     }
     
     // Report buffer status
@@ -233,16 +248,19 @@ String CrashLogger::getRecentLogs(size_t maxBytes) {
     result += "Boot Count: " + String(bootCount) + "\n";
     result += "Session Uptime: " + String(millis() - sessionStartTime) + " ms\n";
     result += "Last Boot Crash: " + String(crashMarker == 0xDEADBEEF ? "YES" : "NO") + "\n";
-    result += "\n--- RAM Logs (Current Session) ---\n";
-    result += getRAMLogs();
-    result += "\n--- RTC Logs (Since Last Reboot) ---\n";
-    result += getRTCLogs();
     
-    // Check if we have NVS logs from a crash
+    // Show logs in chronological order: oldest (NVS) → middle (RTC) → newest (RAM)
+    // Check if we have NVS logs from previous boot (oldest)
     if (prefs.isKey("log_data")) {
         result += "\n--- NVS Logs (Preserved from Previous Boot) ---\n";
         result += getNVSLogs();
     }
+    
+    result += "\n--- RTC Logs (Since Last Reboot) ---\n";
+    result += getRTCLogs();
+    
+    result += "\n--- RAM Logs (Current Session) ---\n";
+    result += getRAMLogs();
     
     result += "\n===== END CRASH LOGGER DUMP =====\n";
     

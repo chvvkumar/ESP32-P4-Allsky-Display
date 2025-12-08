@@ -166,12 +166,12 @@ void debugPrint(const char* message, uint16_t color) {
     crashLogger.log("\n");
     
     // Intelligently detect severity from message content
-    LogSeverity severity = LOG_INFO;  // Default
+    LogSeverity severity = LOG_DEBUG;  // Default to DEBUG for debugPrint calls
     String msg = String(message);
     msg.toLowerCase();
     
-    if (msg.indexOf("debug:") >= 0 || msg.indexOf("trace") >= 0) {
-        severity = LOG_DEBUG;
+    if (msg.indexOf("info") >= 0 || msg.indexOf("✓") >= 0) {
+        severity = LOG_INFO;
     } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
         severity = LOG_ERROR;
     } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
@@ -197,12 +197,12 @@ void debugPrintf(uint16_t color, const char* format, ...) {
     crashLogger.log("\n");
     
     // Intelligently detect severity from message content
-    LogSeverity severity = LOG_INFO;  // Default
+    LogSeverity severity = LOG_DEBUG;  // Default to DEBUG for debugPrintf calls
     String msg = String(buffer);
     msg.toLowerCase();
     
-    if (msg.indexOf("debug:") >= 0 || msg.indexOf("trace") >= 0) {
-        severity = LOG_DEBUG;
+    if (msg.indexOf("info") >= 0 || msg.indexOf("✓") >= 0) {
+        severity = LOG_INFO;
     } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
         severity = LOG_ERROR;
     } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
@@ -1045,8 +1045,13 @@ void downloadAndDisplayImage() {
     size_t size = http.getSize();
     
     Serial.printf("[Image] Content-Length: %d bytes\n", size);
-    Serial.printf("[Image] Source: Image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
-    debugPrintf(COLOR_WHITE, "Image %d/%d: %d bytes", currentImageIndex + 1, imageSourceCount, size);
+    if (cyclingEnabled && imageSourceCount > 1) {
+        Serial.printf("[Image] Source: Image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+        debugPrintf(COLOR_WHITE, "Image %d/%d: %d bytes", currentImageIndex + 1, imageSourceCount, size);
+    } else {
+        Serial.printf("[Image] Source: %s\n", currentImageURL);
+        debugPrintf(COLOR_WHITE, "Image: %d bytes", size);
+    }
     
     // Validate size before proceeding
     if (size <= 0) {
@@ -1315,8 +1320,13 @@ void downloadAndDisplayImage() {
                 
                 // Mark image as ready to display (but don't display yet - let loop handle it)
                 imageReadyToDisplay = true;
-                Serial.printf("[Image] Image %d/%d ready to display - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
-                debugPrintf(COLOR_GREEN, "Image %d/%d ready", currentImageIndex + 1, imageSourceCount);
+                if (cyclingEnabled && imageSourceCount > 1) {
+                    Serial.printf("[Image] Image %d/%d ready to display - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+                    debugPrintf(COLOR_GREEN, "Image %d/%d ready", currentImageIndex + 1, imageSourceCount);
+                } else {
+                    Serial.printf("[Image] Image ready to display - %s\n", currentImageURL);
+                    debugPrintf(COLOR_GREEN, "Image ready");
+                }
                 Serial.println("Image fully decoded and ready for display");
                 
                 // Mark first image as loaded (only once) - happens before actual display
@@ -1973,8 +1983,13 @@ void loop() {
         systemMonitor.forceResetWatchdog();
         
         // Now render the new image to display (single seamless update, no clearing artifacts)
-        Serial.printf("[Image] Rendering image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
-        debugPrintf(COLOR_GREEN, "Rendering image %d/%d", currentImageIndex + 1, imageSourceCount);
+        if (cyclingEnabled && imageSourceCount > 1) {
+            Serial.printf("[Image] Rendering image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+            debugPrintf(COLOR_GREEN, "Rendering image %d/%d", currentImageIndex + 1, imageSourceCount);
+        } else {
+            Serial.printf("[Image] Rendering image - %s\n", currentImageURL);
+            debugPrintf(COLOR_GREEN, "Rendering image");
+        }
         renderFullImage();
         systemMonitor.forceResetWatchdog();
         

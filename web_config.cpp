@@ -6,6 +6,7 @@
 #include "mqtt_manager.h"
 #include "display_manager.h"
 #include "crash_logger.h"
+#include <time.h>
 
 // Global instance
 WebConfig webConfig;
@@ -48,6 +49,7 @@ bool WebConfig::begin(int port) {
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
         server->on("/api/set-log-severity", HTTP_POST, [this]() { handleSetLogSeverity(); });
+        server->on("/api/clear-crash-logs", HTTP_POST, [this]() { handleClearCrashLogs(); });
         server->on("/api/info", HTTP_GET, [this]() { handleGetAllInfo(); });
         server->on("/api/current-image", HTTP_GET, [this]() { handleCurrentImage(); });
         
@@ -455,9 +457,21 @@ void WebConfig::broadcastLog(const char* message, uint16_t color, LogSeverity se
     
     // Use fixed buffer to avoid String heap fragmentation
     char buffer[384];
-    unsigned long ms = millis();
-    int written = snprintf(buffer, sizeof(buffer), "[%lu.%03lu] %s%s", 
-                          ms / 1000, ms % 1000, severityPrefix, message);
+    
+    // Get current time
+    struct tm timeinfo;
+    char timeStr[32];
+    if (getLocalTime(&timeinfo, 0)) {
+        // Format: YYYY-MM-DD HH:MM:SS
+        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    } else {
+        // Fallback to relative time if NTP not synced
+        unsigned long ms = millis();
+        snprintf(timeStr, sizeof(timeStr), "%lu.%03lu", ms / 1000, ms % 1000);
+    }
+    
+    int written = snprintf(buffer, sizeof(buffer), "[%s] %s%s", 
+                          timeStr, severityPrefix, message);
     
     // Ensure newline termination if there's room
     if (written > 0 && written < (int)sizeof(buffer) - 2) {

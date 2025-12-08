@@ -490,6 +490,59 @@ String WebConfig::generateAdvancedPage() {
     html += "<input type='number' id='mqtt_reconnect_interval' name='mqtt_reconnect_interval' class='form-control' value='" + String(configStorage.getMQTTReconnectInterval() / 1000) + "' min='1' max='300'></div>";
     html += "<div class='form-group'><label for='watchdog_timeout'>Watchdog Timeout (seconds)</label>";
     html += "<input type='number' id='watchdog_timeout' name='watchdog_timeout' class='form-control' value='" + String(configStorage.getWatchdogTimeout() / 1000) + "' min='10' max='120'></div></div>";
+    
+    html += "<div class='card'><h2>🕐 Time Settings</h2>";
+    html += "<div class='form-group'><label><input type='checkbox' id='ntp_enabled' name='ntp_enabled' " + String(configStorage.getNTPEnabled() ? "checked" : "") + "> Enable NTP Time Sync</label></div>";
+    html += "<div class='form-group'><label for='ntp_server'>NTP Server</label>";
+    html += "<input type='text' id='ntp_server' name='ntp_server' class='form-control' value='" + configStorage.getNTPServer() + "' placeholder='pool.ntp.org'></div>";
+    html += "<div class='form-group'><label for='timezone'>Timezone</label>";
+    html += "<select id='timezone' name='timezone' class='form-control'>";
+    
+    String currentTz = configStorage.getTimezone();
+    
+    // Common timezones with friendly names
+    const char* timezones[][2] = {
+        {"UTC0", "UTC (Universal Time)"},
+        {"GMT0BST,M3.5.0/1,M10.5.0", "Europe/London (GMT/BST)"},
+        {"CET-1CEST,M3.5.0,M10.5.0/3", "Europe/Paris (CET/CEST)"},
+        {"EET-2EEST,M3.5.0/3,M10.5.0/4", "Europe/Athens (EET/EEST)"},
+        {"MSK-3", "Europe/Moscow (MSK)"},
+        {"EST5EDT,M3.2.0,M11.1.0", "US/Eastern (EST/EDT)"},
+        {"CST6CDT,M3.2.0,M11.1.0", "US/Central (CST/CDT)"},
+        {"MST7MDT,M3.2.0,M11.1.0", "US/Mountain (MST/MDT)"},
+        {"PST8PDT,M3.2.0,M11.1.0", "US/Pacific (PST/PDT)"},
+        {"AKST9AKDT,M3.2.0,M11.1.0", "US/Alaska (AKST/AKDT)"},
+        {"HST10", "US/Hawaii (HST)"},
+        {"AST4ADT,M3.2.0,M11.1.0", "Canada/Atlantic (AST/ADT)"},
+        {"NST3:30NDT,M3.2.0,M11.1.0", "Canada/Newfoundland (NST/NDT)"},
+        {"<-03>3", "South America/Buenos Aires (ART)"},
+        {"<-03>3<-02>,M10.1.0/0,M2.3.0/0", "South America/São Paulo (BRT/BRST)"},
+        {"AEST-10AEDT,M10.1.0,M4.1.0/3", "Australia/Sydney (AEST/AEDT)"},
+        {"ACST-9:30ACDT,M10.1.0,M4.1.0/3", "Australia/Adelaide (ACST/ACDT)"},
+        {"AWST-8", "Australia/Perth (AWST)"},
+        {"NZST-12NZDT,M9.5.0,M4.1.0/3", "Pacific/Auckland (NZST/NZDT)"},
+        {"JST-9", "Asia/Tokyo (JST)"},
+        {"KST-9", "Asia/Seoul (KST)"},
+        {"CST-8", "Asia/Shanghai (CST)"},
+        {"HKT-8", "Asia/Hong Kong (HKT)"},
+        {"SGT-8", "Asia/Singapore (SGT)"},
+        {"IST-5:30", "Asia/Kolkata (IST)"},
+        {"PKT-5", "Asia/Karachi (PKT)"},
+        {"<+03>-3", "Asia/Dubai (GST)"},
+        {"EAT-3", "Africa/Nairobi (EAT)"},
+        {"SAST-2", "Africa/Johannesburg (SAST)"},
+        {"WAT-1", "Africa/Lagos (WAT)"}
+    };
+    
+    int tzCount = sizeof(timezones) / sizeof(timezones[0]);
+    for (int i = 0; i < tzCount; i++) {
+        String selected = (currentTz == timezones[i][0]) ? " selected" : "";
+        html += "<option value='" + String(timezones[i][0]) + "'" + selected + ">" + String(timezones[i][1]) + "</option>";
+    }
+    
+    html += "</select>";
+    html += "<small style='color:#94a3b8;display:block;margin-top:0.5rem'>Select your timezone from the list. Time will be displayed in local time after NTP sync.</small></div></div>";
+    
     html += "<div class='card'><h2>💾 Memory Thresholds</h2>";
     html += "<div class='form-group'><label for='critical_heap_threshold'>Critical Heap Threshold (bytes)</label>";
     html += "<input type='number' id='critical_heap_threshold' name='critical_heap_threshold' class='form-control' value='" + String(configStorage.getCriticalHeapThreshold()) + "' min='10000' max='1000000'></div>";
@@ -999,28 +1052,34 @@ String WebConfig::generateAPIReferencePage() {
 
 String WebConfig::generateConsolePage() {
     String html = "<div class='main'><div class='container'>";
-    html += "<div class='card'>";
-    html += "<h2>🖥️ Serial Console</h2>";
     
-    // Info box
-    html += "<div style='background:rgba(56,189,248,0.1);border:1px solid #38bdf8;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
-    html += "<p style='color:#38bdf8;margin:0;font-size:0.9rem'><i class='fas fa-info-circle' style='margin-right:8px'></i>";
-    html += "<strong>Real-time Monitoring:</strong> View serial debug output from the device in real-time over WiFi. ";
-    html += "No USB connection required. Messages appear as they are logged by the system.</p>";
+    // Two-column layout: Controls on left, Console on right
+    html += "<div style='display:grid;grid-template-columns:280px 1fr;gap:1.5rem;align-items:start'>";
+    
+    // Left column: Controls and info
+    html += "<div style='display:flex;flex-direction:column;gap:0.75rem'>";
+    
+    // Connection controls card
+    html += "<div class='card' style='padding:1rem'>";
+    html += "<h3 style='margin:0 0 0.75rem 0;color:#38bdf8;font-size:1rem'>Connection</h3>";
+    html += "<button class='btn btn-success' onclick='connectConsole()' id='connectBtn' style='width:100%;margin-bottom:0.5rem'><i class='fas fa-plug' style='margin-right:0.5rem'></i>Connect</button>";
+    html += "<button class='btn btn-danger' onclick='disconnectConsole()' id='disconnectBtn' disabled style='width:100%'><i class='fas fa-times' style='margin-right:0.5rem'></i>Disconnect</button>";
     html += "</div>";
     
-    // Control buttons and severity filter
-    html += "<div style='display:flex;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center'>";
-    html += "<button class='btn btn-success' onclick='connectConsole()' id='connectBtn'><i class='fas fa-plug' style='margin-right:0.5rem'></i>Connect</button>";
-    html += "<button class='btn btn-danger' onclick='disconnectConsole()' id='disconnectBtn' disabled><i class='fas fa-times' style='margin-right:0.5rem'></i>Disconnect</button>";
-    html += "<button class='btn btn-secondary' onclick='clearConsole()'><i class='fas fa-eraser' style='margin-right:0.5rem'></i>Clear</button>";
-    html += "<button class='btn btn-secondary' onclick='toggleAutoscroll()' id='autoscrollBtn'><i class='fas fa-arrow-down' style='margin-right:0.5rem'></i>Auto-scroll: ON</button>";
-    html += "<button class='btn btn-secondary' onclick='downloadLogs()'><i class='fas fa-download' style='margin-right:0.5rem'></i>Download</button>";
+    // Console controls card
+    html += "<div class='card' style='padding:1rem'>";
+    html += "<h3 style='margin:0 0 0.75rem 0;color:#38bdf8;font-size:1rem'>Console Actions</h3>";
+    html += "<button class='btn btn-secondary' onclick='clearConsole()' style='width:100%;margin-bottom:0.5rem'><i class='fas fa-eraser' style='margin-right:0.5rem'></i>Clear Display</button>";
+    html += "<button class='btn btn-warning' onclick='clearCrashLogs()' title='Clear buffered crash logs from device' style='width:100%;margin-bottom:0.5rem'><i class='fas fa-trash-alt' style='margin-right:0.5rem'></i>Clear Device Logs</button>";
+    html += "<button class='btn btn-secondary' onclick='toggleAutoscroll()' id='autoscrollBtn' style='width:100%;margin-bottom:0.5rem'><i class='fas fa-arrow-down' style='margin-right:0.5rem'></i>Auto-scroll: ON</button>";
+    html += "<button class='btn btn-secondary' onclick='downloadLogs()' style='width:100%'><i class='fas fa-download' style='margin-right:0.5rem'></i>Download Logs</button>";
+    html += "</div>";
     
-    // Severity filter dropdown
-    html += "<div style='display:flex;align-items:center;gap:0.5rem;margin-left:auto'>";
-    html += "<label for='severityFilter' style='color:#94a3b8;font-size:0.9rem;white-space:nowrap'><i class='fas fa-filter' style='margin-right:0.5rem'></i>Min Severity:</label>";
-    html += "<select id='severityFilter' onchange='updateSeverityFilter()' style='background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:0.5rem;font-size:0.9rem;cursor:pointer'>";
+    // Filter card
+    html += "<div class='card' style='padding:1rem'>";
+    html += "<h3 style='margin:0 0 0.75rem 0;color:#38bdf8;font-size:1rem'>Filter</h3>";
+    html += "<label for='severityFilter' style='color:#94a3b8;font-size:0.9rem;display:block;margin-bottom:0.5rem'><i class='fas fa-filter' style='margin-right:0.5rem'></i>Min Severity:</label>";
+    html += "<select id='severityFilter' onchange='updateSeverityFilter()' style='width:100%;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:0.5rem;font-size:0.9rem;cursor:pointer'>";
     
     int currentSeverity = configStorage.getMinLogSeverity();
     html += "<option value='0'" + String(currentSeverity == 0 ? " selected" : "") + ">DEBUG</option>";
@@ -1030,13 +1089,22 @@ String WebConfig::generateConsolePage() {
     html += "<option value='4'" + String(currentSeverity == 4 ? " selected" : "") + ">CRITICAL</option>";
     html += "</select>";
     html += "</div>";
-    html += "</div>";
     
-    // Status indicator
-    html += "<div style='margin-bottom:1rem;padding:0.75rem;background:#1e293b;border-radius:8px;display:flex;align-items:center;gap:0.75rem'>";
+    html += "</div>"; // End left column
+    
+    // Right column: Serial Console
+    html += "<div class='card' style='padding:1rem'>";
+    
+    // Title row with status and message count
+    html += "<div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem'>";
+    html += "<h2 style='margin:0'>🖥️ Serial Console</h2>";
+    html += "<div style='display:flex;align-items:center;gap:1rem'>";
+    html += "<span style='color:#64748b;font-size:0.8rem' id='wsStats'>0 messages</span>";
+    html += "<div style='display:flex;align-items:center;gap:0.5rem'>";
     html += "<span id='wsStatus' class='status-indicator status-offline'></span>";
-    html += "<span id='wsStatusText' style='color:#94a3b8;font-size:0.9rem'>Disconnected</span>";
-    html += "<span id='wsStats' style='margin-left:auto;color:#64748b;font-size:0.85rem'>0 messages</span>";
+    html += "<span id='wsStatusText' style='color:#94a3b8;font-size:0.85rem'>Disconnected</span>";
+    html += "</div>";
+    html += "</div>";
     html += "</div>";
     
     // Console output area
@@ -1044,8 +1112,9 @@ String WebConfig::generateConsolePage() {
     html += "background:#0f172a;";
     html += "border:1px solid #334155;";
     html += "border-radius:8px;";
-    html += "padding:1rem;";
-    html += "height:600px;";
+    html += "padding:0.5rem;";
+    html += "height:calc(100vh - 300px);";
+    html += "min-height:250px;";
     html += "overflow-y:auto;";
     html += "font-family:\"Courier New\",monospace;";
     html += "font-size:0.85rem;";
@@ -1055,7 +1124,9 @@ String WebConfig::generateConsolePage() {
     html += "word-wrap:break-word;";
     html += "'></div>";
     
-    html += "</div></div></div>";
+    html += "</div>"; // End card
+    html += "</div>"; // End grid
+    html += "</div></div>";
     
     // WebSocket JavaScript
     html += "<script>";
@@ -1094,16 +1165,21 @@ String WebConfig::generateConsolePage() {
     html += "    reconnectAttempts = 0;";
     html += "    wsStats.textContent = messageCount + ' messages';";
     html += "    let msg = event.data;";
-    // Add color coding for special markers
+    // Add color coding for special markers - use proper escaping for HTML
+    html += "    const msgLower = msg.toLowerCase();";
+    html += "    let coloredMsg = null;";
     html += "    if (msg.includes('╔══════')) {";
-    html += "      msg = '<span style=\"color:#10b981;font-weight:bold\">' + msg.replace(/\\n/g, '</span>\\n<span style=\"color:#10b981;font-weight:bold\">') + '</span>';";
-    html += "      consoleOutput.innerHTML += msg;";
+    html += "      const escaped = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');";
+    html += "      coloredMsg = '<span style=\"color:#10b981;font-weight:bold\">' + escaped + '</span>';";
     html += "    } else if (msg.includes('BUFFERED LOGS') || msg.includes('END OF BUFFERED')) {";
-    html += "      msg = '<span style=\"color:#06b6d4;font-weight:bold\">' + msg + '</span>';";
-    html += "      consoleOutput.innerHTML += msg;";
-    html += "    } else if (msg.includes('CRASH') || msg.includes('crash')) {";
-    html += "      msg = '<span style=\"color:#f59e0b;font-weight:bold\">' + msg + '</span>';";
-    html += "      consoleOutput.innerHTML += msg;";
+    html += "      const escaped = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');";
+    html += "      coloredMsg = '<span style=\"color:#06b6d4;font-weight:bold\">' + escaped + '</span>';";
+    html += "    } else if (msgLower.includes('crash') || msgLower.includes('boot #') || msgLower.includes('===== boot')) {";
+    html += "      const escaped = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');";
+    html += "      coloredMsg = '<span style=\"color:#f59e0b;font-weight:bold;display:block\">' + escaped + '</span>';";
+    html += "    }";
+    html += "    if (coloredMsg) {";
+    html += "      consoleOutput.innerHTML += coloredMsg;";
     html += "    } else {";
     html += "      const textNode = document.createTextNode(msg);";
     html += "      consoleOutput.appendChild(textNode);";
@@ -1184,6 +1260,22 @@ String WebConfig::generateConsolePage() {
     html += "        consoleOutput.textContent += '[CLIENT] Severity filter updated to ' + levels[severity] + '\\n';";
     html += "        if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
     html += "      }";
+    html += "    });";
+    html += "}";
+    
+    html += "function clearCrashLogs() {";
+    html += "  if (!confirm('Clear all buffered crash logs from device memory?\\n\\nThis will remove logs from RTC and NVS storage.')) return;";
+    html += "  fetch('/api/clear-crash-logs', {method: 'POST'})";
+    html += "    .then(response => response.json())";
+    html += "    .then(data => {";
+    html += "      if (data.status === 'success') {";
+    html += "        consoleOutput.textContent += '[CLIENT] ✓ Crash logs cleared from device\\n';";
+    html += "        if (autoscroll) consoleOutput.scrollTop = consoleOutput.scrollHeight;";
+    html += "      } else {";
+    html += "        consoleOutput.textContent += '[CLIENT] ✗ Failed to clear crash logs\\n';";
+    html += "      }";
+    html += "    }).catch(err => {";
+    html += "      consoleOutput.textContent += '[CLIENT] ✗ Error: ' + err + '\\n';";
     html += "    });";
     html += "}";
     

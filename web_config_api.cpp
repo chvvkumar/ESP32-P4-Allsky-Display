@@ -7,6 +7,7 @@
 #include "mqtt_manager.h"
 #include "display_manager.h"
 #include "ota_manager.h"
+#include "logging.h"
 #include <Update.h>
 
 // External global instances
@@ -110,6 +111,10 @@ void WebConfig::handleSaveConfig() {
         else if (name == "watchdog_timeout") configStorage.setWatchdogTimeout(value.toInt() * 1000);
         else if (name == "critical_heap_threshold") configStorage.setCriticalHeapThreshold(value.toInt());
         else if (name == "critical_psram_threshold") configStorage.setCriticalPSRAMThreshold(value.toInt());
+        
+        // Time settings
+        else if (name == "ntp_server") configStorage.setNTPServer(value);
+        else if (name == "timezone") configStorage.setTimezone(value);
     }
     
     // Handle checkbox parameters - HTML forms only send checked checkbox values
@@ -122,9 +127,16 @@ void WebConfig::handleSaveConfig() {
     configStorage.setRandomOrder(server->hasArg("random_order"));
     configStorage.setBrightnessAutoMode(server->hasArg("brightness_auto_mode"));
     configStorage.setHADiscoveryEnabled(server->hasArg("ha_discovery_enabled"));
+    configStorage.setNTPEnabled(server->hasArg("ntp_enabled"));
     
     // Save configuration to persistent storage
     configStorage.saveConfig();
+    
+    // Re-sync time if NTP settings changed
+    if (server->hasArg("ntp_server") || server->hasArg("timezone") || server->hasArg("ntp_enabled")) {
+        extern WiFiManager wifiManager;
+        wifiManager.syncNTPTime();
+    }
     
     // Reload configuration in the running system
     reloadConfiguration();
@@ -144,16 +156,24 @@ void WebConfig::handleSaveConfig() {
         extern void downloadAndDisplayImage();
         extern unsigned long lastUpdate;
         extern unsigned long lastCycleTime;
+        extern bool cyclingEnabled;
+        
+        // Update the global cycling state
+        cyclingEnabled = nowCycling;
         
         if (nowCycling) {
             // Switched to multi-image mode: reset to first image (index 0)
-            Serial.println("Mode switched to multi-image: resetting to first source");
+            Serial.println("[Mode] Switched to CYCLING mode (multi-image)");
+            char modeMsg[64];
+            snprintf(modeMsg, sizeof(modeMsg), "Mode: CYCLING (%d images)", configStorage.getImageSourceCount());
+            displayManager.debugPrint(modeMsg, COLOR_CYAN);
             configStorage.setCurrentImageIndex(0);
             configStorage.saveConfig();
             lastCycleTime = millis();
         } else {
             // Switched to single-image mode: load the single image URL
-            Serial.println("Mode switched to single-image: loading primary URL");
+            Serial.println("[Mode] Switched to SINGLE IMAGE mode");
+            displayManager.debugPrint("Mode: SINGLE IMAGE", COLOR_CYAN);
         }
         
         // Force immediate download
@@ -402,6 +422,20 @@ void WebConfig::handleSetLogSeverity() {
     Serial.printf("[WebConfig] Log severity filter updated to %s (%d)\n", severityNames[severity], severity);
 }
 
+void WebConfig::handleClearCrashLogs() {
+    // Clear crash logs from device memory
+    crashLogger.clearAll();
+    
+    String json = "{";
+    json += "\"status\":\"success\",";
+    json += "\"message\":\"Crash logs cleared from RTC and NVS storage\"";
+    json += "}";
+    
+    sendResponse(200, "application/json", json);
+    
+    LOG_INFO("[WebConfig] Crash logs cleared by user request");
+}
+
 void WebConfig::applyImageSettings() {
     extern float scaleX, scaleY;
     extern int16_t offsetX, offsetY;
@@ -567,6 +601,13 @@ void WebConfig::handleGetAllInfo() {
     json += "\"watchdog_timeout\":" + String(configStorage.getWatchdogTimeout()) + ",";
     json += "\"critical_heap_threshold\":" + String(configStorage.getCriticalHeapThreshold()) + ",";
     json += "\"critical_psram_threshold\":" + String(configStorage.getCriticalPSRAMThreshold());
+    json += "},";
+    
+    // Time settings
+    json += "\"time\":{";
+    json += "\"ntp_enabled\":" + String(configStorage.getNTPEnabled() ? "true" : "false") + ",";
+    json += "\"ntp_server\":\"" + escapeJson(configStorage.getNTPServer()) + "\",";
+    json += "\"timezone\":\"" + escapeJson(configStorage.getTimezone()) + "\"";
     json += "}";
     
     json += "}";
