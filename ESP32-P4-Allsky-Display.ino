@@ -15,6 +15,7 @@
 #include "task_retry_handler.h"
 #include "wifi_qr_code.h"
 #include "crash_logger.h"
+#include "command_interpreter.h"
 
 // Additional required libraries
 #include <HTTPClient.h>
@@ -32,8 +33,8 @@ size_t imageBufferSize = 0;
 // Image transformation variables
 float scaleX = DEFAULT_SCALE_X;
 float scaleY = DEFAULT_SCALE_Y;
-int16_t offsetX = DEFAULT_OFFSET_X;
-int16_t offsetY = DEFAULT_OFFSET_Y;
+int offsetX = DEFAULT_OFFSET_X;
+int offsetY = DEFAULT_OFFSET_Y;
 float rotationAngle = DEFAULT_ROTATION;
 
 // Dynamic configuration variables
@@ -100,12 +101,6 @@ unsigned long firstTapTime = 0;
 bool touchPressed = false;
 bool touchWasPressed = false;
 
-// Touch timing configuration
-const unsigned long TOUCH_DEBOUNCE_MS = 50;        // Minimum time between touch events
-const unsigned long DOUBLE_TAP_TIMEOUT_MS = 400;   // Maximum time between taps for double-tap
-const unsigned long MIN_TAP_DURATION_MS = 50;      // Minimum press duration for valid tap
-const unsigned long MAX_TAP_DURATION_MS = 2000;    // Maximum press duration for tap (vs hold)
-
 // Touch actions triggered flags
 bool touchTriggeredNextImage = false;
 bool touchTriggeredModeToggle = false;
@@ -120,7 +115,6 @@ int JPEGDraw(JPEGDRAW *pDraw);
 int JPEGDrawQR(JPEGDRAW *pDraw);
 int16_t displayWiFiQRCode();
 void downloadAndDisplayImage();
-void processSerialCommands();
 void renderFullImage();
 void loadCyclingConfiguration();
 void advanceToNextImage();
@@ -1129,7 +1123,7 @@ void downloadAndDisplayImage() {
     
     // Use configuration values for better consistency
     const size_t ULTRA_CHUNK_SIZE = 1024;  // 1KB chunks for good performance
-    const unsigned long DOWNLOAD_WATCHDOG_INTERVAL = 50;  // Reset every 50ms for more frequent resets
+
     const unsigned long NO_DATA_TIMEOUT = 5000;  // 5 seconds with no data before giving up (increased for slow connections)
     
     unsigned long downloadStartTime = millis();
@@ -1344,7 +1338,7 @@ void downloadAndDisplayImage() {
             unsigned long decodeStart = millis();
             
             // JPEG decode with timeout monitoring
-            const unsigned long DECODE_TIMEOUT = 5000;  // 5 second timeout for decode
+
             unsigned long decodeStartTime = millis();
             
             // Pause display during decode to prevent LCD underrun from memory contention
@@ -1524,244 +1518,7 @@ String getCurrentImageURL() {
     return configStorage.getImageURL();
 }
 
-void processSerialCommands() {
-    if (Serial.available()) {
-        char command = Serial.read();
-        
-        switch (command) {
-            // Scaling commands
-            case '+':
-                scaleX = constrain(scaleX + SCALE_STEP, MIN_SCALE, MAX_SCALE);
-                scaleY = constrain(scaleY + SCALE_STEP, MIN_SCALE, MAX_SCALE);
-                configStorage.setImageScaleX(currentImageIndex, scaleX);
-                configStorage.setImageScaleY(currentImageIndex, scaleY);
-                configStorage.saveConfig();
-                renderFullImage();
-                LOG_INFO_F("[Serial] Scale increased: %.1fx%.1f (saved for image %d)\n", scaleX, scaleY, currentImageIndex + 1);
-                break;
-            case '-':
-                scaleX = constrain(scaleX - SCALE_STEP, MIN_SCALE, MAX_SCALE);
-                scaleY = constrain(scaleY - SCALE_STEP, MIN_SCALE, MAX_SCALE);
-                configStorage.setImageScaleX(currentImageIndex, scaleX);
-                configStorage.setImageScaleY(currentImageIndex, scaleY);
-                configStorage.saveConfig();
-                renderFullImage();
-                LOG_INFO_F("[Serial] Scale decreased: %.1fx%.1f (saved for image %d)\n", scaleX, scaleY, currentImageIndex + 1);
-                break;
-                
-            // Movement commands
-            case 'W':
-            case 'w':
-                offsetY -= MOVE_STEP;
-                configStorage.setImageOffsetY(currentImageIndex, offsetY);
-                configStorage.saveConfig();
-                renderFullImage();
-                LOG_INFO_F("[Serial] Move up: offset=%d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
-                break;
-            case 'S':
-            case 's':
-                offsetY += MOVE_STEP;
-                configStorage.setImageOffsetY(currentImageIndex, offsetY);
-                configStorage.saveConfig();
-                renderFullImage();
-                LOG_INFO_F("[Serial] Move down: offset=%d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
-                break;
-            case 'A':
-            case 'a':
-                offsetX -= MOVE_STEP;
-                configStorage.setImageOffsetX(currentImageIndex, offsetX);
-                configStorage.saveConfig();
-                renderFullImage();
-                LOG_INFO_F("[Serial] Move left: offset=%d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
-                break;
-            case 'D':
-            case 'd':
-                offsetX += MOVE_STEP;
-                configStorage.setImageOffsetX(currentImageIndex, offsetX);
-                configStorage.saveConfig();
-                renderFullImage();
-                LOG_INFO_F("[Serial] Move right: offset=%d,%d (saved for image %d)\n", offsetX, offsetY, currentImageIndex + 1);
-                break;
-                
-            // Rotation commands
-            case 'Q':
-            case 'q':
-                rotationAngle -= ROTATION_STEP;
-                if (rotationAngle < 0) rotationAngle += 360.0;
-                configStorage.setImageRotation(currentImageIndex, rotationAngle);
-                configStorage.saveConfig();
-                renderFullImage();
-                LOG_INFO_F("[Serial] Rotate CCW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
-                break;
-            case 'E':
-            case 'e':
-                rotationAngle += ROTATION_STEP;
-                if (rotationAngle >= 360.0) rotationAngle -= 360.0;
-                configStorage.setImageRotation(currentImageIndex, rotationAngle);
-                configStorage.saveConfig();
-                renderFullImage();
-                LOG_INFO_F("[Serial] Rotate CW: %.0f° (saved for image %d)\n", rotationAngle, currentImageIndex + 1);
-                break;
-                
-            // Next image command
-            case 'N':
-            case 'n':
-                if (cyclingEnabled && imageSourceCount > 1) {
-                    LOG_INFO_F("[Serial] Next image command - advancing to next (image %d of %d)\n", currentImageIndex + 1, imageSourceCount);
-                    advanceToNextImage();
-                    lastCycleTime = millis(); // Reset cycle timer for fresh interval
-                    lastUpdate = 0; // Force immediate image download
-                } else {
-                    LOG_WARNING("[Serial] Next image command ignored - cycling not enabled or only one source configured");
-                }
-                break;
-            
-            // Refresh current image
-            case 'F':
-            case 'f':
-                lastUpdate = 0; // Force immediate refresh
-                LOG_INFO("[Serial] Force image refresh requested");
-                break;
-                
-            // Reset command
-            case 'R':
-            case 'r':
-                LOG_INFO_F("[Serial] Reset transformations for image %d\n", currentImageIndex + 1);
-                scaleX = DEFAULT_SCALE_X;
-                scaleY = DEFAULT_SCALE_Y;
-                offsetX = DEFAULT_OFFSET_X;
-                offsetY = DEFAULT_OFFSET_Y;
-                rotationAngle = DEFAULT_ROTATION;
-                configStorage.setImageScaleX(currentImageIndex, scaleX);
-                configStorage.setImageScaleY(currentImageIndex, scaleY);
-                configStorage.setImageOffsetX(currentImageIndex, offsetX);
-                configStorage.setImageOffsetY(currentImageIndex, offsetY);
-                configStorage.setImageRotation(currentImageIndex, rotationAngle);
-                configStorage.saveConfig();
-                renderFullImage();
-                LOG_INFO("[Serial] All transformations reset to defaults");
-                break;
-                
-            // Save current transform settings to config for this image
-            case 'V':
-            case 'v':
-                configStorage.setImageScaleX(currentImageIndex, scaleX);
-                configStorage.setImageScaleY(currentImageIndex, scaleY);
-                configStorage.setImageOffsetX(currentImageIndex, offsetX);
-                configStorage.setImageOffsetY(currentImageIndex, offsetY);
-                configStorage.setImageRotation(currentImageIndex, rotationAngle);
-                configStorage.saveConfig();
-                Serial.printf("Saved transform settings for image %d: scale=%.1fx%.1f, offset=%d,%d, rotation=%.0f°\n",
-                             currentImageIndex + 1, scaleX, scaleY, offsetX, offsetY, rotationAngle);
-                break;
-                
-            // Brightness commands
-            case 'L':
-            case 'l':
-                displayManager.setBrightness(min(displayManager.getBrightness() + 10, 100));
-                LOG_INFO_F("[Serial] Brightness increased: %d%%\n", displayManager.getBrightness());
-                break;
-            case 'K':
-            case 'k':
-                displayManager.setBrightness(max(displayManager.getBrightness() - 10, 0));
-                LOG_INFO_F("[Serial] Brightness decreased: %d%%\n", displayManager.getBrightness());
-                break;
-                
-            // Reboot command
-            case 'B':
-            case 'b':
-                LOG_WARNING("[Serial] Device reboot requested via serial command");
-                delay(1000); // Give time for message to be sent
-                crashLogger.saveBeforeReboot();
-                delay(100);
-                ESP.restart();
-                break;
-                
-            // Help command
-            case 'H':
-            case 'h':
-            case '?':
-                Serial.println("\n=== Image Control Commands ===");
-                Serial.println("Navigation:");
-                Serial.println("  N   : Next image (resets cycle timer)");
-                Serial.println("  F   : Force refresh current image");
-                Serial.println("Scaling:");
-                Serial.println("  +/- : Scale both axes");
-                Serial.println("Movement:");
-                Serial.println("  W/S : Move up/down");
-                Serial.println("  A/D : Move left/right");
-                Serial.println("Rotation:");
-                Serial.println("  Q/E : Rotate 90° CCW/CW");
-                Serial.println("Reset:");
-                Serial.println("  R   : Reset all transformations");
-                Serial.println("  V   : Save (persist) current transform settings for this image");
-                Serial.println("Brightness:");
-                Serial.println("  L/K : Brightness up/down");
-                Serial.println("System:");
-                Serial.println("  B   : Reboot device");
-                Serial.println("  M   : Memory info");
-                Serial.println("  I   : Network info");
-                Serial.println("  P   : PPA info");
-                Serial.println("  T   : MQTT info");
-                Serial.println("  X   : Web server status/restart");
-                Serial.println("Touch:");
-                Serial.println("  Single tap : Next image");
-                Serial.println("  Double tap : Toggle cycling/single refresh mode");
-                Serial.println("Help:");
-                Serial.println("  H/? : Show this help");
-                break;
-                
-            // System info commands
-            case 'M':
-            case 'm':
-                systemMonitor.printMemoryStatus();
-                break;
-            case 'I':
-            case 'i':
-                wifiManager.printConnectionInfo();
-                break;
-            case 'P':
-            case 'p':
-                ppaAccelerator.printStatus();
-                break;
-            case 'T':
-            case 't':
-                mqttManager.printConnectionInfo();
-                break;
-            case 'X':
-            case 'x':
-                // Web server status and restart
-                LOG_INFO("[Serial] Web server status check requested");
-                Serial.println("\n=== Web Server Status ===");
-                Serial.printf("WiFi connected: %s\n", wifiManager.isConnected() ? "YES" : "NO");
-                if (wifiManager.isConnected()) {
-                    Serial.printf("IP Address: %s\n", WiFi.localIP().toString().c_str());
-                }
-                Serial.printf("Web server running: %s\n", webConfig.isRunning() ? "YES" : "NO");
-                
-                // Try to restart web server
-                if (wifiManager.isConnected()) {
-                    LOG_INFO("[Serial] Attempting web server restart");
-                    Serial.println("Attempting to restart web server...");
-                    webConfig.stop();
-                    delay(500);
-                    if (webConfig.begin(8080)) {
-                        LOG_INFO_F("[Serial] Web server restarted successfully at: http://%s:8080\n", WiFi.localIP().toString().c_str());
-                    } else {
-                        LOG_ERROR("[Serial] Failed to restart web server");
-                    }
-                } else {
-                    LOG_WARNING("[Serial] Cannot start web server - WiFi not connected");
-                }
-                break;
-        }
-        
-        // Clear any remaining characters
-        while (Serial.available()) {
-            Serial.read();
-        }
-    }
-}
+
 
 void loop() {
     // Force watchdog reset at start of each loop iteration
@@ -1864,7 +1621,7 @@ void loop() {
     }
     
     // Process serial commands for image control
-    processSerialCommands();
+    commandInterpreter.processCommands();
     systemMonitor.forceResetWatchdog();
     
     // Update touch state and process gestures
@@ -1967,7 +1724,7 @@ void loop() {
             
             // Wrap download in timeout protection with absolute timeout
             unsigned long downloadStartTime = millis();
-            const unsigned long ABSOLUTE_DOWNLOAD_TIMEOUT = 50000; // 50 second absolute timeout (increased for slow connections)
+
             
             // Create a flag to track download completion
             bool downloadCompleted = false;
