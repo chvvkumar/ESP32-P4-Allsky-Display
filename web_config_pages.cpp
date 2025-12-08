@@ -1058,7 +1058,7 @@ String WebConfig::generateConsolePage() {
     String html = "<div class='main'><div class='container'>";
     
     // Two-column layout: Controls on left, Console on right
-    html += "<div style='display:grid;grid-template-columns:280px 1fr;gap:1.5rem;align-items:start'>";
+    html += "<div style='display:grid;grid-template-columns:200px 1fr;gap:1.5rem;align-items:start'>";
     
     // Left column: Controls and info
     html += "<div style='display:flex;flex-direction:column;gap:0.75rem'>";
@@ -1074,9 +1074,9 @@ String WebConfig::generateConsolePage() {
     html += "<div class='card' style='padding:1rem'>";
     html += "<h3 style='margin:0 0 0.75rem 0;color:#38bdf8;font-size:1rem'>Console Actions</h3>";
     html += "<button class='btn btn-secondary' onclick='clearConsole()' style='width:100%;margin-bottom:0.5rem'><i class='fas fa-eraser' style='margin-right:0.5rem'></i>Clear Display</button>";
-    html += "<button class='btn btn-warning' onclick='clearCrashLogs()' title='Clear buffered crash logs from device' style='width:100%;margin-bottom:0.5rem'><i class='fas fa-trash-alt' style='margin-right:0.5rem'></i>Clear Device Logs</button>";
     html += "<button class='btn btn-secondary' onclick='toggleAutoscroll()' id='autoscrollBtn' style='width:100%;margin-bottom:0.5rem'><i class='fas fa-arrow-down' style='margin-right:0.5rem'></i>Auto-scroll: ON</button>";
-    html += "<button class='btn btn-secondary' onclick='downloadLogs()' style='width:100%'><i class='fas fa-download' style='margin-right:0.5rem'></i>Download Logs</button>";
+    html += "<button class='btn btn-secondary' onclick='downloadLogs()' style='width:100%;margin-bottom:0.5rem'><i class='fas fa-download' style='margin-right:0.5rem'></i>Download Logs</button>";
+    html += "<button class='btn btn-warning' onclick='clearCrashLogs()' title='Clear buffered crash logs from device' style='width:100%'><i class='fas fa-trash-alt' style='margin-right:0.5rem'></i>Clear Device Logs</button>";
     html += "</div>";
     
     // Filter card
