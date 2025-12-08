@@ -25,14 +25,19 @@ MQTTManager::MQTTManager() :
 }
 
 bool MQTTManager::begin() {
+    LOG_INFO("[MQTT] Initializing MQTT manager");
+    
     // Configure MQTT client
     mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
     mqttClient.setCallback(messageCallback);
     mqttClient.setBufferSize(2048); // Increase buffer size for Home Assistant discovery messages
+    LOG_DEBUG_F("[MQTT] Buffer size set to: %d bytes\n", 2048);
     
     // Initialize Home Assistant discovery
+    LOG_DEBUG("[MQTT] Initializing Home Assistant discovery");
     haDiscovery.begin(&mqttClient);
     
+    LOG_INFO("[MQTT] Manager initialization complete");
     return true;
 }
 
@@ -190,6 +195,9 @@ void MQTTManager::messageCallback(char* topic, byte* payload, unsigned int lengt
         message += (char)payload[i];
     }
     
+    LOG_DEBUG_F("[MQTT] Message received on topic: %s\n", topic);
+    LOG_DEBUG_F("[MQTT] Message payload: %s\n", message.c_str());
+    
     // Handle Home Assistant commands
     String topicStr = String(topic);
     haDiscovery.handleCommand(topicStr, message);
@@ -211,6 +219,11 @@ void MQTTManager::update() {
     
     // Track connection state changes
     if (currentConnectionState != lastConnectionState) {
+        if (currentConnectionState) {
+            LOG_INFO("[MQTT] State change: Disconnected -> Connected");
+        } else {
+            LOG_WARNING("[MQTT] State change: Connected -> Disconnected");
+        }
         lastConnectionState = currentConnectionState;
     }
     

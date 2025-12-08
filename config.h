@@ -120,10 +120,10 @@ extern const bool DEFAULT_RANDOM_ORDER;
 #define DEFAULT_BRIGHTNESS 50            // Default brightness percentage
 
 // Debug display settings
-#define DEBUG_START_Y 50                 // Starting Y position for debug text
-#define DEBUG_LINE_HEIGHT 30             // Height between debug lines
+#define DEBUG_START_Y 150                // Starting Y position for debug text (centered vertically)
+#define DEBUG_LINE_HEIGHT 35             // Height between debug lines
 #define DEBUG_TEXT_SIZE 3                // Debug text size
-#define MAX_DEBUG_LINES 20               // Maximum lines to show on screen
+#define MAX_DEBUG_LINES 15               // Maximum lines to show on screen
 
 // Display colors (RGB565)
 #define COLOR_BLACK 0x0000

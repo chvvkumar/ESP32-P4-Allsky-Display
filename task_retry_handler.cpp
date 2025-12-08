@@ -1,6 +1,7 @@
 #include "task_retry_handler.h"
 #include "system_monitor.h"
 #include "display_manager.h"
+#include "logging.h"
 
 // Global instance
 TaskRetryHandler taskRetryHandler;
@@ -27,6 +28,8 @@ unsigned long TaskRetryHandler::calculateNextRetryInterval(const RetryTask& task
 void TaskRetryHandler::addTask(TaskType type, TaskCallback callback, const char* taskName, 
                                int maxAttempts, unsigned long baseInterval, 
                                const char* errorMessage) {
+    LOG_DEBUG_F("[TaskRetry] Adding task: %s (max attempts: %d, interval: %lu ms)\n", taskName, maxAttempts, baseInterval);
+    
     // Check if task already exists and remove it
     removeTask(type);
     
@@ -69,7 +72,10 @@ void TaskRetryHandler::process() {
         // Check if max attempts exceeded
         if (task.attemptCount >= task.maxAttempts) {
             task.status = TASK_FAILED;
-            Serial.printf("Task FAILED: %s\n", task.taskName);
+            LOG_ERROR_F("[TaskRetry] Task FAILED after %d attempts: %s\n", task.maxAttempts, task.taskName);
+            if (task.errorMessage && strlen(task.errorMessage) > 0) {
+                LOG_ERROR_F("[TaskRetry] Error: %s\n", task.errorMessage);
+            }
             continue;
         }
         
@@ -77,6 +83,7 @@ void TaskRetryHandler::process() {
         task.attemptCount++;
         task.status = TASK_RUNNING;
         task.lastAttemptTime = now;
+        LOG_DEBUG_F("[TaskRetry] Executing task (attempt %d/%d): %s\n", task.attemptCount, task.maxAttempts, task.taskName);
         
         // Reset watchdog before task execution
         systemMonitor.forceResetWatchdog();
@@ -92,9 +99,13 @@ void TaskRetryHandler::process() {
         
         if (success) {
             task.status = TASK_SUCCESS;
+            LOG_INFO_F("[TaskRetry] Task completed successfully: %s\n", task.taskName);
         } else {
             task.status = TASK_RETRYING;
-            task.nextRetryTime = now + calculateNextRetryInterval(task);
+            unsigned long retryInterval = calculateNextRetryInterval(task);
+            task.nextRetryTime = now + retryInterval;
+            LOG_WARNING_F("[TaskRetry] Task failed, will retry in %lu ms: %s (attempt %d/%d)\n", 
+                         retryInterval, task.taskName, task.attemptCount, task.maxAttempts);
         }
     }
 }
@@ -111,6 +122,7 @@ TaskStatus TaskRetryHandler::getTaskStatus(TaskType type) {
 void TaskRetryHandler::cancelTask(TaskType type) {
     for (auto& task : taskQueue) {
         if (task.type == type) {
+            LOG_INFO_F("[TaskRetry] Task cancelled: %s\n", task.taskName);
             task.status = TASK_CANCELLED;
             break;
         }

@@ -1,5 +1,6 @@
 #include "captive_portal.h"
 #include "crash_logger.h"
+#include "logging.h"
 #include <esp_task_wdt.h>
 
 // Global instances
@@ -18,7 +19,7 @@ CaptivePortal::CaptivePortal() :
 }
 
 bool CaptivePortal::begin(const char* apSSID, const char* apPassword) {
-    Serial.println("\n=== Starting WiFi Captive Portal ===");
+    LOG_INFO("[CaptivePortal] Starting WiFi setup captive portal");
     
     // Reset watchdog before potentially long operations
     esp_task_wdt_reset();
@@ -35,15 +36,15 @@ bool CaptivePortal::begin(const char* apSSID, const char* apPassword) {
     
     bool apStarted;
     if (apPassword && strlen(apPassword) > 0) {
+        LOG_INFO_F("[CaptivePortal] Starting AP: %s (password protected)\n", apSSID);
         apStarted = WiFi.softAP(apSSID, apPassword);
-        Serial.printf("Starting AP: %s (password protected)\n", apSSID);
     } else {
+        LOG_INFO_F("[CaptivePortal] Starting AP: %s (open network)\n", apSSID);
         apStarted = WiFi.softAP(apSSID);
-        Serial.printf("Starting AP: %s (open network)\n", apSSID);
     }
     
     if (!apStarted) {
-        Serial.println("ERROR: Failed to start AP mode!");
+        LOG_ERROR("[CaptivePortal] Failed to start AP mode!");
         return false;
     }
     
@@ -51,26 +52,27 @@ bool CaptivePortal::begin(const char* apSSID, const char* apPassword) {
     esp_task_wdt_reset(); // Reset after AP startup delay
     
     IPAddress apIP = WiFi.softAPIP();
-    Serial.printf("AP IP address: %s\n", apIP.toString().c_str());
-    Serial.printf("AP MAC address: %s\n", WiFi.softAPmacAddress().c_str());
+    LOG_INFO_F("[CaptivePortal] AP IP address: %s\n", apIP.toString().c_str());
+    LOG_DEBUG_F("[CaptivePortal] AP MAC address: %s\n", WiFi.softAPmacAddress().c_str());
     
     // Start DNS server for captive portal (redirect all domains to AP IP)
     dnsServer = new DNSServer();
     dnsServer->start(DNS_PORT, "*", apIP);
-    Serial.println("DNS server started for captive portal");
+    LOG_INFO("[CaptivePortal] DNS server started (redirecting all domains to AP)");
     esp_task_wdt_reset(); // Reset after DNS startup
     
     // Start web server
     server = new WebServer(80);
     
     // Register handlers
+    LOG_DEBUG("[CaptivePortal] Registering web server routes");
     server->on("/", HTTP_GET, [this]() { handleRoot(); });
     server->on("/scan", HTTP_GET, [this]() { handleScan(); });
     server->on("/connect", HTTP_POST, [this]() { handleConnect(); });
     server->onNotFound([this]() { handleNotFound(); });
     
     server->begin();
-    Serial.println("Web server started on port 80");
+    LOG_INFO("[CaptivePortal] Web server started on port 80");
     esp_task_wdt_reset(); // Reset after web server startup
     
     // Don't auto-scan on startup - let user initiate scan
@@ -79,12 +81,11 @@ bool CaptivePortal::begin(const char* apSSID, const char* apPassword) {
     running = true;
     configured = false;
     
-    Serial.println("=== Captive Portal Ready ===");
+    LOG_INFO("[CaptivePortal] Setup complete - captive portal ready");
     esp_task_wdt_reset(); // Final reset before returning
-    Serial.printf("Connect to WiFi network: %s\n", apSSID);
-    Serial.println("Configuration page should open automatically");
-    Serial.printf("If not, open browser and go to: http://%s\n", apIP.toString().c_str());
-    Serial.printf("Or try: http://192.168.4.1\n");
+    LOG_INFO_F("[CaptivePortal] Connect to WiFi network: %s\n", apSSID);
+    LOG_INFO("[CaptivePortal] Configuration page should open automatically");
+    LOG_INFO_F("[CaptivePortal] Manual access: http://%s or http://192.168.4.1\n", apIP.toString().c_str());
     
     return true;
 }
@@ -106,6 +107,7 @@ bool CaptivePortal::isConfigured() {
 }
 
 void CaptivePortal::stop() {
+    LOG_INFO("[CaptivePortal] Stopping captive portal");
     if (server) {
         server->stop();
         delete server;
@@ -121,7 +123,7 @@ void CaptivePortal::stop() {
     WiFi.softAPdisconnect(true);
     running = false;
     
-    Serial.println("Captive portal stopped");
+    LOG_INFO("[CaptivePortal] Captive portal stopped successfully");
 }
 
 String CaptivePortal::getAPIP() {
@@ -129,7 +131,7 @@ String CaptivePortal::getAPIP() {
 }
 
 void CaptivePortal::handleRoot() {
-    Serial.println("Serving captive portal main page");
+    LOG_DEBUG("[CaptivePortal] Serving WiFi setup page");
     
     String html = generateHeader("WiFi Setup");
     html += generateCSS();
@@ -142,7 +144,7 @@ void CaptivePortal::handleRoot() {
 }
 
 void CaptivePortal::handleScan() {
-    Serial.println("Rescanning WiFi networks...");
+    LOG_INFO("[CaptivePortal] WiFi network scan requested");
     scanNetworks();
     
     String json = "{\"networks\":[";
@@ -163,9 +165,10 @@ void CaptivePortal::handleConnect() {
     String ssid = server->arg("ssid");
     String password = server->arg("password");
     
-    Serial.printf("Attempting to connect to: %s\n", ssid.c_str());
+    LOG_INFO_F("[CaptivePortal] Connection request for SSID: %s\n", ssid.c_str());
     
     if (ssid.length() == 0) {
+        LOG_WARNING("[CaptivePortal] Connection request rejected - SSID is empty");
         server->send(400, "application/json", "{\"status\":\"error\",\"message\":\"SSID is required\"}");
         return;
     }
@@ -176,7 +179,7 @@ void CaptivePortal::handleConnect() {
     configStorage.setWiFiProvisioned(true);
     configStorage.saveConfig();
     
-    Serial.println("WiFi credentials saved to configuration");
+    LOG_INFO("[CaptivePortal] WiFi credentials saved to NVS storage");
     
     // Send response immediately before attempting connection
     String response = "{\"status\":\"success\",\"message\":\"WiFi credentials saved. Device will reboot in 3 seconds to apply changes.\"}";
@@ -204,13 +207,13 @@ void CaptivePortal::handleConnect() {
     
     // Always reboot after configuration attempt for clean startup
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("WiFi connection successful!");
-        Serial.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
-        Serial.println("Rebooting to apply configuration...");
+        LOG_INFO("[CaptivePortal] WiFi connection successful!");
+        LOG_INFO_F("[CaptivePortal] Assigned IP address: %s\n", WiFi.localIP().toString().c_str());
+        LOG_INFO("[CaptivePortal] Rebooting to apply configuration");
         configured = true;
     } else {
-        Serial.println("WiFi connection failed!");
-        Serial.println("Rebooting to retry with saved credentials...");
+        LOG_WARNING("[CaptivePortal] WiFi connection test failed");
+        LOG_INFO("[CaptivePortal] Rebooting to retry with saved credentials");
         // Keep credentials saved - device will retry on boot
     }
     
@@ -226,7 +229,7 @@ void CaptivePortal::handleConnect() {
 
 void CaptivePortal::handleNotFound() {
     // Redirect all unknown requests to root (captive portal behavior)
-    Serial.printf("Redirecting request: %s\n", server->uri().c_str());
+    LOG_DEBUG_F("[CaptivePortal] Redirecting request to root: %s\n", server->uri().c_str());
     handleRoot();
 }
 

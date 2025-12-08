@@ -1,4 +1,5 @@
 #include "system_monitor.h"
+#include "logging.h"
 
 // Global instance
 SystemMonitor systemMonitor;
@@ -14,6 +15,7 @@ SystemMonitor::SystemMonitor() :
 }
 
 bool SystemMonitor::begin() {
+    LOG_INFO("[SystemMonitor] Initializing system monitor and watchdog");
     // Try to initialize watchdog timer for system stability
     esp_task_wdt_config_t wdt_config = {
         .timeout_ms = WATCHDOG_TIMEOUT_MS,
@@ -21,26 +23,29 @@ bool SystemMonitor::begin() {
         .trigger_panic = WATCHDOG_TRIGGER_PANIC
     };
     
+    LOG_DEBUG_F("[SystemMonitor] Watchdog timeout: %d ms\n", WATCHDOG_TIMEOUT_MS);
     esp_err_t result = esp_task_wdt_init(&wdt_config);
     if (result == ESP_ERR_INVALID_STATE) {
-        // Watchdog already initialized, that's fine
+        LOG_DEBUG("[SystemMonitor] Watchdog already initialized");
     } else if (result != ESP_OK) {
-        Serial.printf("Watchdog init failed: %s\n", esp_err_to_name(result));
+        LOG_ERROR_F("[SystemMonitor] Watchdog init failed: %s\n", esp_err_to_name(result));
         return false;
     }
     
     // Add current task to watchdog
     result = esp_task_wdt_add(NULL);
     if (result == ESP_ERR_INVALID_ARG) {
-        // Task already added, that's fine
+        LOG_DEBUG("[SystemMonitor] Task already added to watchdog");
     } else if (result != ESP_OK) {
-        Serial.printf("Watchdog add task failed: %s\n", esp_err_to_name(result));
+        LOG_ERROR_F("[SystemMonitor] Watchdog add task failed: %s\n", esp_err_to_name(result));
         return false;
     }
     
     // Initialize memory tracking
     minFreeHeap = ESP.getFreeHeap();
     minFreePsram = ESP.getFreePsram();
+    LOG_INFO_F("[SystemMonitor] Initial heap: %d bytes, PSRAM: %d bytes\n", minFreeHeap, minFreePsram);
+    LOG_INFO("[SystemMonitor] System monitor initialization complete");
     
     return true;
 }
@@ -74,14 +79,18 @@ void SystemMonitor::checkSystemHealth() {
         
         if (heapCritical || psramCritical) {
             systemHealthy = false;
-            Serial.printf("CRITICAL: Low memory - Heap: %d, PSRAM: %d\n", freeHeap, freePsram);
+            LOG_CRITICAL_F("[SystemMonitor] Low memory detected - Heap: %d bytes (threshold: %d), PSRAM: %d bytes (threshold: %d)\n", 
+                          freeHeap, CRITICAL_HEAP_THRESHOLD, freePsram, CRITICAL_PSRAM_THRESHOLD);
             
             // Force garbage collection
             if (heapCritical) {
-                Serial.println("Attempting heap cleanup...");
+                LOG_WARNING("[SystemMonitor] Attempting heap cleanup");
                 // Could add specific cleanup here if needed
             }
         } else {
+            if (!systemHealthy) {
+                LOG_INFO("[SystemMonitor] System health recovered");
+            }
             systemHealthy = true;
         }
         
@@ -141,7 +150,9 @@ void SystemMonitor::printMemoryStatus() {
     size_t freeHeap = getCurrentFreeHeap();
     size_t freePsram = getCurrentFreePsram();
     
-    Serial.printf("Current Memory - Heap: %d bytes, PSRAM: %d bytes\n", freeHeap, freePsram);
-    Serial.printf("Minimum Memory - Heap: %d bytes, PSRAM: %d bytes\n", minFreeHeap, minFreePsram);
-    Serial.printf("System Health: %s\n", systemHealthy ? "HEALTHY" : "CRITICAL");
+    LOG_INFO("[SystemMonitor] === Memory Status ===");
+    LOG_INFO_F("[SystemMonitor] Current - Heap: %d bytes, PSRAM: %d bytes\n", freeHeap, freePsram);
+    LOG_INFO_F("[SystemMonitor] Minimum - Heap: %d bytes, PSRAM: %d bytes\n", minFreeHeap, minFreePsram);
+    LOG_INFO_F("[SystemMonitor] System Health: %s\n", systemHealthy ? "HEALTHY" : "CRITICAL");
+    LOG_INFO("[SystemMonitor] =======================");
 }

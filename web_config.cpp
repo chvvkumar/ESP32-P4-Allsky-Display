@@ -6,6 +6,7 @@
 #include "mqtt_manager.h"
 #include "display_manager.h"
 #include "crash_logger.h"
+#include "logging.h"
 #include <time.h>
 
 // Global instance
@@ -14,18 +15,21 @@ WebConfig webConfig;
 WebConfig::WebConfig() : server(nullptr), wsServer(nullptr), serverRunning(false), otaInProgress(false) {}
 
 bool WebConfig::begin(int port) {
-    if (serverRunning) return true;
+    if (serverRunning) {
+        LOG_DEBUG_F("[WebServer] Already running on port %d\n", port);
+        return true;
+    }
     
     try {
-        Serial.printf("Creating WebServer on port %d...\n", port);
+        LOG_INFO_F("[WebServer] Initializing web server on port %d\n", port);
         server = new WebServer(port);
         
         if (!server) {
-            Serial.println("ERROR: Failed to allocate WebServer memory!");
+            LOG_CRITICAL("[WebServer] Failed to allocate WebServer memory!");
             return false;
         }
         
-        Serial.println("Setting up routes...");
+        LOG_DEBUG("[WebServer] Setting up HTTP routes");
         
         // Setup routes
         server->on("/", [this]() { handleRoot(); });
@@ -52,6 +56,11 @@ bool WebConfig::begin(int port) {
         server->on("/api/clear-crash-logs", HTTP_POST, [this]() { handleClearCrashLogs(); });
         server->on("/api/info", HTTP_GET, [this]() { handleGetAllInfo(); });
         server->on("/api/current-image", HTTP_GET, [this]() { handleCurrentImage(); });
+        
+        // Favicon handler (prevents 404 log clutter when browsers request favicon)
+        server->on("/favicon.ico", HTTP_GET, [this]() { 
+            server->send(204); // No Content - silently ignore favicon requests
+        });
         
         // Initialize ElegantOTA
         ElegantOTA.begin(server);
@@ -93,11 +102,11 @@ bool WebConfig::begin(int port) {
         server->begin();
         
         // Initialize WebSocket server on port 81
-        Serial.println("[WebSocket] Starting WebSocket server on port 81...");
-        Serial.printf("[WebSocket] Free heap before allocation: %d bytes\n", ESP.getFreeHeap());
+        LOG_INFO("[WebSocket] Starting WebSocket server on port 81");
+        LOG_DEBUG_F("[WebSocket] Free heap before allocation: %d bytes\n", ESP.getFreeHeap());
         wsServer = new WebSocketsServer(81);
         if (wsServer) {
-            Serial.println("[WebSocket] Server instance created successfully");
+            LOG_DEBUG("[WebSocket] Server instance created successfully");
             wsServer->begin();
             wsServer->onEvent(webSocketEvent);
             Serial.println("[WebSocket] ✓ Server started and event handler registered");
@@ -161,14 +170,16 @@ void WebConfig::stop() {
 
 // Route handlers - these call the page generators from web_config_pages.cpp
 void WebConfig::handleRoot() {
+    LOG_DEBUG("[WebServer] Dashboard page accessed");
     String html = generateHeader("Dashboard");
     html += generateNavigation("dashboard");
-    html += generateMainPage();
+    html += generateStatusPage();
     html += generateFooter();
     sendResponse(200, "text/html", html);
 }
 
 void WebConfig::handleConsole() {
+    LOG_DEBUG("[WebServer] Serial console page accessed");
     String html = generateHeader("Serial Console");
     html += generateNavigation("console");
     html += generateConsolePage();
@@ -177,6 +188,7 @@ void WebConfig::handleConsole() {
 }
 
 void WebConfig::handleNetworkConfig() {
+    LOG_DEBUG("[WebServer] Network configuration page accessed");
     String html = generateHeader("Network Configuration");
     html += generateNavigation("network");
     html += generateNetworkPage();
@@ -185,6 +197,7 @@ void WebConfig::handleNetworkConfig() {
 }
 
 void WebConfig::handleMQTTConfig() {
+    LOG_DEBUG("[WebServer] MQTT configuration page accessed");
     String html = generateHeader("MQTT Configuration");
     html += generateNavigation("mqtt");
     html += generateMQTTPage();
@@ -193,7 +206,8 @@ void WebConfig::handleMQTTConfig() {
 }
 
 void WebConfig::handleImageConfig() {
-    String html = generateHeader("Image Configuration");
+    LOG_DEBUG("[WebServer] Image sources page accessed");
+    String html = generateHeader("Image Sources");
     html += generateNavigation("images");
     html += generateImagePage();
     html += generateFooter();
@@ -238,6 +252,8 @@ void WebConfig::handleAPIReference() {
 }
 
 void WebConfig::handleNotFound() {
+    String uri = server->uri();
+    LOG_WARNING_F("[WebServer] 404 Not Found: %s\n", uri.c_str());
     String html = generateHeader("Page Not Found");
     html += "<div class='container'><div class='card error'>";
     html += "<h2>🚫 Page Not Found</h2>";
@@ -458,16 +474,15 @@ void WebConfig::broadcastLog(const char* message, uint16_t color, LogSeverity se
     // Use fixed buffer to avoid String heap fragmentation
     char buffer[384];
     
-    // Get current time
+    // Get current time - always use real time
     struct tm timeinfo;
     char timeStr[32];
     if (getLocalTime(&timeinfo, 0)) {
         // Format: YYYY-MM-DD HH:MM:SS
         strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
     } else {
-        // Fallback to relative time if NTP not synced
-        unsigned long ms = millis();
-        snprintf(timeStr, sizeof(timeStr), "%lu.%03lu", ms / 1000, ms % 1000);
+        // Show clear message that time is not synced yet
+        snprintf(timeStr, sizeof(timeStr), "TIME_NOT_SYNCED");
     }
     
     int written = snprintf(buffer, sizeof(buffer), "[%s] %s%s", 

@@ -2,6 +2,7 @@
 #include "display_manager.h"
 #include "system_monitor.h"
 #include "crash_logger.h"
+#include "logging.h"
 #include <WiFi.h>
 #include <esp_task_wdt.h>
 
@@ -17,9 +18,12 @@ HADiscovery::HADiscovery() :
 }
 
 void HADiscovery::begin(PubSubClient* client) {
+    LOG_INFO("[HA] Initializing Home Assistant discovery");
     mqttClient = client;
     deviceId = getDeviceId();
     baseTopic = getBaseTopic();
+    LOG_DEBUG_F("[HA] Device ID: %s\n", deviceId.c_str());
+    LOG_DEBUG_F("[HA] Base topic: %s\n", baseTopic.c_str());
 }
 
 String HADiscovery::getDeviceId() {
@@ -75,6 +79,7 @@ String HADiscovery::getDeviceJson() {
 }
 
 bool HADiscovery::publishLightDiscovery() {
+    LOG_DEBUG("[HA] Publishing light entity discovery");
     String topic = buildDiscoveryTopic("light", "brightness");
     String payload = "{";
     payload += "\"name\":\"Brightness\",";
@@ -92,7 +97,7 @@ bool HADiscovery::publishLightDiscovery() {
     
     bool result = mqttClient->publish(topic.c_str(), payload.c_str(), true);
     if (!result) {
-        Serial.println("ERROR: Failed to publish light discovery!");
+        LOG_ERROR("[HA] Failed to publish light discovery!");
     }
     return result;
 }
@@ -207,23 +212,26 @@ bool HADiscovery::publishSensorDiscovery(const char* entityId, const char* name,
 
 bool HADiscovery::publishDiscovery() {
     if (!mqttClient || !mqttClient->connected()) {
+        LOG_WARNING("[HA] Cannot publish discovery - MQTT not connected");
         return false;
     }
     
     if (!configStorage.getHADiscoveryEnabled()) {
+        LOG_DEBUG("[HA] Discovery disabled in configuration");
         return false;
     }
     
-    Serial.println("Publishing Home Assistant discovery messages...");
+    LOG_INFO("[HA] Publishing Home Assistant discovery messages");
     
     // Light entity (brightness)
     if (!publishLightDiscovery()) {
-        Serial.println("Failed to publish light discovery");
+        LOG_ERROR("[HA] Failed to publish light discovery");
         return false;
     }
     delay(50);
     
     // Switch entities
+    LOG_DEBUG("[HA] Publishing switch entities");
     if (!publishSwitchDiscovery("cycling", "Cycling Enabled", "mdi:image-multiple")) return false;
     delay(50);
     if (!publishSwitchDiscovery("random_order", "Random Order", "mdi:shuffle")) return false;
@@ -250,6 +258,7 @@ bool HADiscovery::publishDiscovery() {
     delay(50);
     
     // Sensor entities
+    LOG_DEBUG("[HA] Publishing sensor entities");
     if (!publishSensorDiscovery("current_image", "Current Image URL", "", "", "mdi:image")) return false;
     delay(50);
     if (!publishSensorDiscovery("free_heap", "Free Heap", "KB", "", "mdi:memory")) return false;
@@ -285,6 +294,7 @@ bool HADiscovery::publishDiscovery() {
     if (!publishSensorDiscovery("temperature_fahrenheit", "Temperature (F)", "°F", "temperature", "mdi:thermometer")) return false;
     delay(50);
     
+    LOG_INFO("[HA] All discovery messages published successfully");
     return true;
 }
 
@@ -295,6 +305,7 @@ bool HADiscovery::publishAvailability(bool online) {
     
     String topic = getAvailabilityTopic();
     const char* payload = online ? "online" : "offline";
+    LOG_DEBUG_F("[HA] Publishing availability: %s\n", payload);
     return mqttClient->publish(topic.c_str(), payload, true);
 }
 
@@ -307,6 +318,7 @@ bool HADiscovery::publishState() {
         return false;
     }
     
+    LOG_DEBUG("[HA] Publishing entity states to Home Assistant");
     // Publish individual entity states
     
     // Brightness
@@ -450,19 +462,25 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     int secondLastSlash = topic.lastIndexOf('/', lastSlash - 1);
     String entity = topic.substring(secondLastSlash + 1, lastSlash);
     
+    LOG_INFO_F("[HA] Command received - Entity: %s, Payload: %s\n", entity.c_str(), payload.c_str());
+    
     // Handle brightness
     if (entity == "brightness") {
         int brightness = payload.toInt();
         if (brightness >= 0 && brightness <= 100) {
+            LOG_INFO_F("[HA] Setting brightness to %d%%\n", brightness);
             displayManager.setBrightness(brightness);
             configStorage.setDefaultBrightness(brightness);
             configStorage.saveConfig();
             mqttClient->publish(buildStateTopic("brightness").c_str(), payload.c_str());
+        } else {
+            LOG_WARNING_F("[HA] Invalid brightness value: %d (must be 0-100)\n", brightness);
         }
     }
     // Handle switches
     else if (entity == "cycling") {
         bool enabled = (payload == "ON");
+        LOG_INFO_F("[HA] Cycling mode: %s\n", enabled ? "enabled" : "disabled");
         configStorage.setCyclingEnabled(enabled);
         configStorage.saveConfig();
         mqttClient->publish(buildStateTopic("cycling").c_str(), payload.c_str());
@@ -505,12 +523,14 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     }
     // Handle buttons
     else if (entity == "reboot" && payload == "PRESS") {
+        LOG_WARNING("[HA] Reboot requested via Home Assistant");
         delay(100);
         crashLogger.saveBeforeReboot();
         ESP.restart();
     }
     else if (entity == "next_image" && payload == "PRESS") {
         int nextIndex = (configStorage.getCurrentImageIndex() + 1) % configStorage.getImageSourceCount();
+        LOG_INFO_F("[HA] Next image requested - switching to image %d\n", nextIndex + 1);
         configStorage.setCurrentImageIndex(nextIndex);
         configStorage.saveConfig();
         String imageSource = "Image " + String(nextIndex + 1);
