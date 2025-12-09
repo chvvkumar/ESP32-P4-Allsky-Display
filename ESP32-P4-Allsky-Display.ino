@@ -439,8 +439,15 @@ int16_t displayWiFiQRCode() {
 }
 
 void setup() {
+    // CRITICAL: Disable bootloader watchdog immediately if it exists
+    // ESP32 bootloader may start a watchdog timer before setup() runs
+    // We need to disable it so we can reconfigure with proper timeout for heavy initialization
+    esp_err_t wdt_status = esp_task_wdt_deinit();
+    
     Serial.begin(9600);
-    delay(1000); // Give serial time to initialize
+    
+    // Small delay for serial stability (reduced from 1000ms to minimize boot time)
+    delay(500);
     
     // Initialize crash logger FIRST to capture ALL boot messages
     crashLogger.begin();
@@ -457,12 +464,16 @@ void setup() {
     initializeConfiguration();
     
     // Initialize system monitor with configured watchdog timeout
+    // This will properly configure the watchdog with our desired timeout
     unsigned long watchdogTimeout = configStorage.getWatchdogTimeout();
     Serial.printf("Initializing system monitor with watchdog timeout: %lu ms\n", watchdogTimeout);
     if (!systemMonitor.begin(watchdogTimeout)) {
         Serial.println("CRITICAL: System monitor initialization failed!");
         while(1) delay(1000);
     }
+    
+    // Now watchdog is properly configured - reset it after initialization
+    systemMonitor.forceResetWatchdog();
     
     // Pre-allocate all PSRAM buffers BEFORE display init to ensure enough contiguous memory
     // Display needs ~1.28MB contiguous for frame buffer (800x800x2), so we allocate our buffers first
@@ -540,6 +551,9 @@ void setup() {
                  ESP.getFreePsram(), ESP.getFreePsram() / (1024.0 * 1024.0));
     Serial.printf("PSRAM pre-allocation complete - Free PSRAM remaining: %d bytes\n", ESP.getFreePsram());
     
+    // Reset watchdog after large memory allocations
+    systemMonitor.forceResetWatchdog();
+    
     // NOW initialize display - it should have plenty of contiguous PSRAM remaining
     if (!displayManager.begin()) {
         Serial.println("CRITICAL: Display initialization failed!");
@@ -553,6 +567,9 @@ void setup() {
                      w, h, displayManager.getWidth(), displayManager.getHeight());
         Serial.println("Buffer sizes may be incorrect - please update CURRENT_SCREEN define");
     }
+    
+    // Reset watchdog after display initialization (heavy operation)
+    systemMonitor.forceResetWatchdog();
     
     // Setup debug functions for other modules
     wifiManager.setDebugFunctions(debugPrint, debugPrintf, &firstImageLoaded);
@@ -587,6 +604,9 @@ void setup() {
     if (!configStorage.isWiFiProvisioned()) {
         // Clear screen and show only WiFi setup instructions
         displayManager.clearScreen();
+        
+        // Reset watchdog before captive portal operations
+        systemMonitor.forceResetWatchdog();
         
         // Start captive portal for WiFi configuration
         if (captivePortal.begin("AllSky-Display-Setup")) {
@@ -1241,6 +1261,11 @@ void downloadAndDisplayImage() {
     
     // Close HTTP connection immediately
     http.end();
+    
+    // CRITICAL: Explicitly stop and cleanup the underlying WiFiClient to prevent TCP socket leaks
+    // This prevents PANIC/EXCEPTION crashes after ~59 minutes due to resource exhaustion
+    stream->stop();
+    
     systemMonitor.forceResetWatchdog();
     
     float avgSpeed = readTime > 0 ? (bytesRead * 1000.0) / readTime : 0; // bytes/sec
@@ -1605,11 +1630,14 @@ void loop() {
     }
     
     // Periodically save crash logs to NVS (every hour to reduce flash wear)
-    static unsigned long lastNVSSave = 0;
+    // DISABLED: This was causing hourly reboots due to watchdog timeout during NVS write
+    // Crash logger already auto-saves on crashes, panics, and intentional reboots
+    /* static unsigned long lastNVSSave = 0;
     if (millis() - lastNVSSave > 3600000) {  // 1 hour
         crashLogger.saveToNVS();
         lastNVSSave = millis();
     }
+    */
     
     // Check for critical system health issues
     if (!systemMonitor.isSystemHealthy()) {
