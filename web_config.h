@@ -50,6 +50,7 @@ private:
     void handleRemoveImageSource();
     void handleUpdateImageSource();
     void handleClearImageSources();
+    void handleBulkDeleteImageSources();
     void handleNextImage();
     void handleUpdateImageTransform();
     void handleCopyDefaultsToImage();

@@ -321,6 +321,100 @@ void WebConfig::handleClearImageSources() {
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"All image sources cleared, reset to single default source\"}");
 }
 
+void WebConfig::handleBulkDeleteImageSources() {
+    if (!server->hasArg("indices")) {
+        LOG_WARNING("[WebAPI] Bulk delete called without indices parameter");
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Indices parameter required\"}");
+        return;
+    }
+    
+    String indicesJson = server->arg("indices");
+    LOG_INFO_F("[WebAPI] Bulk delete request - indices=%s\n", indicesJson.c_str());
+    
+    // Parse JSON array manually (simple parsing for array of numbers)
+    indicesJson.trim();
+    if (!indicesJson.startsWith("[") || !indicesJson.endsWith("]")) {
+        LOG_WARNING("[WebAPI] Invalid JSON format for indices");
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid indices format\"}");
+        return;
+    }
+    
+    // Extract indices and sort in reverse order (delete from end to preserve indices)
+    int indices[MAX_IMAGE_SOURCES];
+    int count = 0;
+    indicesJson = indicesJson.substring(1, indicesJson.length() - 1); // Remove brackets
+    
+    int startPos = 0;
+    while (startPos < indicesJson.length() && count < MAX_IMAGE_SOURCES) {
+        int commaPos = indicesJson.indexOf(',', startPos);
+        String numStr;
+        if (commaPos == -1) {
+            numStr = indicesJson.substring(startPos);
+            numStr.trim();
+            if (numStr.length() > 0) {
+                indices[count++] = numStr.toInt();
+            }
+            break;
+        } else {
+            numStr = indicesJson.substring(startPos, commaPos);
+            numStr.trim();
+            if (numStr.length() > 0) {
+                indices[count++] = numStr.toInt();
+            }
+            startPos = commaPos + 1;
+        }
+    }
+    
+    if (count == 0) {
+        LOG_WARNING("[WebAPI] No valid indices parsed");
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"No valid indices provided\"}");
+        return;
+    }
+    
+    // Check if trying to delete all sources
+    if (count >= configStorage.getImageSourceCount()) {
+        LOG_WARNING("[WebAPI] Attempted to delete all sources");
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Cannot delete all sources. At least one must remain.\"}");
+        return;
+    }
+    
+    // Sort indices in descending order to delete from end
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = i + 1; j < count; j++) {
+            if (indices[i] < indices[j]) {
+                int temp = indices[i];
+                indices[i] = indices[j];
+                indices[j] = temp;
+            }
+        }
+    }
+    
+    // Delete each source
+    int successCount = 0;
+    for (int i = 0; i < count; i++) {
+        if (configStorage.removeImageSource(indices[i])) {
+            successCount++;
+            LOG_DEBUG_F("[WebAPI] Deleted source at index %d\n", indices[i]);
+        } else {
+            LOG_WARNING_F("[WebAPI] Failed to delete source at index %d\n", indices[i]);
+        }
+    }
+    
+    if (successCount > 0) {
+        configStorage.saveConfig();
+        String message = String("{\"status\":\"success\",\"message\":\"Successfully deleted ") + 
+                        String(successCount) + String(" of ") + String(count) + String(" source(s)\",\"deleted\":") + 
+                        String(successCount) + String(",\"remaining\":") + 
+                        String(configStorage.getImageSourceCount()) + String("}");
+        LOG_INFO_F("[WebAPI] Bulk delete completed - %d sources deleted, %d remaining\n", 
+                   successCount, configStorage.getImageSourceCount());
+        sendResponse(200, "application/json", message);
+    } else {
+        LOG_ERROR("[WebAPI] Bulk delete failed - no sources were deleted");
+        sendResponse(500, "application/json", "{\"status\":\"error\",\"message\":\"Failed to delete any sources\"}");
+    }
+}
+
 void WebConfig::handleNextImage() {
     extern void advanceToNextImage();
     extern void updateCyclingVariables();

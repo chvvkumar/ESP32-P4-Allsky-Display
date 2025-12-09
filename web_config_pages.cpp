@@ -330,14 +330,28 @@ String WebConfig::generateImagePage() {
     html += "<input type='hidden' name='random_order_present' value='1'></div></div>";
     
     // Image sources list
-    html += "<h3 style='color:#38bdf8;margin-top:1.5rem;margin-bottom:1rem'>Image Sources</h3>";
+    int sourceCount = configStorage.getImageSourceCount();
+    html += "<div style='display:flex;justify-content:space-between;align-items:center;margin-top:1.5rem;margin-bottom:1rem'>";
+    html += "<h3 style='color:#38bdf8;margin:0'>Image Sources</h3>";
+    if (sourceCount > 1) {
+        html += "<div style='display:flex;gap:0.75rem;align-items:center'>";
+        html += "<label style='display:flex;align-items:center;color:#94a3b8;cursor:pointer'>";
+        html += "<input type='checkbox' id='selectAllImages' style='width:18px;height:18px;accent-color:#0ea5e9;margin-right:6px' onchange='toggleSelectAll(this.checked)'>";
+        html += "<span style='font-size:0.9rem'>Select All</span></label>";
+        html += "<button type='button' class='btn btn-danger' id='bulkDeleteBtn' onclick='bulkDeleteSelected(this)' style='font-size:0.9rem;padding:0.6rem 1rem;display:none'>";
+        html += "<i class='fas fa-trash' style='margin-right:6px'></i>Delete Selected (<span id='selectedCount'>0</span>)</button>";
+        html += "</div>";
+    }
+    html += "</div>";
     html += "<div id='imageSourcesList'>";
     
-    int sourceCount = configStorage.getImageSourceCount();
     for (int i = 0; i < sourceCount; i++) {
         String url = configStorage.getImageSource(i);
         html += "<div class='image-source-item' style='margin-bottom:1rem;padding:1rem;border:1px solid #334155;border-radius:6px;background:#1e293b'>";
         html += "<div style='display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem'>";
+        if (sourceCount > 1) {
+            html += "<input type='checkbox' class='image-select-checkbox' data-index='" + String(i) + "' style='width:18px;height:18px;accent-color:#0ea5e9;cursor:pointer' onchange='updateBulkDeleteButton()'>";
+        }
         html += "<span style='font-weight:bold;color:#38bdf8;min-width:2rem'>" + String(i + 1) + ".</span>";
         html += "<input type='url' class='form-control' id='imageUrl_" + String(i) + "' style='flex:1' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this)'>";
         html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(" + String(i) + ")'><i class='fas fa-sliders-h'></i></button>";
@@ -849,6 +863,24 @@ String WebConfig::generateAPIReferencePage() {
     html += "<p style='color:#94a3b8;margin-bottom:1rem'>Remove all image sources from the cycling list.</p>";
     html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
     html += "curl -X POST " + deviceUrl + "/api/clear-sources</pre></div>";
+    
+    // POST /api/bulk-delete-sources
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/bulk-delete-sources</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Delete multiple image sources at once by providing an array of indices. At least one source must remain.</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Parameters:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>indices</code> (required) - JSON array of zero-based indices to delete (e.g., \"[0,2,4]\")</li></ul></div>";
+    html += "<div>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Example Request:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/bulk-delete-sources \\\n  -d 'indices=[0,2,4]'</pre></div>";
+    html += "<div style='margin-top:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0'>";
+    html += "{\"status\":\"success\",\"message\":\"Successfully deleted 3 of 3 source(s)\",\"deleted\":3,\"remaining\":5}</pre>";
+    html += "</div></div>";
     
     // POST /api/next-image
     html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
