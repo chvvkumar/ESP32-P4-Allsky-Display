@@ -516,17 +516,26 @@ jobs:
     - name: Generate commit history
       id: changelog
       run: |
-        # Get the previous tag for this branch
+        # Get the previous tag for this branch (excluding the tag we're about to create)
         TAG_PREFIX="${{ needs.build.outputs.release_type == 'test' && format('{0}-', needs.build.outputs.branch) || '' }}v"
         TAG_PATTERN="${TAG_PREFIX}*"
-        PREVIOUS_TAG=$(git tag -l "${TAG_PATTERN}" | sort -V | tail -n2 | head -n1)
+        NEW_TAG="${{ needs.build.outputs.tag }}"
+        
+        # Get all matching tags, exclude the new tag if it exists, and get the latest
+        PREVIOUS_TAG=$(git tag -l "${TAG_PATTERN}" | grep -v "^${NEW_TAG}$" | sort -V | tail -n1)
         
         if [ -z "$PREVIOUS_TAG" ]; then
-          echo "No previous tag found, showing all commits"
-          COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          echo "No previous tag found, showing last 20 commits"
+          COMMITS=$(git log -20 --pretty=format:"- %s (%h)" --no-merges)
         else
           echo "Generating changelog from $PREVIOUS_TAG to HEAD"
           COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          
+          # If no commits found, it means we're on the same commit
+          if [ -z "$COMMITS" ]; then
+            echo "No new commits since $PREVIOUS_TAG"
+            COMMITS="- No changes since previous release"
+          fi
         fi
         
         # Save to output using heredoc to handle multiline
