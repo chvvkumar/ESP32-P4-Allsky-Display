@@ -278,7 +278,7 @@ String WebConfig::generateImagePage() {
     html += "<input type='url' id='image_url' name='image_url' class='form-control' value='" + escapeHtml(configStorage.getImageURL()) + "' placeholder='http://allsky.local/image.jpg'></div>";
     html += "<div class='form-group'><label for='update_interval'>";
     html += "<span style='color:#38bdf8'>Download Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
-    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
+    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'" + String(isCycling ? " disabled" : "") + ">";
     html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
     html += "<i class='fas fa-download' style='margin-right:6px;color:#0ea5e9'></i>";
     html += "How often to <strong>re-download</strong> this URL to fetch updated content (e.g., latest AllSky image)";
@@ -318,7 +318,7 @@ String WebConfig::generateImagePage() {
     html += "</p></div>";
     html += "<div class='form-group'><label for='cycle_update_interval'>";
     html += "<span style='color:#38bdf8'>Download Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
-    html += "<input type='number' id='cycle_update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
+    html += "<input type='number' id='cycle_update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'" + String(isCycling ? "" : " disabled") + ">";
     html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
     html += "<i class='fas fa-download' style='margin-right:6px;color:#0ea5e9'></i>";
     html += "How often to <strong>re-download</strong> each source URL to fetch updated content";
@@ -440,6 +440,12 @@ String WebConfig::generateImagePage() {
     html += "  document.getElementById('singleImageSection').style.display = enableCycling ? 'none' : 'block';";
     html += "  document.getElementById('multiImageSection').style.display = enableCycling ? 'block' : 'none';";
     html += "  document.getElementById('cycling_enabled').checked = enableCycling;";
+    html += "  ";
+    html += "  // Disable hidden section's update_interval to prevent duplicate form submission";
+    html += "  const singleUpdateInterval = document.getElementById('update_interval');";
+    html += "  const multiUpdateInterval = document.getElementById('cycle_update_interval');";
+    html += "  if (singleUpdateInterval) singleUpdateInterval.disabled = enableCycling;";
+    html += "  if (multiUpdateInterval) multiUpdateInterval.disabled = !enableCycling;";
     html += "}";
     html += "</script>";
     

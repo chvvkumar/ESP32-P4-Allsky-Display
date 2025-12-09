@@ -20,6 +20,16 @@ Transform your ESP32-P4 display into a all-sky camera viewer with multi-image cy
 - [OTA Updates](OTA_GUIDE.md) - Wireless firmware updates
 - [Troubleshooting](#-troubleshooting) - Common issues and solutions
 
+## 📚 Documentation
+
+Comprehensive developer documentation is available in the [`docs/`](docs/) folder:
+
+- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design, Mermaid diagrams, control flow, memory layout
+- **[API Reference](docs/API_REFERENCE.md)** - Doxygen-style documentation for all core classes
+- **[Hardware & Dependencies](docs/HARDWARE_AND_DEPENDENCIES.md)** - Complete hardware specs, pin assignments, library installation
+- **[Configuration Guide](docs/CONFIGURATION_GUIDE.md)** - Compile-time vs. runtime settings, Web UI guide, MQTT setup
+- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Common issues, crash diagnosis, performance tuning
+
 [![Arduino Compilation](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml/badge.svg?labelColor=1a1a2e)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml)
 [![Release](https://img.shields.io/github/v/release/chvvkumar/ESP32-P4-Allsky-Display?labelColor=1a1a2e&color=16537e)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
 ![Flash Usage](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/badges/.github/badges/flash-usage.json&query=$.message&label=Flash&labelColor=1a1a2e&color=16537e)
