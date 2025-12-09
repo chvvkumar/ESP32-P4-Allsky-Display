@@ -267,7 +267,7 @@ bool HADiscovery::publishDiscovery() {
     delay(50);
     if (!publishSensorDiscovery("wifi_rssi", "WiFi Signal", "dBm", "signal_strength", "mdi:wifi")) return false;
     delay(50);
-    if (!publishSensorDiscovery("uptime", "Uptime", "s", "", "mdi:clock-outline")) return false;
+    if (!publishSensorDiscovery("uptime", "Uptime", "s", "duration", "mdi:clock-outline")) return false;
     delay(50);
     if (!publishSensorDiscovery("image_count", "Image Count", "", "", "mdi:counter")) return false;
     delay(50);
