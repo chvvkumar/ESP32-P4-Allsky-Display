@@ -45,8 +45,9 @@ bool WebConfig::begin(int port) {
         server->on("/api/add-source", HTTP_POST, [this]() { handleAddImageSource(); });
         server->on("/api/remove-source", HTTP_POST, [this]() { handleRemoveImageSource(); });
         server->on("/api/update-source", HTTP_POST, [this]() { handleUpdateImageSource(); });
-        server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
-        server->on("/api/next-image", HTTP_POST, [this]() { handleNextImage(); });
+    server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
+    server->on("/api/bulk-delete-sources", HTTP_POST, [this]() { handleBulkDeleteImageSources(); });
+    server->on("/api/next-image", HTTP_POST, [this]() { handleNextImage(); });
         server->on("/api/update-transform", HTTP_POST, [this]() { handleUpdateImageTransform(); });
         server->on("/api/copy-defaults", HTTP_POST, [this]() { handleCopyDefaultsToImage(); });
         server->on("/api/apply-transform", HTTP_POST, [this]() { handleApplyTransform(); });
