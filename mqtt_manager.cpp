@@ -2,6 +2,7 @@
 #include "system_monitor.h"
 #include "display_manager.h"
 #include "config_storage.h"
+#include "device_health.h"
 #include "logging.h"
 
 // Global instance
@@ -171,6 +172,9 @@ void MQTTManager::reconnect() {
     
     if (now - lastReconnectAttempt > interval) {
         lastReconnectAttempt = now;
+        
+        // Track reconnection attempt for health monitoring
+        DeviceHealthAnalyzer::recordMQTTReconnect();
         
         // Reset watchdog before reconnect attempt
         esp_task_wdt_reset();

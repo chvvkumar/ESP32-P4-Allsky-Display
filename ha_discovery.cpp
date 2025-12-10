@@ -73,7 +73,8 @@ String HADiscovery::getDeviceJson() {
     json += "\"name\":\"" + configStorage.getHADeviceName() + "\",";
     json += "\"model\":\"ESP32-P4-WIFI6-Touch-LCD\",";
     json += "\"manufacturer\":\"chvvkumar\",";
-    json += "\"sw_version\":\"1.0\"";
+    json += "\"sw_version\":\"1.0\",";
+    json += "\"configuration_url\":\"http://" + WiFi.localIP().toString() + ":8080\"";
     json += "}";
     return json;
 }
@@ -269,6 +270,8 @@ bool HADiscovery::publishDiscovery() {
     delay(50);
     if (!publishSensorDiscovery("uptime", "Uptime", "s", "duration", "mdi:clock-outline")) return false;
     delay(50);
+    if (!publishSensorDiscovery("uptime_readable", "Uptime Readable", "", "", "mdi:clock-outline")) return false;
+    delay(50);
     if (!publishSensorDiscovery("image_count", "Image Count", "", "", "mdi:counter")) return false;
     delay(50);
     if (!publishSensorDiscovery("current_image_index", "Current Image Index", "", "", "mdi:numeric")) return false;
@@ -385,8 +388,25 @@ bool HADiscovery::publishSensors() {
     mqttClient->publish(buildStateTopic("wifi_rssi").c_str(), rssi.c_str());
     
     // Uptime (in seconds)
-    String uptime = String(millis() / 1000);
+    unsigned long uptimeSeconds = millis() / 1000;
+    String uptime = String(uptimeSeconds);
     mqttClient->publish(buildStateTopic("uptime").c_str(), uptime.c_str());
+    
+    // Readable uptime (formatted)
+    unsigned long days = uptimeSeconds / 86400;
+    unsigned long hours = (uptimeSeconds % 86400) / 3600;
+    unsigned long minutes = (uptimeSeconds % 3600) / 60;
+    unsigned long seconds = uptimeSeconds % 60;
+
+    char timeBuffer[32];
+    if (days > 0) {
+        snprintf(timeBuffer, sizeof(timeBuffer), "%lud %luh %lum", days, hours, minutes);
+    } else if (hours > 0) {
+        snprintf(timeBuffer, sizeof(timeBuffer), "%luh %lum", hours, minutes);
+    } else {
+        snprintf(timeBuffer, sizeof(timeBuffer), "%lum %lus", minutes, seconds);
+    }
+    mqttClient->publish(buildStateTopic("uptime_readable").c_str(), timeBuffer);
     
     // Image count
     String imageCount = String(configStorage.getImageSourceCount());

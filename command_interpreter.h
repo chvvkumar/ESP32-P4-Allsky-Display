@@ -12,7 +12,7 @@
  * - Reset: R (reset transforms), V (save transforms)
  * - Brightness: L, K (±10%)
  * - System: B (reboot), H/? (help)
- * - Info: M (memory), I (network), P (PPA), T (MQTT), X (web server)
+ * - Info: M (memory), I (network), P (PPA), T (MQTT), X (web server), G (health diagnostics)
  */
 
 #ifndef COMMAND_INTERPRETER_H
@@ -85,6 +85,7 @@ private:
     void handlePPAInfo();
     void handleMQTTInfo();
     void handleWebServerStatus();
+    void handleHealthDiagnostics();
 };
 
 // Global instance

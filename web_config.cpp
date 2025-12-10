@@ -57,6 +57,7 @@ bool WebConfig::begin(int port) {
         server->on("/api/clear-crash-logs", HTTP_POST, [this]() { handleClearCrashLogs(); });
         server->on("/api/info", HTTP_GET, [this]() { handleGetAllInfo(); });
         server->on("/api/current-image", HTTP_GET, [this]() { handleCurrentImage(); });
+        server->on("/api/health", HTTP_GET, [this]() { handleGetHealth(); });
         
         // Favicon handler (prevents 404 log clutter when browsers request favicon)
         server->on("/favicon.ico", HTTP_GET, [this]() { 

@@ -59,6 +59,7 @@ private:
     void handleFactoryReset();
     void handleSetLogSeverity();
     void handleClearCrashLogs();
+    void handleGetHealth();
     
 public:
     // WebSocket log broadcasting with severity filtering
