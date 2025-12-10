@@ -5,6 +5,7 @@
  */
 
 #include "command_interpreter.h"
+#include "device_health.h"
 
 // Global instance definition
 CommandInterpreter& commandInterpreter = CommandInterpreter::getInstance();
@@ -112,6 +113,10 @@ void CommandInterpreter::processCommands() {
             case 'X':
             case 'x':
                 handleWebServerStatus();
+                break;
+            case 'G':
+            case 'g':
+                handleHealthDiagnostics();
                 break;
             
             default:
@@ -293,6 +298,7 @@ void CommandInterpreter::handleHelp() {
     Serial.println("  P   : PPA info");
     Serial.println("  T   : MQTT info");
     Serial.println("  X   : Web server status/restart");
+    Serial.println("  G   : Health diagnostics (comprehensive device health report)");
     Serial.println("Touch:");
     Serial.println("  Single tap : Next image");
     Serial.println("  Double tap : Toggle cycling/single refresh mode");
@@ -340,4 +346,10 @@ void CommandInterpreter::handleWebServerStatus() {
     } else {
         LOG_WARNING("[Serial] Cannot start web server - WiFi not connected");
     }
+}
+
+void CommandInterpreter::handleHealthDiagnostics() {
+    LOG_INFO("[Serial] Health diagnostics requested");
+    DeviceHealthReport report = deviceHealth.generateReport();
+    deviceHealth.printReport(report);
 }

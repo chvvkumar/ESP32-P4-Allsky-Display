@@ -3,6 +3,7 @@
 #include "display_manager.h"
 #include "ota_manager.h"
 #include "web_config.h"
+#include "device_health.h"
 #include "logging.h"
 #include "config_storage.h"
 #include <ArduinoOTA.h>
@@ -108,6 +109,8 @@ void WiFiManager::checkConnection() {
             LOG_INFO("[WiFi] Connection lost! Starting reconnection logic...");
             LOG_INFO_F("[WiFi] Last known IP: %s\n", WiFi.localIP().toString().c_str());
             LOG_INFO_F("[WiFi] WiFi status: %d\n", WiFi.status());
+            // Track disconnect for health monitoring
+            DeviceHealthAnalyzer::recordNetworkDisconnect();
         } else {
             LOG_INFO("[WiFi] Connection restored!");
             LOG_INFO_F("[WiFi] IP: %s, RSSI: %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
