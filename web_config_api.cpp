@@ -7,6 +7,7 @@
 #include "mqtt_manager.h"
 #include "display_manager.h"
 #include "ota_manager.h"
+#include "device_health.h"
 #include "logging.h"
 #include <Update.h>
 
@@ -801,6 +802,26 @@ void WebConfig::handleCurrentImage() {
     
     json += "\"message\":\"Image data is displayed on the device. Use the current URL to fetch the source image.\"";
     json += "}";
+    
+    sendResponse(200, "application/json", json);
+}
+
+void WebConfig::handleGetHealth() {
+    extern DeviceHealthAnalyzer deviceHealth;
+    
+    LOG_INFO("[WebAPI] Health diagnostics requested via API");
+    
+    // Generate comprehensive health report
+    DeviceHealthReport report = deviceHealth.generateReport();
+    
+    // Convert to JSON
+    String json = deviceHealth.getReportJSON(report);
+    
+    LOG_DEBUG_F("[WebAPI] Health report generated: status=%s\n", 
+                report.overallStatus == HEALTH_EXCELLENT ? "EXCELLENT" :
+                report.overallStatus == HEALTH_GOOD ? "GOOD" :
+                report.overallStatus == HEALTH_WARNING ? "WARNING" :
+                report.overallStatus == HEALTH_CRITICAL ? "CRITICAL" : "FAILING");
     
     sendResponse(200, "application/json", json);
 }
