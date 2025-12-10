@@ -797,6 +797,39 @@ String WebConfig::generateAPIReferencePage() {
     html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>brightness</code> - Current display brightness (0-100)</li>";
     html += "</ul></div></div>";
     
+    // GET /api/health
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #10b981;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#10b981;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>GET</span>/api/health</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Get comprehensive device health diagnostics with status indicators and actionable recommendations.</p>";
+    
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Request Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0'>";
+    html += "curl -X GET " + deviceUrl + "/api/health</pre></div>";
+    
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Fields:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>overall</code> - Overall health status (EXCELLENT, GOOD, WARNING, CRITICAL, FAILING)</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>memory</code> - Heap/PSRAM usage, fragmentation analysis</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>network</code> - WiFi signal quality, disconnect count</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>mqtt</code> - MQTT connection stability, reconnect count</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>system</code> - Boot count, crash detection, temperature, watchdog resets</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>display</code> - Display health and brightness</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>recommendations</code> - Array of actionable suggestions to improve device health</li>";
+    html += "</ul></div>";
+    
+    html += "<div>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Example (Partial):</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "{\n  \"overall\": {\n    \"status\": \"GOOD\",\n    \"message\": \"Device is functional with minor issues\",\n";
+    html += "    \"critical_issues\": 0,\n    \"warnings\": 1\n  },\n";
+    html += "  \"memory\": {\n    \"status\": \"EXCELLENT\",\n    \"free_heap\": 400000,\n    \"heap_usage_percent\": 45.2,\n";
+    html += "    \"free_psram\": 15000000,\n    \"psram_usage_percent\": 52.3\n  },\n";
+    html += "  \"network\": {\n    \"status\": \"GOOD\",\n    \"rssi\": -68,\n    \"disconnect_count\": 2\n  },\n";
+    html += "  \"recommendations\": [\n    \"Improve WiFi signal by relocating device or access point\"\n  ]\n}</pre>";
+    html += "</div></div>";
+    
     html += "</div>"; // End GET endpoints card
     
     // POST Endpoints Section
