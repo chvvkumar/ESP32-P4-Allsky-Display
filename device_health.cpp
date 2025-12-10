@@ -309,12 +309,12 @@ void DeviceHealthAnalyzer::printReport(const DeviceHealthReport& report) {
     
     // Memory
     LOG_INFO_F("[MEMORY] %s - %s\n", healthStatusToString(report.memory.status), report.memory.message.c_str());
-    LOG_INFO_F("  Heap: %d / %d bytes (%.1f%% used, min: %d)\n", 
-               report.memory.freeHeap, report.memory.totalHeap, 
-               report.memory.heapUsagePercent, report.memory.minFreeHeap);
-    LOG_INFO_F("  PSRAM: %d / %d bytes (%.1f%% used, min: %d)\n",
-               report.memory.freePsram, report.memory.totalPsram,
-               report.memory.psramUsagePercent, report.memory.minFreePsram);
+    LOG_INFO_F("  Heap: %lu / %lu bytes (%.1f%% used, min: %lu)\n", 
+               (unsigned long)report.memory.freeHeap, (unsigned long)report.memory.totalHeap, 
+               report.memory.heapUsagePercent, (unsigned long)report.memory.minFreeHeap);
+    LOG_INFO_F("  PSRAM: %lu / %lu bytes (%.1f%% used, min: %lu)\n",
+               (unsigned long)report.memory.freePsram, (unsigned long)report.memory.totalPsram,
+               report.memory.psramUsagePercent, (unsigned long)report.memory.minFreePsram);
     
     // Network
     LOG_INFO_F("[NETWORK] %s - %s\n", healthStatusToString(report.network.status), report.network.message.c_str());
@@ -330,8 +330,8 @@ void DeviceHealthAnalyzer::printReport(const DeviceHealthReport& report) {
     
     // System
     LOG_INFO_F("[SYSTEM] %s - %s\n", healthStatusToString(report.system.status), report.system.message.c_str());
-    LOG_INFO_F("  Uptime: %.1f hours | Boots: %lu | Last crash: %s\n",
-               report.system.uptime / 3600000.0, report.system.bootCount,
+    LOG_INFO_F("  Uptime: %.1f hours | Boots: %u | Last crash: %s\n",
+               report.system.uptime / 3600000.0, (unsigned int)report.system.bootCount,
                report.system.lastBootWasCrash ? "Yes" : "No");
     LOG_INFO_F("  Temperature: %.1f°C | Watchdog resets: %lu\n",
                report.system.temperature, report.system.watchdogResets);

@@ -805,7 +805,7 @@ String WebConfig::generateAPIReferencePage() {
     html += "<div style='margin-bottom:1rem'>";
     html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Request Example:</p>";
     html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0'>";
-    html += "curl -X GET " + deviceUrl + "/api/health</pre></div>";
+    html += "curl -X GET " + escapeHtml(deviceUrl) + "/api/health</pre></div>";
     
     html += "<div style='margin-bottom:1rem'>";
     html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Fields:</p>";
