@@ -77,7 +77,6 @@ struct DeviceHealthReport {
     // Issue counters
     int criticalIssues;
     int warnings;
-    int recommendations;
     
     // Recommendations array
     String recommendations[10];

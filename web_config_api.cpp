@@ -807,8 +807,6 @@ void WebConfig::handleCurrentImage() {
 }
 
 void WebConfig::handleGetHealth() {
-    extern DeviceHealthAnalyzer deviceHealth;
-    
     LOG_INFO("[WebAPI] Health diagnostics requested via API");
     
     // Generate comprehensive health report

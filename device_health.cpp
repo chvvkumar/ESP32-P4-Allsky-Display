@@ -296,8 +296,6 @@ DeviceHealthReport DeviceHealthAnalyzer::generateReport() {
         report.overallMessage = "Device is failing or unstable";
     }
     
-    report.recommendations = report.recommendationCount;
-    
     return report;
 }
 
