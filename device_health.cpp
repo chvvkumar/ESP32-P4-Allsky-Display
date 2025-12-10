@@ -19,6 +19,37 @@ unsigned long DeviceHealthAnalyzer::watchdogResetCount = 0;
 DeviceHealthAnalyzer::DeviceHealthAnalyzer() {
 }
 
+// Helper function to escape strings for JSON
+static String escapeJsonString(const String& input) {
+    String output;
+    output.reserve(input.length() + 10); // Reserve some extra space for escapes
+    
+    for (unsigned int i = 0; i < input.length(); i++) {
+        char c = input.charAt(i);
+        switch (c) {
+            case '"':  output += "\\\""; break;
+            case '\\': output += "\\\\"; break;
+            case '/':  output += "\\/"; break;
+            case '\b': output += "\\b"; break;
+            case '\f': output += "\\f"; break;
+            case '\n': output += "\\n"; break;
+            case '\r': output += "\\r"; break;
+            case '\t': output += "\\t"; break;
+            default:
+                if (c < 0x20) {
+                    // Control characters - escape as unicode
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)c);
+                    output += buf;
+                } else {
+                    output += c;
+                }
+                break;
+        }
+    }
+    return output;
+}
+
 MemoryHealth DeviceHealthAnalyzer::analyzeMemory() {
     MemoryHealth health;
     
@@ -66,7 +97,7 @@ NetworkHealth DeviceHealthAnalyzer::analyzeNetwork() {
         health.message = "Critical: WiFi disconnected";
     } else if (health.rssi < -80) {
         health.status = HEALTH_WARNING;
-        health.message = "Warning: Weak WiFi signal (RSSI < -80 dBm)";
+        health.message = "Warning: Weak WiFi signal (below -80 dBm)";
     } else if (health.rssi < -70) {
         health.status = HEALTH_GOOD;
         health.message = "Good: WiFi signal moderate";
@@ -358,7 +389,7 @@ String DeviceHealthAnalyzer::getReportJSON(const DeviceHealthReport& report) {
     // Overall status
     json += "\"overall\":{";
     json += "\"status\":\"" + String(healthStatusToString(report.overallStatus)) + "\",";
-    json += "\"message\":\"" + report.overallMessage + "\",";
+    json += "\"message\":\"" + escapeJsonString(report.overallMessage) + "\",";
     json += "\"critical_issues\":" + String(report.criticalIssues) + ",";
     json += "\"warnings\":" + String(report.warnings) + ",";
     json += "\"timestamp\":" + String(report.timestamp);
@@ -367,7 +398,7 @@ String DeviceHealthAnalyzer::getReportJSON(const DeviceHealthReport& report) {
     // Memory health
     json += "\"memory\":{";
     json += "\"status\":\"" + String(healthStatusToString(report.memory.status)) + "\",";
-    json += "\"message\":\"" + report.memory.message + "\",";
+    json += "\"message\":\"" + escapeJsonString(report.memory.message) + "\",";
     json += "\"free_heap\":" + String(report.memory.freeHeap) + ",";
     json += "\"total_heap\":" + String(report.memory.totalHeap) + ",";
     json += "\"min_free_heap\":" + String(report.memory.minFreeHeap) + ",";
@@ -381,7 +412,7 @@ String DeviceHealthAnalyzer::getReportJSON(const DeviceHealthReport& report) {
     // Network health
     json += "\"network\":{";
     json += "\"status\":\"" + String(healthStatusToString(report.network.status)) + "\",";
-    json += "\"message\":\"" + report.network.message + "\",";
+    json += "\"message\":\"" + escapeJsonString(report.network.message) + "\",";
     json += "\"connected\":" + String(report.network.connected ? "true" : "false") + ",";
     json += "\"rssi\":" + String(report.network.rssi) + ",";
     json += "\"disconnect_count\":" + String(report.network.disconnectCount);
@@ -390,7 +421,7 @@ String DeviceHealthAnalyzer::getReportJSON(const DeviceHealthReport& report) {
     // MQTT health
     json += "\"mqtt\":{";
     json += "\"status\":\"" + String(healthStatusToString(report.mqtt.status)) + "\",";
-    json += "\"message\":\"" + report.mqtt.message + "\",";
+    json += "\"message\":\"" + escapeJsonString(report.mqtt.message) + "\",";
     json += "\"connected\":" + String(report.mqtt.connected ? "true" : "false") + ",";
     json += "\"reconnect_count\":" + String(report.mqtt.reconnectCount);
     json += "},";
@@ -398,7 +429,7 @@ String DeviceHealthAnalyzer::getReportJSON(const DeviceHealthReport& report) {
     // System health
     json += "\"system\":{";
     json += "\"status\":\"" + String(healthStatusToString(report.system.status)) + "\",";
-    json += "\"message\":\"" + report.system.message + "\",";
+    json += "\"message\":\"" + escapeJsonString(report.system.message) + "\",";
     json += "\"healthy\":" + String(report.system.healthy ? "true" : "false") + ",";
     json += "\"uptime_ms\":" + String(report.system.uptime) + ",";
     json += "\"boot_count\":" + String(report.system.bootCount) + ",";
@@ -410,7 +441,7 @@ String DeviceHealthAnalyzer::getReportJSON(const DeviceHealthReport& report) {
     // Display health
     json += "\"display\":{";
     json += "\"status\":\"" + String(healthStatusToString(report.display.status)) + "\",";
-    json += "\"message\":\"" + report.display.message + "\",";
+    json += "\"message\":\"" + escapeJsonString(report.display.message) + "\",";
     json += "\"initialized\":" + String(report.display.initialized ? "true" : "false") + ",";
     json += "\"brightness\":" + String(report.display.brightness);
     json += "},";
@@ -419,7 +450,7 @@ String DeviceHealthAnalyzer::getReportJSON(const DeviceHealthReport& report) {
     json += "\"recommendations\":[";
     for (int i = 0; i < report.recommendationCount; i++) {
         if (i > 0) json += ",";
-        json += "\"" + report.recommendations[i] + "\"";
+        json += "\"" + escapeJsonString(report.recommendations[i]) + "\"";
     }
     json += "]";
     
