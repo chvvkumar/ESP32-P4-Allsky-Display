@@ -218,6 +218,9 @@ private:
     } config;
     
     void setDefaults();
+    
+    // Dirty flag to track if configuration has changed
+    bool _dirty = false;
 };
 
 // Global instance

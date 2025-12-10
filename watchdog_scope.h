@@ -72,6 +72,6 @@ public:
  * Creates an unnamed WatchdogScope instance that will reset the watchdog
  * on entry and exit of the current scope.
  */
-#define WATCHDOG_SCOPE() WatchdogScope _watchdog_scope_guard_##__LINE__
+#define WATCHDOG_SCOPE() WatchdogScope _watchdog_scope_guard_##__COUNTER__
 
 #endif // WATCHDOG_SCOPE_H
