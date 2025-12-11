@@ -514,6 +514,159 @@ flowchart TD
 
 ---
 
+## Dual-Core Architecture
+
+### ESP32-P4 Core Allocation Strategy
+
+The ESP32-P4 features a dual-core RISC-V processor. The firmware strategically distributes tasks across both cores to achieve non-blocking, responsive operation while handling network-intensive image downloads.
+
+#### Core 0 - Network & Download Task
+
+**Dedicated Purpose:** Asynchronous image download operations
+
+**Key Characteristics:**
+- Explicitly pinned via `xTaskCreatePinnedToCore(..., 0)` in setup()
+- Runs `downloadTask()` FreeRTOS function
+- 8KB stack size (`DOWNLOAD_TASK_STACK_SIZE`)
+- Priority level 2 (`DOWNLOAD_TASK_PRIORITY`)
+- Subscribed to watchdog with 90-second timeout
+
+**Responsibilities:**
+- HTTP image downloads from configured URLs
+- JPEG decoding via JPEGDEC library
+- Buffer management (downloads to `pendingFullImageBuffer`)
+- Network I/O operations isolated from UI thread
+- Watchdog reset calls during long downloads
+
+**Why Core 0?**
+- Separates blocking network operations from UI rendering
+- Prevents display freezing during slow downloads
+- Allows parallel processing: download on Core 0 while Core 1 updates display
+- Achieves true asynchronous downloads without complex callback chains
+
+**Code Location:**
+```cpp
+// ESP32-P4-Allsky-Display.ino, line 786-794
+xTaskCreatePinnedToCore(
+    downloadTask,                    // Task function
+    "DownloadTask",                  // Name
+    DOWNLOAD_TASK_STACK_SIZE,        // Stack size (8192 bytes)
+    NULL,                            // Parameters
+    DOWNLOAD_TASK_PRIORITY,          // Priority (2)
+    &downloadTaskHandle,             // Task handle
+    0                                // Core 0 (CRITICAL)
+);
+```
+
+#### Core 1 - Application & UI Task (Default Arduino Core)
+
+**Dedicated Purpose:** Main application loop, display rendering, and user interaction
+
+**Key Characteristics:**
+- Default Arduino framework core (setup() and loop() run here)
+- No explicit core pinning required
+- Handles all non-download operations
+- Remains responsive during Core 0 downloads
+
+**Responsibilities:**
+- **Display Management:**
+  - PPA hardware-accelerated scaling/rotation
+  - Framebuffer updates via `draw16bitRGBBitmap()`
+  - Software fallback scaling if PPA fails
+  - Debug overlay rendering
+  - Brightness control
+  
+- **Touch Handling:**
+  - GT911 capacitive touch controller polling
+  - Gesture detection (swipe left/right, tap)
+  - Touch-triggered image cycling
+  
+- **Web Services:**
+  - HTTP server (port 8080) for configuration UI
+  - WebSocket server (port 81) for console logging
+  - ElegantOTA update handling at `/update`
+  - API endpoint serving (`/api/info`, `/api/config`)
+  
+- **MQTT Communication:**
+  - Home Assistant integration
+  - Command processing (brightness, image cycle)
+  - Status publishing and availability heartbeat
+  - MQTT loop processing
+  
+- **WiFi Management:**
+  - Non-blocking WiFi setup mode (5-minute timeout)
+  - Captive portal hosting during provisioning
+  - WiFi reconnection handling
+  - NTP time synchronization
+  
+- **System Monitoring:**
+  - Watchdog management for loop() tasks
+  - Memory usage tracking
+  - Crash detection and logging
+  - Serial command interpreter
+
+**Why Core 1?**
+- Arduino framework defaults to Core 1 for `setup()` and `loop()`
+- Keeps UI responsive - no freezing during downloads
+- All user-facing services remain available during network operations
+- Display updates continue while Core 0 downloads next image
+
+#### Task Synchronization Mechanisms
+
+**Double-Buffering:**
+- Core 0 downloads to `pendingFullImageBuffer`
+- Core 1 displays from `fullImageBuffer`
+- Atomic buffer swap when download completes via mutex-protected flag
+
+**Download Queue:**
+```cpp
+QueueHandle_t downloadQueue;  // Signals download request from Core 1 to Core 0
+```
+
+**Thread Safety:**
+```cpp
+SemaphoreHandle_t downloadMutex;  // Protects buffer swap operations
+volatile bool downloadInProgress;  // Atomic status flag
+volatile bool newImageReady;       // Signals Core 1 to swap buffers
+```
+
+**Watchdog Coordination:**
+- Core 0 task subscribes explicitly: `esp_task_wdt_add(NULL)` in `downloadTask()`
+- Core 1 uses `systemMonitor.forceResetWatchdog()` for loop() operations
+- Separate 90-second timeout accommodates slow downloads
+
+#### Performance Benefits
+
+**Measured Improvements:**
+- **Download speeds:** 735-1781 KB/s (no throttling from UI)
+- **UI responsiveness:** Touch, web server, MQTT remain active during downloads
+- **Display updates:** PPA scaling completes in 337-338ms without blocking
+- **No freezing:** 60-second image cycle never blocks user interaction
+
+**Architectural Advantages:**
+1. **Non-blocking downloads:** Network I/O isolated to Core 0
+2. **Parallel processing:** Download next image while displaying current
+3. **Fault isolation:** Download task crashes don't affect UI
+4. **Resource separation:** Network stack memory on Core 0, display buffers on Core 1
+5. **Scalability:** Easy to add more Core 0 tasks (e.g., weather data fetch)
+
+#### Debugging Core Allocation
+
+**Serial Log Indicators:**
+```
+[DownloadTask] Task subscribed to watchdog  // Core 0 startup confirmation
+[DownloadTask] Starting download from ...    // Core 0 active
+=== SWAPPING IMAGE BUFFERS FOR SEAMLESS DISPLAY ===  // Core 1 buffer swap
+✓ Hardware acceleration successful in 337 ms  // Core 1 PPA operation
+```
+
+**Runtime Verification:**
+- Check `/api/info` endpoint for `downloadInProgress` status
+- Monitor WebSocket console for `[DownloadTask]` prefixed messages
+- Verify touch/web responsiveness during downloads (Core 1 proof)
+
+---
+
 ## Memory Architecture
 
 ### PSRAM Buffer Layout
