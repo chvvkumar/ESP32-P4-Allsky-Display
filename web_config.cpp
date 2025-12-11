@@ -21,7 +21,7 @@ bool WebConfig::begin(int port) {
     }
     
     try {
-        LOG_INFO_F("[WebServer] Initializing web server on port %d\n", port);
+        LOG_DEBUG_F("[WebServer] Initializing web server on port %d\n", port);
         server = new WebServer(port);
         
         if (!server) {
@@ -100,19 +100,19 @@ bool WebConfig::begin(int port) {
         server->on("/api-reference", [this]() { handleAPIReference(); });
         server->onNotFound([this]() { handleNotFound(); });
         
-        LOG_INFO("Starting WebServer...");
+        LOG_DEBUG("Starting WebServer...");
         server->begin();
         
         // Initialize WebSocket server on port 81
-        LOG_INFO("[WebSocket] Starting WebSocket server on port 81");
+        LOG_DEBUG("[WebSocket] Starting WebSocket server on port 81");
         LOG_DEBUG_F("[WebSocket] Free heap before allocation: %d bytes\n", ESP.getFreeHeap());
         wsServer = new WebSocketsServer(81);
         if (wsServer) {
             LOG_DEBUG("[WebSocket] Server instance created successfully");
             wsServer->begin();
             wsServer->onEvent(webSocketEvent);
-            LOG_INFO("[WebSocket] ✓ Server started and event handler registered");
-            LOG_INFO_F("[WebSocket] Listening on port 81 (clients can connect to ws://%s:81)\n", WiFi.localIP().toString().c_str());
+            LOG_DEBUG("[WebSocket] ✓ Server started and event handler registered");
+            LOG_DEBUG_F("[WebSocket] Listening on port 81 (clients can connect to ws://%s:81)\n", WiFi.localIP().toString().c_str());
         } else {
             LOG_ERROR("[WebSocket] ERROR: Failed to allocate WebSocket server!");
             LOG_ERROR_F("[WebSocket] Free heap: %d bytes, PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
@@ -124,7 +124,7 @@ bool WebConfig::begin(int port) {
         }
         
         serverRunning = true;
-        LOG_INFO_F("✓ Web configuration server started successfully on port %d\n", port);
+        LOG_DEBUG_F("✓ Web configuration server started successfully on port %d\n", port);
         return true;
         
     } catch (const std::exception& e) {

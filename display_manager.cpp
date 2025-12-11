@@ -163,15 +163,16 @@ void DisplayManager::debugPrint(const char* message, uint16_t color) {
         debugY = DEBUG_START_Y;
         debugLineCount = 0;
         
+        // Don't show the debug log header during initial boot
         // Center the scroll header
-        gfx->setTextSize(DEBUG_TEXT_SIZE);
-        gfx->setTextColor(COLOR_YELLOW);
-        const char* scrollMsg = "=== DEBUG LOG ===";
-        gfx->getTextBounds(scrollMsg, 0, 0, &x1, &y1, &textWidth, &textHeight);
-        centerX = (displayWidth - textWidth) / 2;
-        gfx->setCursor(centerX, debugY);
-        gfx->println(scrollMsg);
-        debugY += DEBUG_LINE_HEIGHT * 2;
+        // gfx->setTextSize(DEBUG_TEXT_SIZE);
+        // gfx->setTextColor(COLOR_YELLOW);
+        // const char* scrollMsg = "=== DEBUG LOG ===";
+        // gfx->getTextBounds(scrollMsg, 0, 0, &x1, &y1, &textWidth, &textHeight);
+        // centerX = (displayWidth - textWidth) / 2;
+        // gfx->setCursor(centerX, debugY);
+        // gfx->println(scrollMsg);
+        // debugY += DEBUG_LINE_HEIGHT * 2;
     }
 }
 

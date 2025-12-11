@@ -249,20 +249,20 @@ int16_t displayWiFiQRCode() {
     int16_t displayHeight = displayManager.getHeight();
     int16_t textStartY = 200; // Default fallback
     
-    Serial.println("DEBUG: Loading WiFi QR code...");
+    LOG_DEBUG("DEBUG: Loading WiFi QR code...");
     
     // Reset watchdog before system calls
     systemMonitor.forceResetWatchdog();
     
-    Serial.printf("DEBUG: Free heap before QR: %d bytes\n", systemMonitor.getCurrentFreeHeap());
-    Serial.printf("DEBUG: Free PSRAM before QR: %d bytes\n", systemMonitor.getCurrentFreePsram());
+    LOG_DEBUG_F("DEBUG: Free heap before QR: %d bytes\n", systemMonitor.getCurrentFreeHeap());
+    LOG_DEBUG_F("DEBUG: Free PSRAM before QR: %d bytes\n", systemMonitor.getCurrentFreePsram());
     
     // Reset watchdog before heavy operation
     systemMonitor.forceResetWatchdog();
     
     // First, open JPEG to get actual dimensions
     if (!jpeg.openRAM((uint8_t*)wifi_qr_code_jpg, wifi_qr_code_jpg_len, JPEGDrawQR)) {
-        Serial.println("ERROR: Failed to open QR code JPEG");
+        LOG_ERROR("ERROR: Failed to open QR code JPEG");
         return textStartY; // Return default position
     }
     
@@ -271,11 +271,11 @@ int16_t displayWiFiQRCode() {
     
     qrCodeWidth = jpeg.getWidth();
     qrCodeHeight = jpeg.getHeight();
-    Serial.printf("DEBUG: QR code dimensions - %dx%d\n", qrCodeWidth, qrCodeHeight);
+    LOG_DEBUG_F("DEBUG: QR code dimensions - %dx%d\n", qrCodeWidth, qrCodeHeight);
     
     // Check if QR code fits on display
     if (qrCodeWidth > displayWidth || qrCodeHeight > displayHeight) {
-        Serial.println("ERROR: QR code too large for display");
+        LOG_ERROR("ERROR: QR code too large for display");
         jpeg.close();
         return textStartY; // Return default position
     }
@@ -285,19 +285,19 @@ int16_t displayWiFiQRCode() {
     
     // Check PSRAM availability before allocation
     if (ESP.getFreePsram() < qrBufferSize + 100000) {  // Need buffer + 100KB headroom
-        Serial.printf("WARNING: Low PSRAM for QR code - Available: %d, Need: %d\n", 
+        LOG_WARNING_F("WARNING: Low PSRAM for QR code - Available: %d, Need: %d\n", 
                      ESP.getFreePsram(), qrBufferSize);
     }
     
     qrCodeBuffer = (uint16_t*)ps_malloc(qrBufferSize);
     if (!qrCodeBuffer) {
-        Serial.println("ERROR: Failed to allocate QR code buffer");
-        Serial.printf("ERROR: Tried to allocate %d bytes for %dx%d image\n", qrBufferSize, qrCodeWidth, qrCodeHeight);
+        LOG_ERROR("ERROR: Failed to allocate QR code buffer");
+        LOG_ERROR_F("ERROR: Tried to allocate %d bytes for %dx%d image\n", qrBufferSize, qrCodeWidth, qrCodeHeight);
         jpeg.close();
         return textStartY; // Return default position
     }
     
-    Serial.printf("DEBUG: QR buffer allocated: %d bytes\n", qrBufferSize);
+    LOG_DEBUG_F("DEBUG: QR buffer allocated: %d bytes\n", qrBufferSize);
     
     // Reset watchdog after allocation
     systemMonitor.forceResetWatchdog();
@@ -313,7 +313,7 @@ int16_t displayWiFiQRCode() {
     
     // Decode QR code JPEG
     if (jpeg.decode(0, 0, 0)) {
-        Serial.println("DEBUG: QR code decoded successfully");
+        LOG_DEBUG("DEBUG: QR code decoded successfully");
         
         // Reset watchdog after decode
         systemMonitor.forceResetWatchdog();
@@ -335,7 +335,7 @@ int16_t displayWiFiQRCode() {
         systemMonitor.forceResetWatchdog();
         
         if (scaledQR) {
-            Serial.printf("DEBUG: Scaling QR from %dx%d to %dx%d\n", qrCodeWidth, qrCodeHeight, scaledWidth, scaledHeight);
+            LOG_DEBUG_F("DEBUG: Scaling QR from %dx%d to %dx%d\n", qrCodeWidth, qrCodeHeight, scaledWidth, scaledHeight);
             
             // Clear buffer before scaling
             memset(scaledQR, 0, scaledSize);
@@ -346,7 +346,7 @@ int16_t displayWiFiQRCode() {
             // Use PPA to scale down
             if (ppaAccelerator.scaleImage(qrCodeBuffer, qrCodeWidth, qrCodeHeight,
                                          scaledQR, scaledWidth, scaledHeight)) {
-                Serial.println("DEBUG: QR code scaled successfully");
+                LOG_DEBUG("DEBUG: QR code scaled successfully");
                 
                 // Reset watchdog after scaling
                 systemMonitor.forceResetWatchdog();
@@ -373,12 +373,12 @@ int16_t displayWiFiQRCode() {
                     gfx->flush();
                 }
                 
-                Serial.printf("DEBUG: Scaled QR code drawn and flushed at (%d, %d)\n", qrX, qrY);
+                LOG_DEBUG_F("DEBUG: Scaled QR code drawn and flushed at (%d, %d)\n", qrX, qrY);
                 
                 // Calculate where text should start (below QR code + small margin)
                 textStartY = qrY + scaledHeight + 15;
             } else {
-                Serial.println("WARNING: PPA scaling failed, drawing original size");
+                LOG_WARNING("WARNING: PPA scaling failed, drawing original size");
                 int16_t qrX = (displayWidth - qrCodeWidth) / 2;
                 int16_t qrY = 50;
                 
@@ -400,7 +400,7 @@ int16_t displayWiFiQRCode() {
             
             free(scaledQR);
         } else {
-            Serial.println("WARNING: Could not allocate scaled buffer, drawing original");
+            LOG_WARNING("WARNING: Could not allocate scaled buffer, drawing original");
             int16_t qrX = (displayWidth - qrCodeWidth) / 2;
             int16_t qrY = 50;
             
@@ -473,9 +473,9 @@ void setup() {
     // Initialize system monitor with configured watchdog timeout
     // This will properly configure the watchdog with our desired timeout
     unsigned long watchdogTimeout = configStorage.getWatchdogTimeout();
-    Serial.printf("Initializing system monitor with watchdog timeout: %lu ms\n", watchdogTimeout);
+    LOG_DEBUG_F("Initializing system monitor with watchdog timeout: %lu ms\n", watchdogTimeout);
     if (!systemMonitor.begin(watchdogTimeout)) {
-        Serial.println("CRITICAL: System monitor initialization failed!");
+        LOG_CRITICAL("CRITICAL: System monitor initialization failed!");
         while(1) delay(1000);
     }
     
@@ -484,16 +484,16 @@ void setup() {
     
     // Pre-allocate all PSRAM buffers BEFORE display init to ensure enough contiguous memory
     // Display needs ~1.28MB contiguous for frame buffer (800x800x2), so we allocate our buffers first
-    Serial.println("Pre-allocating PSRAM buffers before display initialization...");
-    Serial.printf("Free PSRAM before allocation: %d bytes\n", ESP.getFreePsram());
+    LOG_DEBUG("Pre-allocating PSRAM buffers before display initialization...");
+    LOG_DEBUG_F("Free PSRAM before allocation: %d bytes\n", ESP.getFreePsram());
     
     // Calculate buffer sizes based on display configuration
     const int16_t w = display_cfg.width;
     const int16_t h = display_cfg.height;
-    Serial.printf("Display dimensions from config: %dx%d\n", w, h);
+    LOG_DEBUG_F("Display dimensions from config: %dx%d\n", w, h);
     
-    Serial.println("[Memory] Allocating image buffers...");
-    Serial.printf("[Memory] Pre-allocation state: Heap=%d bytes, PSRAM=%d bytes\n", 
+    LOG_DEBUG("[Memory] Allocating image buffers...");
+    LOG_DEBUG_F("[Memory] Pre-allocation state: Heap=%d bytes, PSRAM=%d bytes\n", 
                  ESP.getFreeHeap(), ESP.getFreePsram());
     
     // Clean up any existing allocations (safety check for repeated setup calls)
@@ -503,83 +503,83 @@ void setup() {
     if (scaledBuffer) { free(scaledBuffer); scaledBuffer = nullptr; }
     
     imageBufferSize = w * h * IMAGE_BUFFER_MULTIPLIER * 2;
-    Serial.printf("[Memory] Allocating image buffer: %d bytes (%.1f KB)\n", 
+    LOG_DEBUG_F("[Memory] Allocating image buffer: %d bytes (%.1f KB)\n", 
                  imageBufferSize, imageBufferSize / 1024.0);
     imageBuffer = (uint8_t*)ps_malloc(imageBufferSize);
     if (!imageBuffer) {
-        Serial.printf("[Memory] ✗ CRITICAL: Image buffer allocation failed!\n");
-        Serial.printf("CRITICAL: Image buffer pre-allocation failed! Size: %d bytes\n", imageBufferSize);
-        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), imageBufferSize);
-        Serial.printf("[Memory] Free Heap: %d bytes\n", ESP.getFreeHeap());
-        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+        LOG_CRITICAL("[Memory] ✗ CRITICAL: Image buffer allocation failed!\n");
+        LOG_CRITICAL_F("CRITICAL: Image buffer pre-allocation failed! Size: %d bytes\n", imageBufferSize);
+        LOG_CRITICAL_F("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), imageBufferSize);
+        LOG_CRITICAL_F("[Memory] Free Heap: %d bytes\n", ESP.getFreeHeap());
+        LOG_CRITICAL_F("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
         crashLogger.saveBeforeReboot();
         delay(100);
         ESP.restart();
     }
-    Serial.printf("[Memory] ✓ Image buffer: %d bytes (%.1f KB)\n", imageBufferSize, imageBufferSize / 1024.0);
-    Serial.printf("✓ Image buffer allocated: %d bytes\n", imageBufferSize);
+    LOG_DEBUG_F("[Memory] ✓ Image buffer: %d bytes (%.1f KB)\n", imageBufferSize, imageBufferSize / 1024.0);
+    LOG_DEBUG_F("✓ Image buffer allocated: %d bytes\n", imageBufferSize);
     
     fullImageBufferSize = FULL_IMAGE_BUFFER_SIZE;
-    Serial.printf("[Memory] Allocating full image buffer: %d bytes (%.1f KB, max 512x512)\n", 
+    LOG_DEBUG_F("[Memory] Allocating full image buffer: %d bytes (%.1f KB, max 512x512)\n", 
                  fullImageBufferSize, fullImageBufferSize / 1024.0);
     fullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
     if (!fullImageBuffer) {
-        Serial.printf("[Memory] ✗ CRITICAL: Full image buffer allocation failed!\n");
-        Serial.printf("CRITICAL: Full image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
-        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), fullImageBufferSize);
-        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+        LOG_CRITICAL("[Memory] ✗ CRITICAL: Full image buffer allocation failed!\n");
+        LOG_CRITICAL_F("CRITICAL: Full image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
+        LOG_CRITICAL_F("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), fullImageBufferSize);
+        LOG_CRITICAL_F("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
         crashLogger.saveBeforeReboot();
         delay(100);
         ESP.restart();
     }
-    Serial.printf("[Memory] ✓ Full image buffer: %d bytes (%.1f KB)\n", fullImageBufferSize, fullImageBufferSize / 1024.0);
-    Serial.printf("✓ Full image buffer allocated: %d bytes\n", fullImageBufferSize);
+    LOG_DEBUG_F("[Memory] ✓ Full image buffer: %d bytes (%.1f KB)\n", fullImageBufferSize, fullImageBufferSize / 1024.0);
+    LOG_DEBUG_F("✓ Full image buffer allocated: %d bytes\n", fullImageBufferSize);
     
-    Serial.printf("[Memory] Allocating pending buffer: %d bytes (double-buffer for flicker-free)\n", 
+    LOG_DEBUG_F("[Memory] Allocating pending buffer: %d bytes (double-buffer for flicker-free)\n", 
                  fullImageBufferSize);
     pendingFullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
     if (!pendingFullImageBuffer) {
-        Serial.printf("[Memory] ✗ CRITICAL: Pending buffer allocation failed!\n");
-        Serial.printf("CRITICAL: Pending image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
-        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), fullImageBufferSize);
-        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+        LOG_CRITICAL("[Memory] ✗ CRITICAL: Pending buffer allocation failed!\n");
+        LOG_CRITICAL_F("CRITICAL: Pending image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
+        LOG_CRITICAL_F("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), fullImageBufferSize);
+        LOG_CRITICAL_F("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
         crashLogger.saveBeforeReboot();
         delay(100);
         ESP.restart();
     }
-    Serial.printf("[Memory] ✓ Pending buffer: %d bytes (%.1f KB)\n", fullImageBufferSize, fullImageBufferSize / 1024.0);
-    Serial.printf("✓ Pending image buffer allocated: %d bytes\n", fullImageBufferSize);
+    LOG_DEBUG_F("[Memory] ✓ Pending buffer: %d bytes (%.1f KB)\n", fullImageBufferSize, fullImageBufferSize / 1024.0);
+    LOG_DEBUG_F("✓ Pending image buffer allocated: %d bytes\n", fullImageBufferSize);
     
     scaledBufferSize = w * h * SCALED_BUFFER_MULTIPLIER * 2;
-    Serial.printf("[Memory] Allocating scaled buffer: %d bytes (%.1f KB, 4x display for PPA)\n", 
+    LOG_DEBUG_F("[Memory] Allocating scaled buffer: %d bytes (%.1f KB, 4x display for PPA)\n", 
                  scaledBufferSize, scaledBufferSize / 1024.0);
     scaledBuffer = (uint16_t*)ps_malloc(scaledBufferSize);
     if (!scaledBuffer) {
-        Serial.printf("[Memory] ✗ CRITICAL: Scaled buffer allocation failed!\n");
-        Serial.printf("CRITICAL: Scaled buffer pre-allocation failed! Size: %d bytes\n", scaledBufferSize);
-        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), scaledBufferSize);
-        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+        LOG_CRITICAL("[Memory] ✗ CRITICAL: Scaled buffer allocation failed!\n");
+        LOG_CRITICAL_F("CRITICAL: Scaled buffer pre-allocation failed! Size: %d bytes\n", scaledBufferSize);
+        LOG_CRITICAL_F("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), scaledBufferSize);
+        LOG_CRITICAL_F("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
         crashLogger.saveBeforeReboot();
         delay(100);
         ESP.restart();
     }
-    Serial.printf("[Memory] ✓ Scaled buffer: %d bytes (%.1f KB)\n", scaledBufferSize, scaledBufferSize / 1024.0);
-    Serial.printf("✓ Scaled buffer allocated: %d bytes\n", scaledBufferSize);
+    LOG_DEBUG_F("[Memory] ✓ Scaled buffer: %d bytes (%.1f KB)\n", scaledBufferSize, scaledBufferSize / 1024.0);
+    LOG_DEBUG_F("✓ Scaled buffer allocated: %d bytes\n", scaledBufferSize);
     
     size_t totalAllocated = imageBufferSize + (fullImageBufferSize * 2) + scaledBufferSize;
-    Serial.printf("[Memory] ✓ All buffers allocated: %d bytes total (%.1f MB)\n", 
+    LOG_DEBUG_F("[Memory] ✓ All buffers allocated: %d bytes total (%.1f MB)\n", 
                  totalAllocated, totalAllocated / (1024.0 * 1024.0));
-    Serial.printf("[Memory] Free PSRAM remaining: %d bytes (%.1f MB)\n", 
+    LOG_DEBUG_F("[Memory] Free PSRAM remaining: %d bytes (%.1f MB)\n", 
                  ESP.getFreePsram(), ESP.getFreePsram() / (1024.0 * 1024.0));
-    Serial.printf("PSRAM pre-allocation complete - Free PSRAM remaining: %d bytes\n", ESP.getFreePsram());
+    LOG_DEBUG_F("PSRAM pre-allocation complete - Free PSRAM remaining: %d bytes\n", ESP.getFreePsram());
     
     // Reset watchdog after large memory allocations
     systemMonitor.forceResetWatchdog();
     
     // NOW initialize display - it should have plenty of contiguous PSRAM remaining
     if (!displayManager.begin()) {
-        Serial.println("CRITICAL: Display initialization failed!");
-        Serial.printf("Free PSRAM at failure: %d bytes\n", ESP.getFreePsram());
+        LOG_CRITICAL("CRITICAL: Display initialization failed!");
+        LOG_CRITICAL_F("Free PSRAM at failure: %d bytes\n", ESP.getFreePsram());
         crashLogger.saveBeforeReboot();
         delay(100);
         ESP.restart();
@@ -587,11 +587,11 @@ void setup() {
     
     // Verify display dimensions match our configuration
     if (displayManager.getWidth() != w || displayManager.getHeight() != h) {
-        Serial.printf("WARNING: Display dimensions mismatch! Config: %dx%d, Actual: %dx%d\n",
+        LOG_WARNING_F("WARNING: Display dimensions mismatch! Config: %dx%d, Actual: %dx%d\n",
                      w, h, displayManager.getWidth(), displayManager.getHeight());
-        Serial.println("This should not happen - check displays_config.h");
+        LOG_WARNING("This should not happen - check displays_config.h");
     } else {
-        Serial.printf("Display dimensions verified: %dx%d\n", w, h);
+        LOG_DEBUG_F("Display dimensions verified: %dx%d\n", w, h);
     }
     
     // Reset watchdog after display initialization (heavy operation)
@@ -612,15 +612,17 @@ void setup() {
         
         debugPrint("ESP32 AllSky Display", COLOR_CYAN);
         debugPrint(" ", COLOR_WHITE);  // Spacing
-        debugPrint("Initializing...", COLOR_GREEN);
+        
+        debugPrint("Initializing hardware...", COLOR_YELLOW);
     }
     
     // Buffers already allocated before display init - just initialize PPA hardware acceleration
     ppaAccelerator.begin(w, h);
     
     if (!needsWiFiSetup) {
-        // Show hardware initialization status
-        debugPrint("Hardware ready", COLOR_GREEN);
+        // Show hardware initialization result
+        debugPrint("Hardware Ready!", COLOR_GREEN);
+        debugPrint(" ", COLOR_WHITE);  // Group spacing
     }
     
     // Initialize brightness control
@@ -727,9 +729,11 @@ void setup() {
         wifiManager.initOTA();
         
         if (!needsWiFiSetup) {
-            debugPrint(" ", COLOR_WHITE);
             debugPrint("System Ready!", COLOR_GREEN);
-            debugPrintf(COLOR_CYAN, "IP: %s", WiFi.localIP().toString().c_str());
+            debugPrint(" ", COLOR_WHITE);  // Group spacing
+            
+            // Pause to allow user to read boot messages
+            delay(2000);
         }
     }
     
@@ -1181,7 +1185,11 @@ void downloadAndDisplayImage() {
     
     Serial.println("[Image] Starting download stream...");
     Serial.printf("[Image] Download config: 1KB chunks, 50ms watchdog, 5s timeout\n");
-    debugPrint("Downloading image data...", COLOR_YELLOW);
+    // Show downloading message on display for first image only
+    if (!firstImageLoaded) {
+        debugPrint("Downloading Image...", COLOR_YELLOW);
+    }
+    LOG_DEBUG("Downloading image data...");
     
     size_t bytesRead = 0;
     uint8_t* buffer = imageBuffer;
@@ -1902,7 +1910,9 @@ void loop() {
 // Touch controller functions implementation
 
 void initializeTouchController() {
-    debugPrint("Initializing touch controller...", COLOR_YELLOW);
+    // Don't show on display during boot - only log to serial
+    // debugPrint("Initializing touch controller...", COLOR_YELLOW);
+    LOG_DEBUG("Initializing touch controller...");
     
     try {
         // Initialize I2C interface first
@@ -1913,8 +1923,9 @@ void initializeTouchController() {
         
         if (touchHandle != nullptr) {
             touchEnabled = true;
-            debugPrint("Touch controller initialized successfully!", COLOR_GREEN);
-            Serial.println("GT911 touch controller ready");
+            // Don't show on display - only log
+            // debugPrint("Touch controller initialized successfully!", COLOR_GREEN);
+            LOG_INFO("GT911 touch controller ready");
         } else {
             debugPrint("Touch controller initialization failed", COLOR_RED);
             Serial.println("Warning: Touch functionality disabled - GT911 init failed");
