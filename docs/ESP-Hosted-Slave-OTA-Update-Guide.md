@@ -1,8 +1,8 @@
-# ESP-Hosted Slave OTA Update Guide for ESP32-P4-Function-EV-Board
+# ESP-Hosted Slave OTA Update Guide for Waveshare ESP32-P4 
 
 ## Overview
 
-This guide documents the complete process of updating the ESP32-C6 slave firmware on the ESP32-P4-Function-EV-Board using the ESP-Hosted OTA mechanism. The update is performed over SDIO from the ESP32-P4 host to the ESP32-C6 co-processor.
+This guide documents the complete process of updating the ESP32-C6 slave firmware on the Waveshare ESP32-P4 Touch LCD using the ESP-Hosted OTA mechanism. The update is performed over SDIO from the ESP32-P4 host to the ESP32-C6 co-processor.
 
 **Steps:**
 - ✅ Built ESP-Hosted slave firmware (v2.7.2) for ESP32-C6
@@ -79,7 +79,7 @@ idf.py menuconfig
 ```
 
 **Key configuration options:**
-- Transport: SDIO (default for ESP32-C6 on Function-EV-Board)
+- Transport: SDIO (default for ESP32-C6 on Waveshare ESP32-P4 Touch LCD)
 - Bluetooth: Configure as needed
 - Wi-Fi settings: Default settings work
 
@@ -433,7 +433,7 @@ This process successfully demonstrates:
 3. **Version management**: Automatic version checking and update prevention
 4. **Partition-based OTA**: Most reliable method for embedded firmware storage
 
-The ESP32-P4-Function-EV-Board now has both chips running updated ESP-Hosted firmware with version compatibility! 🎉
+The Waveshare ESP32-P4 Touch LCD now has both chips running updated ESP-Hosted firmware with version compatibility! 🎉
 
 ---
 
