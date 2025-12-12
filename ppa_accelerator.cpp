@@ -22,7 +22,7 @@ PPAAccelerator::~PPAAccelerator() {
 
 bool PPAAccelerator::begin(int16_t displayWidth, int16_t displayHeight) {
     if (debugPrintFunc) debugPrintFunc("Initializing PPA hardware...", COLOR_YELLOW);
-    LOG_INFO("Initializing PPA hardware acceleration...");
+    LOG_DEBUG("Initializing PPA hardware acceleration...");
     
     // Configure PPA client for scaling operations
     ppa_client_config_t ppa_client_config = {
@@ -66,15 +66,16 @@ bool PPAAccelerator::begin(int16_t displayWidth, int16_t displayHeight) {
     
     ppa_available = true;
     
-    LOG_INFO("PPA hardware initialized successfully!");
-    LOG_INFO_F("PPA src buffer: %d bytes\n", ppa_src_buffer_size);
-    LOG_INFO_F("PPA dst buffer: %d bytes\n", ppa_dst_buffer_size);
+    LOG_DEBUG("PPA hardware initialized successfully!");
+    LOG_DEBUG_F("PPA src buffer: %d bytes\n", ppa_src_buffer_size);
+    LOG_DEBUG_F("PPA dst buffer: %d bytes\n", ppa_dst_buffer_size);
     
-    if (debugPrintFunc) {
-        debugPrintFunc("PPA hardware initialized successfully!", COLOR_GREEN);
-        debugPrintfFunc(COLOR_WHITE, "PPA src buffer: %d bytes", ppa_src_buffer_size);
-        debugPrintfFunc(COLOR_WHITE, "PPA dst buffer: %d bytes", ppa_dst_buffer_size);
-    }
+    // Don't show on display - only log to serial/websocket
+    // if (debugPrintFunc) {
+    //     debugPrintFunc("PPA hardware initialized successfully!", COLOR_GREEN);
+    //     debugPrintfFunc(COLOR_WHITE, "PPA src buffer: %d bytes", ppa_src_buffer_size);
+    //     debugPrintfFunc(COLOR_WHITE, "PPA dst buffer: %d bytes", ppa_dst_buffer_size);
+    // }
     
     return true;
 }

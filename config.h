@@ -146,9 +146,16 @@ extern const bool DEFAULT_RANDOM_ORDER;
 // WATCHDOG CONFIGURATION
 // =============================================================================
 
-#define WATCHDOG_TIMEOUT_MS 30000        // 30 second timeout to handle slow downloads
+#define WATCHDOG_TIMEOUT_MS 90000        // 90 second timeout to handle slow downloads
 #define WATCHDOG_IDLE_CORE_MASK 0        // Don't monitor idle tasks
 #define WATCHDOG_TRIGGER_PANIC false     // Don't panic on timeout, just reset
+
+// =============================================================================
+// ASYNC DOWNLOAD TASK CONFIGURATION
+// =============================================================================
+
+#define DOWNLOAD_TASK_STACK_SIZE 8192    // Stack size for async download task
+#define DOWNLOAD_TASK_PRIORITY 2         // Priority for download task (Core 0)
 
 // =============================================================================
 // TOUCH GESTURE TIMING CONFIGURATION

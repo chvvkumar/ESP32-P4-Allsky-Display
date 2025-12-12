@@ -9,7 +9,9 @@
 // These functions generate the HTML content for each configuration page
 
 String WebConfig::generateMainPage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(12000);  // Pre-allocate ~12KB to prevent fragmentation during HTML generation
+    html = "<div class='main'><div class='container'>";
     
     // Top row - Uptime and Image status cards
     html += "<div class='stats'>";
@@ -181,7 +183,9 @@ String WebConfig::generateMainPage() {
 }
 
 String WebConfig::generateNetworkPage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(2000);  // Pre-allocate ~2KB for network config page
+    html = "<div class='main'><div class='container'>";
     html += "<form id='networkForm'><div class='card'>";
     html += "<h2>📡 WiFi Configuration</h2>";
     
@@ -201,7 +205,9 @@ String WebConfig::generateNetworkPage() {
 }
 
 String WebConfig::generateMQTTPage() {
-    String html = "<div class='main'><div class='container'><form id='mqttForm'><div class='grid'>";
+    String html;
+    html.reserve(5000);  // Pre-allocate ~5KB for MQTT config page
+    html = "<div class='main'><div class='container'><form id='mqttForm'><div class='grid'>";
     html += "<div class='card'><h2>🔗 MQTT Broker</h2>";
     html += "<div class='form-group'><label for='mqtt_server'>Broker Address</label>";
     html += "<input type='text' id='mqtt_server' name='mqtt_server' class='form-control' value='" + escapeHtml(configStorage.getMQTTServer()) + "' required></div>";
@@ -247,7 +253,9 @@ String WebConfig::generateMQTTPage() {
 }
 
 String WebConfig::generateImagePage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(8000);  // Pre-allocate ~8KB for image config page
+    html = "<div class='main'><div class='container'>";
     
     // Mode Selection Card
     html += "<div class='card'><h2>🖼️ Image Configuration</h2>";
@@ -453,7 +461,9 @@ String WebConfig::generateImagePage() {
 }
 
 String WebConfig::generateDisplayPage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(4000);  // Pre-allocate ~4KB for display config page
+    html = "<div class='main'><div class='container'>";
     
     // Current brightness control - Live adjustment (not saved)
     html += "<div class='card'><h2>💡 Current Brightness Control</h2>";
@@ -507,7 +517,9 @@ String WebConfig::generateDisplayPage() {
 }
 
 String WebConfig::generateAdvancedPage() {
-    String html = "<div class='main'><div class='container'><form id='advancedForm'><div class='grid'>";
+    String html;
+    html.reserve(6000);  // Pre-allocate ~6KB for advanced settings page
+    html = "<div class='main'><div class='container'><form id='advancedForm'><div class='grid'>";
     html += "<div class='card'><h2>⏱️ Timing Settings</h2>";
     html += "<div class='form-group'><label for='mqtt_reconnect_interval'>MQTT Reconnect Interval (seconds)</label>";
     html += "<input type='number' id='mqtt_reconnect_interval' name='mqtt_reconnect_interval' class='form-control' value='" + String(configStorage.getMQTTReconnectInterval() / 1000) + "' min='1' max='300'></div>";
@@ -593,7 +605,9 @@ String WebConfig::generateStatusPage() {
 }
 
 String WebConfig::generateSerialCommandsPage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(8000);  // Pre-allocate ~8KB for serial commands reference
+    html = "<div class='main'><div class='container'>";
     
     // Introduction
     html += "<div class='card'><h2>📟 Serial Commands Reference</h2>";
@@ -724,12 +738,15 @@ String WebConfig::generateSerialCommandsPage() {
 }
 
 String WebConfig::generateAPIReferencePage() {
+    // Reserve large buffer for API docs to prevent repeated allocations
     String deviceUrl = "http://allskyesp32.lan:8080";
     if (wifiManager.isConnected()) {
         deviceUrl = "http://" + WiFi.localIP().toString() + ":8080";
     }
     
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(15000);  // Pre-allocate ~15KB for large API documentation page
+    html = "<div class='main'><div class='container'>";
     
     // Introduction
     html += "<div class='card'>";
@@ -1126,7 +1143,9 @@ String WebConfig::generateAPIReferencePage() {
 }
 
 String WebConfig::generateConsolePage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(10000);  // Pre-allocate ~10KB for console page with WebSocket scripts
+    html = "<div class='main'><div class='container'>";
     
     // Two-column layout: Controls on left, Console on right
     html += "<div style='display:grid;grid-template-columns:200px 1fr;gap:1.5rem;align-items:start'>";

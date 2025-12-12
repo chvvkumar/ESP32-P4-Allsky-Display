@@ -26,7 +26,7 @@ MQTTManager::MQTTManager() :
 }
 
 bool MQTTManager::begin() {
-    LOG_INFO("[MQTT] Initializing MQTT manager");
+    LOG_DEBUG("[MQTT] Initializing MQTT manager");
     
     // Configure MQTT client
     mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
@@ -38,7 +38,7 @@ bool MQTTManager::begin() {
     LOG_DEBUG("[MQTT] Initializing Home Assistant discovery");
     haDiscovery.begin(&mqttClient);
     
-    LOG_INFO("[MQTT] Manager initialization complete");
+    LOG_DEBUG("[MQTT] Manager initialization complete");
     return true;
 }
 
@@ -57,24 +57,24 @@ void MQTTManager::connect() {
     // Reset watchdog before connection attempt
     esp_task_wdt_reset();
     
-    LOG_INFO("[MQTT] ===== Connection Attempt =====");
-    LOG_INFO_F("[MQTT] Server: %s:%d\n", configStorage.getMQTTServer().c_str(), configStorage.getMQTTPort());
-    LOG_INFO_F("[MQTT] Client ID: %s\n", clientId.c_str());
+    LOG_DEBUG("[MQTT] ===== Connection Attempt =====");
+    LOG_DEBUG_F("[MQTT] Server: %s:%d\n", configStorage.getMQTTServer().c_str(), configStorage.getMQTTPort());
+    LOG_DEBUG_F("[MQTT] Client ID: %s\n", clientId.c_str());
     
     // Set up Last Will and Testament (LWT) for Home Assistant availability
     String availabilityTopic = haDiscovery.getAvailabilityTopic();
-    LOG_INFO_F("[MQTT] LWT Topic: %s\n", availabilityTopic.c_str());
+    LOG_DEBUG_F("[MQTT] LWT Topic: %s\n", availabilityTopic.c_str());
     
     bool connected = false;
     String mqttUser = configStorage.getMQTTUser();
     String mqttPassword = configStorage.getMQTTPassword();
     
     if (mqttUser.length() > 0) {
-        LOG_INFO_F("[MQTT] Using authentication (username: %s)\n", mqttUser.c_str());
+        LOG_DEBUG_F("[MQTT] Using authentication (username: %s)\n", mqttUser.c_str());
         connected = mqttClient.connect(clientId.c_str(), mqttUser.c_str(), mqttPassword.c_str(),
-                                      availabilityTopic.c_str(), 0, true, "offline");
+                                      availabilityTopic.c_str(), 1, true, "offline");
     } else {
-        LOG_INFO("[MQTT] Connecting without authentication");
+        LOG_DEBUG("[MQTT] Connecting without authentication");
         connected = mqttClient.connect(clientId.c_str(), nullptr, nullptr,
                                       availabilityTopic.c_str(), 0, true, "offline");
     }
@@ -88,41 +88,41 @@ void MQTTManager::connect() {
         reconnectBackoff = 5000;  // Reset backoff
         discoveryPublished = false; // Reset discovery flag
         
-        LOG_INFO("[MQTT] ✓ Connection successful!");
-        LOG_INFO_F("[MQTT] Max packet size: %d bytes\n", mqttClient.getBufferSize());
+        LOG_INFO_F("✓ MQTT connected to %s\n", configStorage.getMQTTServer().c_str());
+        LOG_DEBUG_F("[MQTT] Max packet size: %d bytes\n", mqttClient.getBufferSize());
         
         // Publish availability as online
         esp_task_wdt_reset();
-        LOG_INFO("[MQTT] Publishing availability: online");
+        LOG_DEBUG("[MQTT] Publishing availability: online");
         haDiscovery.publishAvailability(true);
         
         // Publish Home Assistant discovery if enabled
         if (configStorage.getHADiscoveryEnabled()) {
             esp_task_wdt_reset();
-            LOG_INFO("[MQTT] Home Assistant discovery enabled, publishing...");
+            LOG_DEBUG("[MQTT] Home Assistant discovery enabled, publishing...");
             
             if (haDiscovery.publishDiscovery()) {
                 discoveryPublished = true;
-                LOG_INFO("[MQTT] ✓ HA discovery messages published");
+                LOG_DEBUG("[MQTT] ✓ HA discovery messages published");
                 
                 // Subscribe to command topic filter
                 String commandFilter = haDiscovery.getCommandTopicFilter();
-                LOG_INFO_F("[MQTT] Subscribing to HA commands: %s\n", commandFilter.c_str());
+                LOG_DEBUG_F("[MQTT] Subscribing to HA commands: %s\n", commandFilter.c_str());
                 if (!mqttClient.subscribe(commandFilter.c_str())) {
                     LOG_ERROR_F("[MQTT] ✗ FAILED to subscribe to HA command topics! MQTT state: %d\n", mqttClient.state());
                 } else {
-                    LOG_INFO("[MQTT] ✓ Subscribed to HA command topics");
+                    LOG_DEBUG("[MQTT] ✓ Subscribed to HA command topics");
                 }
                 
                 // Publish initial state
                 esp_task_wdt_reset();
-                LOG_INFO("[MQTT] Publishing initial state to HA");
+                LOG_DEBUG("[MQTT] Publishing initial state to HA");
                 haDiscovery.publishState();
             } else {
-                LOG_ERROR("[MQTT] ✗ Failed to publish HA discovery");
+                LOG_WARNING("[MQTT] Failed to publish HA discovery");
             }
         } else {
-            LOG_INFO("[MQTT] HA discovery disabled in configuration");
+            LOG_DEBUG("[MQTT] HA discovery disabled in configuration");
         }
         
     } else {

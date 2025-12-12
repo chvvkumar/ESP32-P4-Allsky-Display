@@ -642,8 +642,13 @@ void WebConfig::reloadConfiguration() {
 }
 
 void WebConfig::handleGetAllInfo() {
+    size_t heapBefore = ESP.getFreeHeap();
+    LOG_DEBUG_F("[WebAPI] /api/info request (heap before: %d bytes)\n", heapBefore);
+    
     // Comprehensive device information API endpoint
-    String json = "{";
+    String json;
+    json.reserve(8000);  // Pre-allocate ~8KB for large JSON response to prevent fragmentation
+    json = "{";
     
     // Firmware information
     json += "\"firmware\":{";
@@ -784,6 +789,15 @@ void WebConfig::handleGetAllInfo() {
     json += "}";
     
     sendResponse(200, "application/json", json);
+    
+    size_t heapAfter = ESP.getFreeHeap();
+    int heapDelta = (int)heapBefore - (int)heapAfter;
+    if (heapDelta > 0) {
+        LOG_WARNING_F("[WebAPI] /api/info request used %d bytes heap (before: %d, after: %d)\n", 
+                      heapDelta, heapBefore, heapAfter);
+    } else {
+        LOG_DEBUG_F("[WebAPI] /api/info completed (heap after: %d bytes)\n", heapAfter);
+    }
 }
 
 void WebConfig::handleCurrentImage() {
