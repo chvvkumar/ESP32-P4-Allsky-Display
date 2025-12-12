@@ -204,7 +204,13 @@ void WebConfig::handleSaveConfig() {
     }
     
     if (hasBrightnessAutoMode) {
-        configStorage.setBrightnessAutoMode(server->hasArg("brightness_auto_mode"));
+        bool enableMQTTBrightness = server->hasArg("brightness_auto_mode");
+        configStorage.setBrightnessAutoMode(enableMQTTBrightness);
+        
+        if (enableMQTTBrightness) {
+            LOG_INFO("[WebAPI] MQTT brightness control enabled - auto-disabling HA REST Control");
+            configStorage.setUseHARestControl(false);
+        }
     }
     
     if (hasHADiscovery) {

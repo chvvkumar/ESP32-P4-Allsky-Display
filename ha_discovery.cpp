@@ -531,6 +531,12 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     else if (entity == "auto_brightness") {
         bool autoMode = (payload == "ON");
         configStorage.setBrightnessAutoMode(autoMode);
+        
+        if (autoMode) {
+            LOG_INFO("[HA] MQTT brightness control enabled - auto-disabling HA REST Control");
+            configStorage.setUseHARestControl(false);
+        }
+        
         configStorage.saveConfig();
         mqttClient->publish(buildStateTopic("auto_brightness").c_str(), payload.c_str());
     }
