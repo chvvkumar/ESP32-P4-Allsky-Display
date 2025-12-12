@@ -497,6 +497,12 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     
     // Handle brightness
     if (entity == "brightness") {
+        // Ignore MQTT brightness commands when HA REST control is active
+        if (configStorage.getUseHARestControl()) {
+            LOG_INFO("[HA] Ignoring MQTT brightness command - HA REST Control is active\n");
+            return;
+        }
+        
         int brightness = payload.toInt();
         if (brightness >= 0 && brightness <= 100) {
             LOG_INFO_F("[HA] Setting brightness to %d%%\n", brightness);

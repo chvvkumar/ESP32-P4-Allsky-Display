@@ -17,6 +17,7 @@
 #include "crash_logger.h"
 #include "command_interpreter.h"
 #include "image_utils.h"  // Software image scaling fallback
+#include "ha_rest_client.h"  // Home Assistant REST brightness control
 
 // Additional required libraries
 #include <HTTPClient.h>
@@ -741,6 +742,9 @@ void setup() {
     // Initialize OTA manager
     otaManager.begin();
     otaManager.setDebugFunction(debugPrint);
+    
+    // Initialize Home Assistant REST client (runs on Core 0)
+    haRestClient.begin();
     
     // Start web configuration server if WiFi is connected
     if (wifiManager.isConnected()) {
@@ -2176,3 +2180,5 @@ void handleDoubleTap() {
     // Set flag to trigger mode toggle in main loop
     touchTriggeredModeToggle = true;
 }
+
+
