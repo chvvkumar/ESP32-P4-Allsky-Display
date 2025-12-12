@@ -21,7 +21,7 @@ bool WebConfig::begin(int port) {
     }
     
     try {
-        LOG_INFO_F("[WebServer] Initializing web server on port %d\n", port);
+        LOG_DEBUG_F("[WebServer] Initializing web server on port %d\n", port);
         server = new WebServer(port);
         
         if (!server) {
@@ -45,8 +45,9 @@ bool WebConfig::begin(int port) {
         server->on("/api/add-source", HTTP_POST, [this]() { handleAddImageSource(); });
         server->on("/api/remove-source", HTTP_POST, [this]() { handleRemoveImageSource(); });
         server->on("/api/update-source", HTTP_POST, [this]() { handleUpdateImageSource(); });
-        server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
-        server->on("/api/next-image", HTTP_POST, [this]() { handleNextImage(); });
+    server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
+    server->on("/api/bulk-delete-sources", HTTP_POST, [this]() { handleBulkDeleteImageSources(); });
+    server->on("/api/next-image", HTTP_POST, [this]() { handleNextImage(); });
         server->on("/api/update-transform", HTTP_POST, [this]() { handleUpdateImageTransform(); });
         server->on("/api/copy-defaults", HTTP_POST, [this]() { handleCopyDefaultsToImage(); });
         server->on("/api/apply-transform", HTTP_POST, [this]() { handleApplyTransform(); });
@@ -56,6 +57,7 @@ bool WebConfig::begin(int port) {
         server->on("/api/clear-crash-logs", HTTP_POST, [this]() { handleClearCrashLogs(); });
         server->on("/api/info", HTTP_GET, [this]() { handleGetAllInfo(); });
         server->on("/api/current-image", HTTP_GET, [this]() { handleCurrentImage(); });
+        server->on("/api/health", HTTP_GET, [this]() { handleGetHealth(); });
         
         // Favicon handler (prevents 404 log clutter when browsers request favicon)
         server->on("/favicon.ico", HTTP_GET, [this]() { 
@@ -98,19 +100,19 @@ bool WebConfig::begin(int port) {
         server->on("/api-reference", [this]() { handleAPIReference(); });
         server->onNotFound([this]() { handleNotFound(); });
         
-        LOG_INFO("Starting WebServer...");
+        LOG_DEBUG("Starting WebServer...");
         server->begin();
         
         // Initialize WebSocket server on port 81
-        LOG_INFO("[WebSocket] Starting WebSocket server on port 81");
+        LOG_DEBUG("[WebSocket] Starting WebSocket server on port 81");
         LOG_DEBUG_F("[WebSocket] Free heap before allocation: %d bytes\n", ESP.getFreeHeap());
         wsServer = new WebSocketsServer(81);
         if (wsServer) {
             LOG_DEBUG("[WebSocket] Server instance created successfully");
             wsServer->begin();
             wsServer->onEvent(webSocketEvent);
-            LOG_INFO("[WebSocket] ✓ Server started and event handler registered");
-            LOG_INFO_F("[WebSocket] Listening on port 81 (clients can connect to ws://%s:81)\n", WiFi.localIP().toString().c_str());
+            LOG_DEBUG("[WebSocket] ✓ Server started and event handler registered");
+            LOG_DEBUG_F("[WebSocket] Listening on port 81 (clients can connect to ws://%s:81)\n", WiFi.localIP().toString().c_str());
         } else {
             LOG_ERROR("[WebSocket] ERROR: Failed to allocate WebSocket server!");
             LOG_ERROR_F("[WebSocket] Free heap: %d bytes, PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
@@ -122,7 +124,7 @@ bool WebConfig::begin(int port) {
         }
         
         serverRunning = true;
-        LOG_INFO_F("✓ Web configuration server started successfully on port %d\n", port);
+        LOG_DEBUG_F("✓ Web configuration server started successfully on port %d\n", port);
         return true;
         
     } catch (const std::exception& e) {
@@ -170,12 +172,23 @@ void WebConfig::stop() {
 
 // Route handlers - these call the page generators from web_config_pages.cpp
 void WebConfig::handleRoot() {
-    LOG_DEBUG("[WebServer] Dashboard page accessed");
+    size_t heapBefore = ESP.getFreeHeap();
+    LOG_DEBUG_F("[WebServer] Dashboard page accessed (heap before: %d bytes)\n", heapBefore);
+    
     String html = generateHeader("Dashboard");
     html += generateNavigation("dashboard");
     html += generateMainPage();
     html += generateFooter();
     sendResponse(200, "text/html", html);
+    
+    size_t heapAfter = ESP.getFreeHeap();
+    int heapDelta = (int)heapBefore - (int)heapAfter;
+    if (heapDelta > 0) {
+        LOG_WARNING_F("[WebServer] Dashboard request used %d bytes heap (before: %d, after: %d)\n", 
+                      heapDelta, heapBefore, heapAfter);
+    } else {
+        LOG_DEBUG_F("[WebServer] Dashboard completed (heap after: %d bytes)\n", heapAfter);
+    }
 }
 
 void WebConfig::handleConsole() {
@@ -266,7 +279,9 @@ void WebConfig::handleNotFound() {
 
 // HTML template generation functions
 String WebConfig::generateHeader(const String& title) {
-    String html = "<!DOCTYPE html><html lang='en'><head>";
+    String html;
+    html.reserve(2000);  // Pre-allocate ~2KB for header HTML
+    html = "<!DOCTYPE html><html lang='en'><head>";
     html += "<meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
     html += "<title>" + title + "</title>";
     html += "<style>" + String(FPSTR(HTML_CSS)) + "</style></head><body>";
@@ -289,7 +304,9 @@ String WebConfig::generateHeader(const String& title) {
 }
 
 String WebConfig::generateNavigation(const String& currentPage) {
-    String html = "<div class='nav'><div class='container' style='position:relative'>";
+    String html;
+    html.reserve(1500);  // Pre-allocate ~1.5KB for navigation HTML
+    html = "<div class='nav'><div class='container' style='position:relative'>";
     html += "<button class='nav-toggle' onclick='toggleNav()' aria-label='Toggle navigation'><i class='fas fa-bars'></i></button>";
     html += "<div class='nav-content'>";
     
@@ -307,7 +324,9 @@ String WebConfig::generateNavigation(const String& currentPage) {
 }
 
 String WebConfig::generateFooter() {
-    String html = "<script>" + String(FPSTR(HTML_JAVASCRIPT)) + "</script>";
+    String html;
+    html.reserve(1000);  // Pre-allocate ~1KB for footer HTML
+    html = "<script>" + String(FPSTR(HTML_JAVASCRIPT)) + "</script>";
     html += String(FPSTR(HTML_MODALS));
     
     html += "<div class='footer'><div class='container'>";
@@ -327,7 +346,9 @@ String WebConfig::generateFooter() {
 
 // Utility functions
 String WebConfig::getSystemStatus() {
-    String json = "{";
+    String json;
+    json.reserve(512);  // Pre-allocate ~512 bytes for system status JSON
+    json = "{";
     json += "\"wifi_connected\":" + String(wifiManager.isConnected() ? "true" : "false") + ",";
     json += "\"wifi_ssid\":\"" + (wifiManager.isConnected() ? String(WiFi.SSID()) : "Not connected") + "\",";
     json += "\"wifi_ip\":\"" + (wifiManager.isConnected() ? WiFi.localIP().toString() : "0.0.0.0") + "\",";
@@ -360,7 +381,9 @@ String WebConfig::formatBytes(size_t bytes) {
 }
 
 String WebConfig::getConnectionStatus() {
-    String html = "";
+    String html;
+    html.reserve(256);  // Pre-allocate ~256 bytes for status badges
+    html = "";
     if (wifiManager.isConnected()) html += "<span class='badge success'>WiFi ✓</span>";
     else html += "<span class='badge error'>WiFi ✗</span>";
     

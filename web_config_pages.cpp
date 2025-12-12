@@ -9,7 +9,9 @@
 // These functions generate the HTML content for each configuration page
 
 String WebConfig::generateMainPage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(12000);  // Pre-allocate ~12KB to prevent fragmentation during HTML generation
+    html = "<div class='main'><div class='container'>";
     
     // Top row - Uptime and Image status cards
     html += "<div class='stats'>";
@@ -181,7 +183,9 @@ String WebConfig::generateMainPage() {
 }
 
 String WebConfig::generateNetworkPage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(2000);  // Pre-allocate ~2KB for network config page
+    html = "<div class='main'><div class='container'>";
     html += "<form id='networkForm'><div class='card'>";
     html += "<h2>📡 WiFi Configuration</h2>";
     
@@ -201,7 +205,9 @@ String WebConfig::generateNetworkPage() {
 }
 
 String WebConfig::generateMQTTPage() {
-    String html = "<div class='main'><div class='container'><form id='mqttForm'><div class='grid'>";
+    String html;
+    html.reserve(5000);  // Pre-allocate ~5KB for MQTT config page
+    html = "<div class='main'><div class='container'><form id='mqttForm'><div class='grid'>";
     html += "<div class='card'><h2>🔗 MQTT Broker</h2>";
     html += "<div class='form-group'><label for='mqtt_server'>Broker Address</label>";
     html += "<input type='text' id='mqtt_server' name='mqtt_server' class='form-control' value='" + escapeHtml(configStorage.getMQTTServer()) + "' required></div>";
@@ -247,7 +253,9 @@ String WebConfig::generateMQTTPage() {
 }
 
 String WebConfig::generateImagePage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(8000);  // Pre-allocate ~8KB for image config page
+    html = "<div class='main'><div class='container'>";
     
     // Mode Selection Card
     html += "<div class='card'><h2>🖼️ Image Configuration</h2>";
@@ -278,7 +286,7 @@ String WebConfig::generateImagePage() {
     html += "<input type='url' id='image_url' name='image_url' class='form-control' value='" + escapeHtml(configStorage.getImageURL()) + "' placeholder='http://allsky.local/image.jpg'></div>";
     html += "<div class='form-group'><label for='update_interval'>";
     html += "<span style='color:#38bdf8'>Download Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
-    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
+    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'" + String(isCycling ? " disabled" : "") + ">";
     html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
     html += "<i class='fas fa-download' style='margin-right:6px;color:#0ea5e9'></i>";
     html += "How often to <strong>re-download</strong> this URL to fetch updated content (e.g., latest AllSky image)";
@@ -318,7 +326,7 @@ String WebConfig::generateImagePage() {
     html += "</p></div>";
     html += "<div class='form-group'><label for='cycle_update_interval'>";
     html += "<span style='color:#38bdf8'>Download Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
-    html += "<input type='number' id='cycle_update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
+    html += "<input type='number' id='cycle_update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'" + String(isCycling ? "" : " disabled") + ">";
     html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
     html += "<i class='fas fa-download' style='margin-right:6px;color:#0ea5e9'></i>";
     html += "How often to <strong>re-download</strong> each source URL to fetch updated content";
@@ -330,14 +338,28 @@ String WebConfig::generateImagePage() {
     html += "<input type='hidden' name='random_order_present' value='1'></div></div>";
     
     // Image sources list
-    html += "<h3 style='color:#38bdf8;margin-top:1.5rem;margin-bottom:1rem'>Image Sources</h3>";
+    int sourceCount = configStorage.getImageSourceCount();
+    html += "<div style='display:flex;justify-content:space-between;align-items:center;margin-top:1.5rem;margin-bottom:1rem'>";
+    html += "<h3 style='color:#38bdf8;margin:0'>Image Sources</h3>";
+    if (sourceCount > 1) {
+        html += "<div style='display:flex;gap:0.75rem;align-items:center'>";
+        html += "<label style='display:flex;align-items:center;color:#94a3b8;cursor:pointer'>";
+        html += "<input type='checkbox' id='selectAllImages' style='width:18px;height:18px;accent-color:#0ea5e9;margin-right:6px' onchange='toggleSelectAll(this.checked)'>";
+        html += "<span style='font-size:0.9rem'>Select All</span></label>";
+        html += "<button type='button' class='btn btn-danger' id='bulkDeleteBtn' onclick='bulkDeleteSelected(this)' style='font-size:0.9rem;padding:0.6rem 1rem;display:none'>";
+        html += "<i class='fas fa-trash' style='margin-right:6px'></i>Delete Selected (<span id='selectedCount'>0</span>)</button>";
+        html += "</div>";
+    }
+    html += "</div>";
     html += "<div id='imageSourcesList'>";
     
-    int sourceCount = configStorage.getImageSourceCount();
     for (int i = 0; i < sourceCount; i++) {
         String url = configStorage.getImageSource(i);
         html += "<div class='image-source-item' style='margin-bottom:1rem;padding:1rem;border:1px solid #334155;border-radius:6px;background:#1e293b'>";
         html += "<div style='display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem'>";
+        if (sourceCount > 1) {
+            html += "<input type='checkbox' class='image-select-checkbox' data-index='" + String(i) + "' style='width:18px;height:18px;accent-color:#0ea5e9;cursor:pointer' onchange='updateBulkDeleteButton()'>";
+        }
         html += "<span style='font-weight:bold;color:#38bdf8;min-width:2rem'>" + String(i + 1) + ".</span>";
         html += "<input type='url' class='form-control' id='imageUrl_" + String(i) + "' style='flex:1' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this)'>";
         html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(" + String(i) + ")'><i class='fas fa-sliders-h'></i></button>";
@@ -426,6 +448,12 @@ String WebConfig::generateImagePage() {
     html += "  document.getElementById('singleImageSection').style.display = enableCycling ? 'none' : 'block';";
     html += "  document.getElementById('multiImageSection').style.display = enableCycling ? 'block' : 'none';";
     html += "  document.getElementById('cycling_enabled').checked = enableCycling;";
+    html += "  ";
+    html += "  // Disable hidden section's update_interval to prevent duplicate form submission";
+    html += "  const singleUpdateInterval = document.getElementById('update_interval');";
+    html += "  const multiUpdateInterval = document.getElementById('cycle_update_interval');";
+    html += "  if (singleUpdateInterval) singleUpdateInterval.disabled = enableCycling;";
+    html += "  if (multiUpdateInterval) multiUpdateInterval.disabled = !enableCycling;";
     html += "}";
     html += "</script>";
     
@@ -433,7 +461,9 @@ String WebConfig::generateImagePage() {
 }
 
 String WebConfig::generateDisplayPage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(4000);  // Pre-allocate ~4KB for display config page
+    html = "<div class='main'><div class='container'>";
     
     // Current brightness control - Live adjustment (not saved)
     html += "<div class='card'><h2>💡 Current Brightness Control</h2>";
@@ -479,15 +509,82 @@ String WebConfig::generateDisplayPage() {
     html += "<div class='form-group'><label for='backlight_resolution'>PWM Resolution (bits)</label>";
     html += "<input type='number' id='backlight_resolution' name='backlight_resolution' class='form-control' value='" + String(configStorage.getBacklightResolution()) + "' min='8' max='16'>";
     html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>Higher resolution provides smoother brightness control. Typical: 10-12 bits</p></div>";
+    html += "</div>";
     
-    html += "<button type='submit' class='btn btn-primary'>💾 Save Brightness Settings</button></div>";
+    // Home Assistant REST Control Card
+    html += "<div class='card' style='border-left:4px solid #38bdf8'><h2> Home Assistant Light Control</h2>";
+    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1.5rem'>Automatically adjust screen brightness using a Home Assistant light sensor entity. Runs on Core 0 (non-blocking).</p>";
+    
+    // Enable Switch
+    html += "<div class='form-group'>";
+    html += "<div style='display:flex;align-items:center;margin-bottom:1rem'>";
+    html += "<input type='checkbox' id='use_ha_rest_control' name='use_ha_rest_control' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px' " + String(configStorage.getUseHARestControl() ? "checked" : "") + ">";
+    html += "<label for='use_ha_rest_control' style='margin-bottom:0;cursor:pointer;font-size:1rem'>Enable Ambient Light Sensor</label>";
+    html += "</div>";
+    html += "<input type='hidden' name='use_ha_rest_control_present' value='1'>";
+    html += "<p style='color:#64748b;font-size:0.85rem;background:rgba(245,158,11,0.1);padding:0.5rem;border-radius:6px;border-left:3px solid #f59e0b'><i class='fas fa-info-circle' style='margin-right:0.5rem'></i>Enabling this will automatically disable MQTT Auto Mode to prevent conflicts.</p>";
+    html += "</div>";
+    
+    // Connection Details Section
+    html += "<div style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h3 style='color:#38bdf8;font-size:1rem;margin-bottom:1rem;display:flex;align-items:center'><i class='fas fa-plug' style='margin-right:8px'></i>Connection Details</h3>";
+    
+    html += "<div class='form-group'><label for='ha_base_url'>Home Assistant URL</label>";
+    html += "<input type='text' id='ha_base_url' name='ha_base_url' class='form-control' value='" + configStorage.getHABaseUrl() + "' placeholder='http://homeassistant.local:8123'></div>";
+    
+    html += "<div class='form-group'><label for='ha_access_token'>Long-Lived Access Token</label>";
+    html += "<input type='password' id='ha_access_token' name='ha_access_token' class='form-control' placeholder='Leave blank to keep existing token'>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.5rem'>Create at <strong>Profile  Long-Lived Access Tokens</strong></p></div>";
+    
+    html += "<div class='grid' style='grid-template-columns:2fr 1fr'>";
+    html += "<div class='form-group'><label for='ha_light_sensor_entity'>Sensor Entity ID</label>";
+    html += "<input type='text' id='ha_light_sensor_entity' name='ha_light_sensor_entity' class='form-control' value='" + configStorage.getHALightSensorEntity() + "' placeholder='sensor.living_room_illuminance'></div>";
+    html += "<div class='form-group'><label for='ha_poll_interval'>Poll Interval (s)</label>";
+    html += "<input type='number' id='ha_poll_interval' name='ha_poll_interval' class='form-control' value='" + String(configStorage.getHAPollInterval()) + "' min='10' max='3600'></div>";
+    html += "</div></div>";
+    
+    // Brightness Mapping Section
+    html += "<div style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h3 style='color:#38bdf8;font-size:1rem;margin-bottom:1rem;display:flex;align-items:center'><i class='fas fa-sliders-h' style='margin-right:8px'></i>Brightness Mapping</h3>";
+    
+    html += "<div class='form-group'><label for='light_sensor_mapping_mode'>Response Curve</label>";
+    html += "<select id='light_sensor_mapping_mode' name='light_sensor_mapping_mode' class='form-control'>";
+    html += "<option value='0'" + String(configStorage.getLightSensorMappingMode() == 0 ? " selected" : "") + ">Linear (Indoor / Low Range)</option>";
+    html += "<option value='1'" + String(configStorage.getLightSensorMappingMode() == 1 ? " selected" : "") + ">Logarithmic (Outdoor / High Range)</option>";
+    html += "<option value='2'" + String(configStorage.getLightSensorMappingMode() == 2 ? " selected" : "") + ">Threshold Switch (Day/Night)</option>";
+    html += "</select>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.5rem'>Use <strong>Logarithmic</strong> for sensors that go from 0 to 100,000+ lux (outdoors). Use <strong>Linear</strong> for dark rooms (0-500 lux).</p></div>";
+    
+    html += "<div class='grid'>";
+    // Sensor Range
+    html += "<div><label style='color:#94a3b8;font-size:0.9rem'>Sensor Range (Lux)</label>";
+    html += "<div style='display:flex;gap:0.5rem;align-items:center'>";
+    html += "<input type='number' id='light_sensor_min_lux' name='light_sensor_min_lux' class='form-control' value='" + String(configStorage.getLightSensorMinLux(), 1) + "' min='0' max='10000' step='0.1' placeholder='Min'>";
+    html += "<span style='color:#64748b'>to</span>";
+    html += "<input type='number' id='light_sensor_max_lux' name='light_sensor_max_lux' class='form-control' value='" + String(configStorage.getLightSensorMaxLux(), 1) + "' min='0' max='100000' step='0.1' placeholder='Max'>";
+    html += "</div></div>";
+    // Display Range
+    html += "<div><label style='color:#94a3b8;font-size:0.9rem'>Display Brightness (%)</label>";
+    html += "<div style='display:flex;gap:0.5rem;align-items:center'>";
+    html += "<input type='number' id='display_min_brightness' name='display_min_brightness' class='form-control' value='" + String(configStorage.getDisplayMinBrightness()) + "' min='0' max='100' placeholder='Min'>";
+    html += "<span style='color:#64748b'>to</span>";
+    html += "<input type='number' id='display_max_brightness' name='display_max_brightness' class='form-control' value='" + String(configStorage.getDisplayMaxBrightness()) + "' min='0' max='100' placeholder='Max'>";
+    html += "</div></div>";
+    html += "</div></div></div>";
+    
+    // Save button card
+    html += "<div class='card'>";
+    html += "<button type='submit' class='btn btn-primary'>💾 Save Display Settings</button>";
+    html += "</div>";
     
     html += "</form></div></div>";
     return html;
 }
 
 String WebConfig::generateAdvancedPage() {
-    String html = "<div class='main'><div class='container'><form id='advancedForm'><div class='grid'>";
+    String html;
+    html.reserve(6000);  // Pre-allocate ~6KB for advanced settings page
+    html = "<div class='main'><div class='container'><form id='advancedForm'><div class='grid'>";
     html += "<div class='card'><h2>⏱️ Timing Settings</h2>";
     html += "<div class='form-group'><label for='mqtt_reconnect_interval'>MQTT Reconnect Interval (seconds)</label>";
     html += "<input type='number' id='mqtt_reconnect_interval' name='mqtt_reconnect_interval' class='form-control' value='" + String(configStorage.getMQTTReconnectInterval() / 1000) + "' min='1' max='300'></div>";
@@ -573,7 +670,9 @@ String WebConfig::generateStatusPage() {
 }
 
 String WebConfig::generateSerialCommandsPage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(8000);  // Pre-allocate ~8KB for serial commands reference
+    html = "<div class='main'><div class='container'>";
     
     // Introduction
     html += "<div class='card'><h2>📟 Serial Commands Reference</h2>";
@@ -704,12 +803,15 @@ String WebConfig::generateSerialCommandsPage() {
 }
 
 String WebConfig::generateAPIReferencePage() {
+    // Reserve large buffer for API docs to prevent repeated allocations
     String deviceUrl = "http://allskyesp32.lan:8080";
     if (wifiManager.isConnected()) {
         deviceUrl = "http://" + WiFi.localIP().toString() + ":8080";
     }
     
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(15000);  // Pre-allocate ~15KB for large API documentation page
+    html = "<div class='main'><div class='container'>";
     
     // Introduction
     html += "<div class='card'>";
@@ -776,6 +878,39 @@ String WebConfig::generateAPIReferencePage() {
     html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>uptime</code> - Uptime in milliseconds</li>";
     html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>brightness</code> - Current display brightness (0-100)</li>";
     html += "</ul></div></div>";
+    
+    // GET /api/health
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #10b981;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#10b981;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>GET</span>/api/health</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Get comprehensive device health diagnostics with status indicators and actionable recommendations.</p>";
+    
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Request Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0'>";
+    html += "curl -X GET " + escapeHtml(deviceUrl) + "/api/health</pre></div>";
+    
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Fields:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>overall</code> - Overall health status (EXCELLENT, GOOD, WARNING, CRITICAL, FAILING)</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>memory</code> - Heap/PSRAM usage, fragmentation analysis</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>network</code> - WiFi signal quality, disconnect count</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>mqtt</code> - MQTT connection stability, reconnect count</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>system</code> - Boot count, crash detection, temperature, watchdog resets</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>display</code> - Display health and brightness</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>recommendations</code> - Array of actionable suggestions to improve device health</li>";
+    html += "</ul></div>";
+    
+    html += "<div>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Example (Partial):</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "{\n  \"overall\": {\n    \"status\": \"GOOD\",\n    \"message\": \"Device is functional with minor issues\",\n";
+    html += "    \"critical_issues\": 0,\n    \"warnings\": 1\n  },\n";
+    html += "  \"memory\": {\n    \"status\": \"EXCELLENT\",\n    \"free_heap\": 400000,\n    \"heap_usage_percent\": 45.2,\n";
+    html += "    \"free_psram\": 15000000,\n    \"psram_usage_percent\": 52.3\n  },\n";
+    html += "  \"network\": {\n    \"status\": \"GOOD\",\n    \"rssi\": -68,\n    \"disconnect_count\": 2\n  },\n";
+    html += "  \"recommendations\": [\n    \"Improve WiFi signal by relocating device or access point\"\n  ]\n}</pre>";
+    html += "</div></div>";
     
     html += "</div>"; // End GET endpoints card
     
@@ -849,6 +984,24 @@ String WebConfig::generateAPIReferencePage() {
     html += "<p style='color:#94a3b8;margin-bottom:1rem'>Remove all image sources from the cycling list.</p>";
     html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
     html += "curl -X POST " + deviceUrl + "/api/clear-sources</pre></div>";
+    
+    // POST /api/bulk-delete-sources
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/bulk-delete-sources</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Delete multiple image sources at once by providing an array of indices. At least one source must remain.</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Parameters:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>indices</code> (required) - JSON array of zero-based indices to delete (e.g., \"[0,2,4]\")</li></ul></div>";
+    html += "<div>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Example Request:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/bulk-delete-sources \\\n  -d 'indices=[0,2,4]'</pre></div>";
+    html += "<div style='margin-top:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0'>";
+    html += "{\"status\":\"success\",\"message\":\"Successfully deleted 3 of 3 source(s)\",\"deleted\":3,\"remaining\":5}</pre>";
+    html += "</div></div>";
     
     // POST /api/next-image
     html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
@@ -1055,7 +1208,9 @@ String WebConfig::generateAPIReferencePage() {
 }
 
 String WebConfig::generateConsolePage() {
-    String html = "<div class='main'><div class='container'>";
+    String html;
+    html.reserve(10000);  // Pre-allocate ~10KB for console page with WebSocket scripts
+    html = "<div class='main'><div class='container'>";
     
     // Two-column layout: Controls on left, Console on right
     html += "<div style='display:grid;grid-template-columns:200px 1fr;gap:1.5rem;align-items:start'>";
@@ -1296,3 +1451,5 @@ String WebConfig::generateConsolePage() {
     
     return html;
 }
+
+

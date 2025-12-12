@@ -22,6 +22,12 @@ void HADiscovery::begin(PubSubClient* client) {
     mqttClient = client;
     deviceId = getDeviceId();
     baseTopic = getBaseTopic();
+    
+    // Pre-build cached topic strings to prevent memory leaks
+    cachedAvailabilityTopic = baseTopic + "/availability";
+    cachedCommandTopicFilter = baseTopic + "/+/set";
+    cachedAttributesTopic = baseTopic + "/attributes";
+    
     LOG_DEBUG_F("[HA] Device ID: %s\n", deviceId.c_str());
     LOG_DEBUG_F("[HA] Base topic: %s\n", baseTopic.c_str());
 }
@@ -31,7 +37,7 @@ String HADiscovery::getDeviceId() {
     uint8_t mac[6];
     WiFi.macAddress(mac);
     char macStr[13];
-    sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    snprintf(macStr, sizeof(macStr), "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     return String(macStr);
 }
 
@@ -56,15 +62,15 @@ String HADiscovery::buildCommandTopic(const char* entity) {
 }
 
 String HADiscovery::buildAttributesTopic() {
-    return baseTopic + "/attributes";
+    return cachedAttributesTopic;
 }
 
 String HADiscovery::getAvailabilityTopic() {
-    return baseTopic + "/availability";
+    return cachedAvailabilityTopic;
 }
 
 String HADiscovery::getCommandTopicFilter() {
-    return baseTopic + "/+/set";
+    return cachedCommandTopicFilter;
 }
 
 String HADiscovery::getDeviceJson() {
@@ -73,7 +79,8 @@ String HADiscovery::getDeviceJson() {
     json += "\"name\":\"" + configStorage.getHADeviceName() + "\",";
     json += "\"model\":\"ESP32-P4-WIFI6-Touch-LCD\",";
     json += "\"manufacturer\":\"chvvkumar\",";
-    json += "\"sw_version\":\"1.0\"";
+    json += "\"sw_version\":\"1.0\",";
+    json += "\"configuration_url\":\"http://" + WiFi.localIP().toString() + ":8080\"";
     json += "}";
     return json;
 }
@@ -267,7 +274,9 @@ bool HADiscovery::publishDiscovery() {
     delay(50);
     if (!publishSensorDiscovery("wifi_rssi", "WiFi Signal", "dBm", "signal_strength", "mdi:wifi")) return false;
     delay(50);
-    if (!publishSensorDiscovery("uptime", "Uptime", "s", "", "mdi:clock-outline")) return false;
+    if (!publishSensorDiscovery("uptime", "Uptime", "s", "duration", "mdi:clock-outline")) return false;
+    delay(50);
+    if (!publishSensorDiscovery("uptime_readable", "Uptime Readable", "", "", "mdi:clock-outline")) return false;
     delay(50);
     if (!publishSensorDiscovery("image_count", "Image Count", "", "", "mdi:counter")) return false;
     delay(50);
@@ -303,10 +312,9 @@ bool HADiscovery::publishAvailability(bool online) {
         return false;
     }
     
-    String topic = getAvailabilityTopic();
     const char* payload = online ? "online" : "offline";
     LOG_DEBUG_F("[HA] Publishing availability: %s\n", payload);
-    return mqttClient->publish(topic.c_str(), payload, true);
+    return mqttClient->publish(cachedAvailabilityTopic.c_str(), payload, true);
 }
 
 bool HADiscovery::publishState() {
@@ -319,36 +327,42 @@ bool HADiscovery::publishState() {
     }
     
     LOG_DEBUG("[HA] Publishing entity states to Home Assistant");
-    // Publish individual entity states
+    
+    // Use char buffers to avoid String allocation overhead
+    char topic[128];
+    char value[32];
     
     // Brightness
-    String brightness = String(displayManager.getBrightness());
-    mqttClient->publish(buildStateTopic("brightness").c_str(), brightness.c_str());
+    snprintf(topic, sizeof(topic), "%s/brightness/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%d", displayManager.getBrightness());
+    mqttClient->publish(topic, value);
     
     // Cycling
-    mqttClient->publish(buildStateTopic("cycling").c_str(), 
-                       configStorage.getCyclingEnabled() ? "ON" : "OFF");
+    snprintf(topic, sizeof(topic), "%s/cycling/state", baseTopic.c_str());
+    mqttClient->publish(topic, configStorage.getCyclingEnabled() ? "ON" : "OFF");
     
     // Random order
-    mqttClient->publish(buildStateTopic("random_order").c_str(),
-                       configStorage.getRandomOrder() ? "ON" : "OFF");
+    snprintf(topic, sizeof(topic), "%s/random_order/state", baseTopic.c_str());
+    mqttClient->publish(topic, configStorage.getRandomOrder() ? "ON" : "OFF");
     
     // Auto brightness
-    mqttClient->publish(buildStateTopic("auto_brightness").c_str(),
-                       configStorage.getBrightnessAutoMode() ? "ON" : "OFF");
+    snprintf(topic, sizeof(topic), "%s/auto_brightness/state", baseTopic.c_str());
+    mqttClient->publish(topic, configStorage.getBrightnessAutoMode() ? "ON" : "OFF");
     
     // Cycle interval (convert milliseconds to seconds)
-    String cycleInterval = String(configStorage.getCycleInterval() / 1000);
-    mqttClient->publish(buildStateTopic("cycle_interval").c_str(), cycleInterval.c_str());
+    snprintf(topic, sizeof(topic), "%s/cycle_interval/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%lu", configStorage.getCycleInterval() / 1000);
+    mqttClient->publish(topic, value);
     
     // Update interval (convert milliseconds to seconds)
-    String updateInterval = String(configStorage.getUpdateInterval() / 1000);
-    mqttClient->publish(buildStateTopic("update_interval").c_str(), updateInterval.c_str());
+    snprintf(topic, sizeof(topic), "%s/update_interval/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%lu", configStorage.getUpdateInterval() / 1000);
+    mqttClient->publish(topic, value);
     
     // Image source
-    int currentIndex = configStorage.getCurrentImageIndex();
-    String imageSource = "Image " + String(currentIndex + 1);
-    mqttClient->publish(buildStateTopic("image_source").c_str(), imageSource.c_str());
+    snprintf(topic, sizeof(topic), "%s/image_source/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "Image %d", configStorage.getCurrentImageIndex() + 1);
+    mqttClient->publish(topic, value);
     
     // Publish sensors
     publishSensors();
@@ -385,8 +399,25 @@ bool HADiscovery::publishSensors() {
     mqttClient->publish(buildStateTopic("wifi_rssi").c_str(), rssi.c_str());
     
     // Uptime (in seconds)
-    String uptime = String(millis() / 1000);
+    unsigned long uptimeSeconds = millis() / 1000;
+    String uptime = String(uptimeSeconds);
     mqttClient->publish(buildStateTopic("uptime").c_str(), uptime.c_str());
+    
+    // Readable uptime (formatted)
+    unsigned long days = uptimeSeconds / 86400;
+    unsigned long hours = (uptimeSeconds % 86400) / 3600;
+    unsigned long minutes = (uptimeSeconds % 3600) / 60;
+    unsigned long seconds = uptimeSeconds % 60;
+
+    char timeBuffer[32];
+    if (days > 0) {
+        snprintf(timeBuffer, sizeof(timeBuffer), "%lud %luh %lum", days, hours, minutes);
+    } else if (hours > 0) {
+        snprintf(timeBuffer, sizeof(timeBuffer), "%luh %lum", hours, minutes);
+    } else {
+        snprintf(timeBuffer, sizeof(timeBuffer), "%lum %lus", minutes, seconds);
+    }
+    mqttClient->publish(buildStateTopic("uptime_readable").c_str(), timeBuffer);
     
     // Image count
     String imageCount = String(configStorage.getImageSourceCount());
@@ -466,6 +497,12 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     
     // Handle brightness
     if (entity == "brightness") {
+        // Ignore MQTT brightness commands when HA REST control is active
+        if (configStorage.getUseHARestControl()) {
+            LOG_INFO("[HA] Ignoring MQTT brightness command - HA REST Control is active\n");
+            return;
+        }
+        
         int brightness = payload.toInt();
         if (brightness >= 0 && brightness <= 100) {
             LOG_INFO_F("[HA] Setting brightness to %d%%\n", brightness);
@@ -494,6 +531,12 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     else if (entity == "auto_brightness") {
         bool autoMode = (payload == "ON");
         configStorage.setBrightnessAutoMode(autoMode);
+        
+        if (autoMode) {
+            LOG_INFO("[HA] MQTT brightness control enabled - auto-disabling HA REST Control");
+            configStorage.setUseHARestControl(false);
+        }
+        
         configStorage.saveConfig();
         mqttClient->publish(buildStateTopic("auto_brightness").c_str(), payload.c_str());
     }

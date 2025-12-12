@@ -3,6 +3,7 @@
 #include "display_manager.h"
 #include "ota_manager.h"
 #include "web_config.h"
+#include "device_health.h"
 #include "logging.h"
 #include "config_storage.h"
 #include <ArduinoOTA.h>
@@ -12,6 +13,7 @@
 WiFiManager wifiManager;
 extern WebConfig webConfig;
 extern ConfigStorage configStorage;
+extern bool firstImageLoaded;  // From main .ino file
 
 WiFiManager::WiFiManager() :
     wifiConnected(false),
@@ -44,8 +46,9 @@ void WiFiManager::connectToWiFi() {
     }
     
     lastConnectionAttempt = now;
-    LOG_INFO_F("[WiFi] Attempting connection to SSID: %s\n", WIFI_SSID);
-    LOG_INFO_F("[WiFi] MAC Address: %s\n", WiFi.macAddress().c_str());
+    LOG_INFO_F("Connecting to WiFi: %s\n", WIFI_SSID);
+    if (debugPrintFunc) debugPrintFunc("Connecting to WiFi...", COLOR_YELLOW);
+    LOG_DEBUG_F("[WiFi] MAC Address: %s\n", WiFi.macAddress().c_str());
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     
     connectionAttempts = 0;
@@ -73,12 +76,15 @@ void WiFiManager::connectToWiFi() {
     
     if (WiFi.status() == WL_CONNECTED) {
         wifiConnected = true;
-        LOG_INFO("[WiFi] ✓ Connection successful!");
-        LOG_INFO_F("[WiFi] IP Address: %s\n", WiFi.localIP().toString().c_str());
-        LOG_INFO_F("[WiFi] Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
-        LOG_INFO_F("[WiFi] DNS: %s\n", WiFi.dnsIP().toString().c_str());
-        LOG_INFO_F("[WiFi] Signal Strength (RSSI): %d dBm\n", WiFi.RSSI());
-        LOG_INFO_F("[WiFi] Connection took %d attempts, %lu ms\n", connectionAttempts, millis() - startTime);
+        LOG_INFO_F("✓ WiFi connected - IP: %s\n", WiFi.localIP().toString().c_str());
+        if (debugPrintFunc && debugPrintfFunc) {
+            debugPrintfFunc(COLOR_GREEN, "%s :: %s", WIFI_SSID, WiFi.localIP().toString().c_str());
+            debugPrintfFunc(COLOR_WHITE, " ");  // Group spacing
+        }
+        LOG_DEBUG_F("[WiFi] Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+        LOG_DEBUG_F("[WiFi] DNS: %s\n", WiFi.dnsIP().toString().c_str());
+        LOG_DEBUG_F("[WiFi] Signal Strength (RSSI): %d dBm\n", WiFi.RSSI());
+        LOG_DEBUG_F("[WiFi] Connection took %d attempts, %lu ms\n", connectionAttempts, millis() - startTime);
         
         // Sync NTP time after successful connection
         syncNTPTime();
@@ -108,6 +114,8 @@ void WiFiManager::checkConnection() {
             LOG_INFO("[WiFi] Connection lost! Starting reconnection logic...");
             LOG_INFO_F("[WiFi] Last known IP: %s\n", WiFi.localIP().toString().c_str());
             LOG_INFO_F("[WiFi] WiFi status: %d\n", WiFi.status());
+            // Track disconnect for health monitoring
+            DeviceHealthAnalyzer::recordNetworkDisconnect();
         } else {
             LOG_INFO("[WiFi] Connection restored!");
             LOG_INFO_F("[WiFi] IP: %s, RSSI: %d dBm\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
@@ -293,8 +301,13 @@ void WiFiManager::syncNTPTime() {
     String ntpServer = configStorage.getNTPServer();
     String timezone = configStorage.getTimezone();
     
-    LOG_INFO_F("[NTP] Synchronizing time from %s...\n", ntpServer.c_str());
-    LOG_INFO_F("[NTP] Timezone: %s\n", timezone.c_str());
+    LOG_DEBUG_F("[NTP] Synchronizing time from %s...\n", ntpServer.c_str());
+    LOG_DEBUG_F("[NTP] Timezone: %s\n", timezone.c_str());
+    
+    // Show NTP start message on display
+    if (debugPrintFunc && !firstImageLoaded) {
+        debugPrintFunc("Updating NTP...", COLOR_YELLOW);
+    }
     
     // Configure time with NTP server and timezone
     // GMT offset and daylight offset are handled by the timezone string
@@ -308,7 +321,7 @@ void WiFiManager::syncNTPTime() {
     struct tm timeinfo;
     
     while (!getLocalTime(&timeinfo, 500) && retries < maxRetries) {
-        LOG_INFO("[NTP] Waiting for time sync...");
+        LOG_DEBUG("[NTP] Waiting for time sync...");
         retries++;
         systemMonitor.resetWatchdog();
     }
@@ -319,9 +332,10 @@ void WiFiManager::syncNTPTime() {
     } else {
         char timeStr[64];
         strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S %Z", &timeinfo);
-        LOG_INFO_F("[NTP] ✓ Time synchronized: %s\n", timeStr);
+        LOG_INFO_F("✓ Time synced: %s\n", timeStr);
         if (debugPrintfFunc && !firstImageLoaded) {
-            debugPrintfFunc(COLOR_GREEN, "Time: %s", timeStr);
+            debugPrintfFunc(COLOR_CYAN, "%s", timeStr);
+            debugPrintfFunc(COLOR_WHITE, " ");  // Group spacing
         }
     }
 }

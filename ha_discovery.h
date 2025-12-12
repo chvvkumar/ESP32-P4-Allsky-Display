@@ -14,6 +14,11 @@ private:
     unsigned long lastSensorUpdate;
     unsigned long lastSensorPublish;
     
+    // Cached topic strings to prevent memory leaks from repeated String concatenation
+    String cachedAvailabilityTopic;
+    String cachedCommandTopicFilter;
+    String cachedAttributesTopic;
+    
     // Helper methods for discovery message generation
     String getDeviceId();
     String getBaseTopic();

@@ -15,7 +15,7 @@ SystemMonitor::SystemMonitor() :
 }
 
 bool SystemMonitor::begin(unsigned long timeoutMs) {
-    LOG_INFO("[SystemMonitor] Initializing system monitor and watchdog");
+    LOG_DEBUG("[SystemMonitor] Initializing system monitor and watchdog");
     // Try to initialize watchdog timer for system stability
     esp_task_wdt_config_t wdt_config = {
         .timeout_ms = timeoutMs,
@@ -44,8 +44,8 @@ bool SystemMonitor::begin(unsigned long timeoutMs) {
     // Initialize memory tracking
     minFreeHeap = ESP.getFreeHeap();
     minFreePsram = ESP.getFreePsram();
-    LOG_INFO_F("[SystemMonitor] Initial heap: %d bytes, PSRAM: %d bytes\n", minFreeHeap, minFreePsram);
-    LOG_INFO("[SystemMonitor] System monitor initialization complete");
+    LOG_DEBUG_F("[SystemMonitor] Initial heap: %d bytes, PSRAM: %d bytes\n", minFreeHeap, minFreePsram);
+    LOG_DEBUG("[SystemMonitor] System monitor initialization complete");
     
     return true;
 }

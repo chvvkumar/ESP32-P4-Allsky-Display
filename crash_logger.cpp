@@ -402,12 +402,13 @@ void CrashLogger::saveToNVS() {
                                            RTC_BUFFER_SIZE, buffer, RTC_BUFFER_SIZE);
             
             // Truncate if needed
+            size_t offset = 0;
             if (len > NVS_MAX_SIZE) {
-                buffer += (len - NVS_MAX_SIZE);
+                offset = len - NVS_MAX_SIZE;  // Start offset for truncated data
                 len = NVS_MAX_SIZE;
             }
             
-            prefs.putBytes("log_data", buffer, len);
+            prefs.putBytes("log_data", buffer + offset, len);
             prefs.putUInt("log_boot", bootCount);
             prefs.putULong("log_time", millis());
             

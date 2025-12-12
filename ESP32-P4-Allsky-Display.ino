@@ -16,6 +16,8 @@
 #include "wifi_qr_code.h"
 #include "crash_logger.h"
 #include "command_interpreter.h"
+#include "image_utils.h"  // Software image scaling fallback
+#include "ha_rest_client.h"  // Home Assistant REST brightness control
 
 // Additional required libraries
 #include <HTTPClient.h>
@@ -78,6 +80,10 @@ uint16_t* qrCodeBuffer = nullptr;
 int16_t qrCodeWidth = 0;
 int16_t qrCodeHeight = 0;
 
+// Reusable scratch buffer for temporary operations (QR codes, etc.)
+// 512KB buffer to prevent fragmentation
+uint16_t* scratchBuffer = nullptr;
+
 // Image processing control
 bool imageProcessing = false;
 unsigned long lastImageProcessTime = 0;
@@ -108,6 +114,22 @@ bool touchTriggeredModeToggle = false;
 // Touch mode control
 bool singleImageRefreshMode = false;  // false = cycling mode, true = single image refresh mode
 
+// =============================================================================
+// WIFI SETUP MODE GLOBALS
+// =============================================================================
+// Non-blocking WiFi setup state management
+bool wifiSetupMode = false;
+unsigned long wifiSetupStartTime = 0;
+
+// =============================================================================
+// ASYNC DOWNLOAD GLOBALS
+// =============================================================================
+// FreeRTOS task handles and synchronization primitives for non-blocking downloads
+TaskHandle_t downloadTaskHandle = nullptr;
+QueueHandle_t imageReadyQueue = nullptr;
+volatile bool imageDownloadPending = false;  // Flag to trigger download
+SemaphoreHandle_t imageBufferMutex = nullptr;  // Protect buffer access
+
 // Forward declarations
 void debugPrint(const char* message, uint16_t color);
 void debugPrintf(uint16_t color, const char* format, ...);
@@ -120,6 +142,8 @@ void loadCyclingConfiguration();
 void advanceToNextImage();
 String getCurrentImageURL();
 void updateCyclingVariables();
+void updateCurrentImageTransformSettings();
+void downloadTask(void* params);
 
 // Touch function declarations
 void initializeTouchController();
@@ -249,20 +273,20 @@ int16_t displayWiFiQRCode() {
     int16_t displayHeight = displayManager.getHeight();
     int16_t textStartY = 200; // Default fallback
     
-    Serial.println("DEBUG: Loading WiFi QR code...");
+    LOG_DEBUG("DEBUG: Loading WiFi QR code...");
     
     // Reset watchdog before system calls
     systemMonitor.forceResetWatchdog();
     
-    Serial.printf("DEBUG: Free heap before QR: %d bytes\n", systemMonitor.getCurrentFreeHeap());
-    Serial.printf("DEBUG: Free PSRAM before QR: %d bytes\n", systemMonitor.getCurrentFreePsram());
+    LOG_DEBUG_F("DEBUG: Free heap before QR: %d bytes\n", systemMonitor.getCurrentFreeHeap());
+    LOG_DEBUG_F("DEBUG: Free PSRAM before QR: %d bytes\n", systemMonitor.getCurrentFreePsram());
     
     // Reset watchdog before heavy operation
     systemMonitor.forceResetWatchdog();
     
     // First, open JPEG to get actual dimensions
     if (!jpeg.openRAM((uint8_t*)wifi_qr_code_jpg, wifi_qr_code_jpg_len, JPEGDrawQR)) {
-        Serial.println("ERROR: Failed to open QR code JPEG");
+        LOG_ERROR("ERROR: Failed to open QR code JPEG");
         return textStartY; // Return default position
     }
     
@@ -271,26 +295,36 @@ int16_t displayWiFiQRCode() {
     
     qrCodeWidth = jpeg.getWidth();
     qrCodeHeight = jpeg.getHeight();
-    Serial.printf("DEBUG: QR code dimensions - %dx%d\n", qrCodeWidth, qrCodeHeight);
+    LOG_DEBUG_F("DEBUG: QR code dimensions - %dx%d\n", qrCodeWidth, qrCodeHeight);
     
     // Check if QR code fits on display
     if (qrCodeWidth > displayWidth || qrCodeHeight > displayHeight) {
-        Serial.println("ERROR: QR code too large for display");
+        LOG_ERROR("ERROR: QR code too large for display");
         jpeg.close();
         return textStartY; // Return default position
     }
     
-    // Allocate buffer for actual QR code size (RGB565)
+    // Use scratch buffer instead of allocating new memory
     const size_t qrBufferSize = qrCodeWidth * qrCodeHeight * sizeof(uint16_t);
-    qrCodeBuffer = (uint16_t*)ps_malloc(qrBufferSize);
-    if (!qrCodeBuffer) {
-        Serial.println("ERROR: Failed to allocate QR code buffer");
-        Serial.printf("ERROR: Tried to allocate %d bytes for %dx%d image\n", qrBufferSize, qrCodeWidth, qrCodeHeight);
+    const size_t scratchBufferSize = 512 * 512 * 2;  // 512KB
+    
+    if (!scratchBuffer) {
+        LOG_ERROR("ERROR: Scratch buffer not available for QR code");
         jpeg.close();
         return textStartY; // Return default position
     }
     
-    Serial.printf("DEBUG: QR buffer allocated: %d bytes\n", qrBufferSize);
+    if (qrBufferSize > scratchBufferSize) {
+        LOG_ERROR_F("ERROR: QR code too large for scratch buffer: %d bytes > %d bytes\n", 
+                   qrBufferSize, scratchBufferSize);
+        jpeg.close();
+        return textStartY;
+    }
+    
+    // Reuse scratch buffer for QR code (no allocation needed!)
+    qrCodeBuffer = scratchBuffer;
+    
+    LOG_DEBUG_F("DEBUG: Using scratch buffer for QR code: %d bytes\n", qrBufferSize);
     
     // Reset watchdog after allocation
     systemMonitor.forceResetWatchdog();
@@ -306,7 +340,7 @@ int16_t displayWiFiQRCode() {
     
     // Decode QR code JPEG
     if (jpeg.decode(0, 0, 0)) {
-        Serial.println("DEBUG: QR code decoded successfully");
+        LOG_DEBUG("DEBUG: QR code decoded successfully");
         
         // Reset watchdog after decode
         systemMonitor.forceResetWatchdog();
@@ -328,7 +362,7 @@ int16_t displayWiFiQRCode() {
         systemMonitor.forceResetWatchdog();
         
         if (scaledQR) {
-            Serial.printf("DEBUG: Scaling QR from %dx%d to %dx%d\n", qrCodeWidth, qrCodeHeight, scaledWidth, scaledHeight);
+            LOG_DEBUG_F("DEBUG: Scaling QR from %dx%d to %dx%d\n", qrCodeWidth, qrCodeHeight, scaledWidth, scaledHeight);
             
             // Clear buffer before scaling
             memset(scaledQR, 0, scaledSize);
@@ -339,7 +373,7 @@ int16_t displayWiFiQRCode() {
             // Use PPA to scale down
             if (ppaAccelerator.scaleImage(qrCodeBuffer, qrCodeWidth, qrCodeHeight,
                                          scaledQR, scaledWidth, scaledHeight)) {
-                Serial.println("DEBUG: QR code scaled successfully");
+                LOG_DEBUG("DEBUG: QR code scaled successfully");
                 
                 // Reset watchdog after scaling
                 systemMonitor.forceResetWatchdog();
@@ -366,12 +400,12 @@ int16_t displayWiFiQRCode() {
                     gfx->flush();
                 }
                 
-                Serial.printf("DEBUG: Scaled QR code drawn and flushed at (%d, %d)\n", qrX, qrY);
+                LOG_DEBUG_F("DEBUG: Scaled QR code drawn and flushed at (%d, %d)\n", qrX, qrY);
                 
                 // Calculate where text should start (below QR code + small margin)
                 textStartY = qrY + scaledHeight + 15;
             } else {
-                Serial.println("WARNING: PPA scaling failed, drawing original size");
+                LOG_WARNING("WARNING: PPA scaling failed, drawing original size");
                 int16_t qrX = (displayWidth - qrCodeWidth) / 2;
                 int16_t qrY = 50;
                 
@@ -393,7 +427,7 @@ int16_t displayWiFiQRCode() {
             
             free(scaledQR);
         } else {
-            Serial.println("WARNING: Could not allocate scaled buffer, drawing original");
+            LOG_WARNING("WARNING: Could not allocate scaled buffer, drawing original");
             int16_t qrX = (displayWidth - qrCodeWidth) / 2;
             int16_t qrY = 50;
             
@@ -422,12 +456,9 @@ int16_t displayWiFiQRCode() {
     
     jpeg.close();
     
-    // Free QR code buffer immediately after display
-    if (qrCodeBuffer) {
-        free(qrCodeBuffer);
-        qrCodeBuffer = nullptr;
-        Serial.println("DEBUG: QR buffer freed");
-    }
+    // No need to free - we're using the reusable scratch buffer
+    qrCodeBuffer = nullptr;  // Just clear the pointer
+    Serial.println("DEBUG: QR buffer released (scratch buffer reusable)");
     
     Serial.printf("DEBUG: Free heap after QR: %d bytes\n", systemMonitor.getCurrentFreeHeap());
     Serial.printf("DEBUG: Free PSRAM after QR: %d bytes\n", systemMonitor.getCurrentFreePsram());
@@ -439,8 +470,15 @@ int16_t displayWiFiQRCode() {
 }
 
 void setup() {
+    // CRITICAL: Disable bootloader watchdog immediately if it exists
+    // ESP32 bootloader may start a watchdog timer before setup() runs
+    // We need to disable it so we can reconfigure with proper timeout for heavy initialization
+    esp_err_t wdt_status = esp_task_wdt_deinit();
+    
     Serial.begin(9600);
-    delay(1000); // Give serial time to initialize
+    
+    // Small delay for serial stability (reduced from 1000ms to minimize boot time)
+    delay(500);
     
     // Initialize crash logger FIRST to capture ALL boot messages
     crashLogger.begin();
@@ -457,102 +495,143 @@ void setup() {
     initializeConfiguration();
     
     // Initialize system monitor with configured watchdog timeout
+    // This will properly configure the watchdog with our desired timeout
     unsigned long watchdogTimeout = configStorage.getWatchdogTimeout();
-    Serial.printf("Initializing system monitor with watchdog timeout: %lu ms\n", watchdogTimeout);
+    LOG_DEBUG_F("Initializing system monitor with watchdog timeout: %lu ms\n", watchdogTimeout);
     if (!systemMonitor.begin(watchdogTimeout)) {
-        Serial.println("CRITICAL: System monitor initialization failed!");
+        LOG_CRITICAL("CRITICAL: System monitor initialization failed!");
         while(1) delay(1000);
     }
+    
+    // Now watchdog is properly configured - reset it after initialization
+    systemMonitor.forceResetWatchdog();
     
     // Pre-allocate all PSRAM buffers BEFORE display init to ensure enough contiguous memory
     // Display needs ~1.28MB contiguous for frame buffer (800x800x2), so we allocate our buffers first
-    Serial.println("Pre-allocating PSRAM buffers before display initialization...");
-    Serial.printf("Free PSRAM before allocation: %d bytes\n", ESP.getFreePsram());
+    LOG_DEBUG("Pre-allocating PSRAM buffers before display initialization...");
+    LOG_DEBUG_F("Free PSRAM before allocation: %d bytes\n", ESP.getFreePsram());
     
-    // Calculate buffer sizes based on expected display dimensions (800x800)
-    const int16_t w = 800;  // Will be verified after display init
-    const int16_t h = 800;
+    // Calculate buffer sizes based on display configuration
+    const int16_t w = display_cfg.width;
+    const int16_t h = display_cfg.height;
+    LOG_DEBUG_F("Display dimensions from config: %dx%d\n", w, h);
     
-    Serial.println("[Memory] Allocating image buffers...");
-    Serial.printf("[Memory] Pre-allocation state: Heap=%d bytes, PSRAM=%d bytes\n", 
+    LOG_DEBUG("[Memory] Allocating image buffers...");
+    LOG_DEBUG_F("[Memory] Pre-allocation state: Heap=%d bytes, PSRAM=%d bytes\n", 
                  ESP.getFreeHeap(), ESP.getFreePsram());
     
+    // Clean up any existing allocations (safety check for repeated setup calls)
+    if (imageBuffer) { free(imageBuffer); imageBuffer = nullptr; }
+    if (fullImageBuffer) { free(fullImageBuffer); fullImageBuffer = nullptr; }
+    if (pendingFullImageBuffer) { free(pendingFullImageBuffer); pendingFullImageBuffer = nullptr; }
+    if (scaledBuffer) { free(scaledBuffer); scaledBuffer = nullptr; }
+    
     imageBufferSize = w * h * IMAGE_BUFFER_MULTIPLIER * 2;
-    Serial.printf("[Memory] Allocating image buffer: %d bytes (%.1f KB)\n", 
+    LOG_DEBUG_F("[Memory] Allocating image buffer: %d bytes (%.1f KB)\n", 
                  imageBufferSize, imageBufferSize / 1024.0);
     imageBuffer = (uint8_t*)ps_malloc(imageBufferSize);
     if (!imageBuffer) {
-        Serial.printf("[Memory] ✗ CRITICAL: Image buffer allocation failed!\n");
-        Serial.printf("CRITICAL: Image buffer pre-allocation failed! Size: %d bytes\n", imageBufferSize);
-        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), imageBufferSize);
-        Serial.printf("[Memory] Free Heap: %d bytes\n", ESP.getFreeHeap());
-        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
-        while(1) delay(1000);
+        LOG_CRITICAL("[Memory] ✗ CRITICAL: Image buffer allocation failed!\n");
+        LOG_CRITICAL_F("CRITICAL: Image buffer pre-allocation failed! Size: %d bytes\n", imageBufferSize);
+        LOG_CRITICAL_F("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), imageBufferSize);
+        LOG_CRITICAL_F("[Memory] Free Heap: %d bytes\n", ESP.getFreeHeap());
+        LOG_CRITICAL_F("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+        crashLogger.saveBeforeReboot();
+        delay(100);
+        ESP.restart();
     }
-    Serial.printf("[Memory] ✓ Image buffer: %d bytes (%.1f KB)\n", imageBufferSize, imageBufferSize / 1024.0);
-    Serial.printf("✓ Image buffer allocated: %d bytes\n", imageBufferSize);
+    LOG_DEBUG_F("[Memory] ✓ Image buffer: %d bytes (%.1f KB)\n", imageBufferSize, imageBufferSize / 1024.0);
+    LOG_DEBUG_F("✓ Image buffer allocated: %d bytes\n", imageBufferSize);
     
     fullImageBufferSize = FULL_IMAGE_BUFFER_SIZE;
-    Serial.printf("[Memory] Allocating full image buffer: %d bytes (%.1f KB, max 512x512)\n", 
+    LOG_DEBUG_F("[Memory] Allocating full image buffer: %d bytes (%.1f KB, max 512x512)\n", 
                  fullImageBufferSize, fullImageBufferSize / 1024.0);
     fullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
     if (!fullImageBuffer) {
-        Serial.printf("[Memory] ✗ CRITICAL: Full image buffer allocation failed!\n");
-        Serial.printf("CRITICAL: Full image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
-        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), fullImageBufferSize);
-        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
-        while(1) delay(1000);
+        LOG_CRITICAL("[Memory] ✗ CRITICAL: Full image buffer allocation failed!\n");
+        LOG_CRITICAL_F("CRITICAL: Full image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
+        LOG_CRITICAL_F("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), fullImageBufferSize);
+        LOG_CRITICAL_F("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+        crashLogger.saveBeforeReboot();
+        delay(100);
+        ESP.restart();
     }
-    Serial.printf("[Memory] ✓ Full image buffer: %d bytes (%.1f KB)\n", fullImageBufferSize, fullImageBufferSize / 1024.0);
-    Serial.printf("✓ Full image buffer allocated: %d bytes\n", fullImageBufferSize);
+    LOG_DEBUG_F("[Memory] ✓ Full image buffer: %d bytes (%.1f KB)\n", fullImageBufferSize, fullImageBufferSize / 1024.0);
+    LOG_DEBUG_F("✓ Full image buffer allocated: %d bytes\n", fullImageBufferSize);
     
-    Serial.printf("[Memory] Allocating pending buffer: %d bytes (double-buffer for flicker-free)\n", 
+    LOG_DEBUG_F("[Memory] Allocating pending buffer: %d bytes (double-buffer for flicker-free)\n", 
                  fullImageBufferSize);
     pendingFullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
     if (!pendingFullImageBuffer) {
-        Serial.printf("[Memory] ✗ CRITICAL: Pending buffer allocation failed!\n");
-        Serial.printf("CRITICAL: Pending image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
-        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), fullImageBufferSize);
-        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
-        while(1) delay(1000);
+        LOG_CRITICAL("[Memory] ✗ CRITICAL: Pending buffer allocation failed!\n");
+        LOG_CRITICAL_F("CRITICAL: Pending image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
+        LOG_CRITICAL_F("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), fullImageBufferSize);
+        LOG_CRITICAL_F("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+        crashLogger.saveBeforeReboot();
+        delay(100);
+        ESP.restart();
     }
-    Serial.printf("[Memory] ✓ Pending buffer: %d bytes (%.1f KB)\n", fullImageBufferSize, fullImageBufferSize / 1024.0);
-    Serial.printf("✓ Pending image buffer allocated: %d bytes\n", fullImageBufferSize);
+    LOG_DEBUG_F("[Memory] ✓ Pending buffer: %d bytes (%.1f KB)\n", fullImageBufferSize, fullImageBufferSize / 1024.0);
+    LOG_DEBUG_F("✓ Pending image buffer allocated: %d bytes\n", fullImageBufferSize);
     
     scaledBufferSize = w * h * SCALED_BUFFER_MULTIPLIER * 2;
-    Serial.printf("[Memory] Allocating scaled buffer: %d bytes (%.1f KB, 4x display for PPA)\n", 
+    LOG_DEBUG_F("[Memory] Allocating scaled buffer: %d bytes (%.1f KB, 4x display for PPA)\n", 
                  scaledBufferSize, scaledBufferSize / 1024.0);
     scaledBuffer = (uint16_t*)ps_malloc(scaledBufferSize);
     if (!scaledBuffer) {
-        Serial.printf("[Memory] ✗ CRITICAL: Scaled buffer allocation failed!\n");
-        Serial.printf("CRITICAL: Scaled buffer pre-allocation failed! Size: %d bytes\n", scaledBufferSize);
-        Serial.printf("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), scaledBufferSize);
-        Serial.printf("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
-        while(1) delay(1000);
+        LOG_CRITICAL("[Memory] ✗ CRITICAL: Scaled buffer allocation failed!\n");
+        LOG_CRITICAL_F("CRITICAL: Scaled buffer pre-allocation failed! Size: %d bytes\n", scaledBufferSize);
+        LOG_CRITICAL_F("[Memory] Free PSRAM: %d bytes (need %d)\n", ESP.getFreePsram(), scaledBufferSize);
+        LOG_CRITICAL_F("[Memory] Largest free block: %d bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+        crashLogger.saveBeforeReboot();
+        delay(100);
+        ESP.restart();
     }
-    Serial.printf("[Memory] ✓ Scaled buffer: %d bytes (%.1f KB)\n", scaledBufferSize, scaledBufferSize / 1024.0);
-    Serial.printf("✓ Scaled buffer allocated: %d bytes\n", scaledBufferSize);
+    LOG_DEBUG_F("[Memory] ✓ Scaled buffer: %d bytes (%.1f KB)\n", scaledBufferSize, scaledBufferSize / 1024.0);
+    LOG_DEBUG_F("✓ Scaled buffer allocated: %d bytes\n", scaledBufferSize);
     
-    size_t totalAllocated = imageBufferSize + (fullImageBufferSize * 2) + scaledBufferSize;
-    Serial.printf("[Memory] ✓ All buffers allocated: %d bytes total (%.1f MB)\n", 
+    // Allocate reusable scratch buffer for QR codes and other temporary operations
+    size_t scratchBufferSize = 512 * 512 * 2;  // 512KB buffer
+    LOG_DEBUG_F("[Memory] Allocating scratch buffer: %d bytes (%.1f KB, reusable)\n", 
+                 scratchBufferSize, scratchBufferSize / 1024.0);
+    scratchBuffer = (uint16_t*)ps_malloc(scratchBufferSize);
+    if (!scratchBuffer) {
+        LOG_WARNING("[Memory] ✗ WARNING: Scratch buffer allocation failed - QR codes may not work\n");
+        LOG_WARNING_F("[Memory] Free PSRAM: %d bytes\n", ESP.getFreePsram());
+    } else {
+        LOG_DEBUG_F("[Memory] ✓ Scratch buffer: %d bytes (%.1f KB)\n", scratchBufferSize, scratchBufferSize / 1024.0);
+    }
+    
+    size_t totalAllocated = imageBufferSize + (fullImageBufferSize * 2) + scaledBufferSize + (scratchBuffer ? scratchBufferSize : 0);
+    LOG_DEBUG_F("[Memory] ✓ All buffers allocated: %d bytes total (%.1f MB)\n", 
                  totalAllocated, totalAllocated / (1024.0 * 1024.0));
-    Serial.printf("[Memory] Free PSRAM remaining: %d bytes (%.1f MB)\n", 
+    LOG_DEBUG_F("[Memory] Free PSRAM remaining: %d bytes (%.1f MB)\n", 
                  ESP.getFreePsram(), ESP.getFreePsram() / (1024.0 * 1024.0));
-    Serial.printf("PSRAM pre-allocation complete - Free PSRAM remaining: %d bytes\n", ESP.getFreePsram());
+    LOG_DEBUG_F("PSRAM pre-allocation complete - Free PSRAM remaining: %d bytes\n", ESP.getFreePsram());
+    
+    // Reset watchdog after large memory allocations
+    systemMonitor.forceResetWatchdog();
     
     // NOW initialize display - it should have plenty of contiguous PSRAM remaining
     if (!displayManager.begin()) {
-        Serial.println("CRITICAL: Display initialization failed!");
-        Serial.printf("Free PSRAM at failure: %d bytes\n", ESP.getFreePsram());
-        while(1) delay(1000);
+        LOG_CRITICAL("CRITICAL: Display initialization failed!");
+        LOG_CRITICAL_F("Free PSRAM at failure: %d bytes\n", ESP.getFreePsram());
+        crashLogger.saveBeforeReboot();
+        delay(100);
+        ESP.restart();
     }
     
-    // Verify display dimensions match our pre-allocated buffer assumptions
+    // Verify display dimensions match our configuration
     if (displayManager.getWidth() != w || displayManager.getHeight() != h) {
-        Serial.printf("WARNING: Display dimensions mismatch! Expected %dx%d, got %dx%d\n",
+        LOG_WARNING_F("WARNING: Display dimensions mismatch! Config: %dx%d, Actual: %dx%d\n",
                      w, h, displayManager.getWidth(), displayManager.getHeight());
-        Serial.println("Buffer sizes may be incorrect - please update CURRENT_SCREEN define");
+        LOG_WARNING("This should not happen - check displays_config.h");
+    } else {
+        LOG_DEBUG_F("Display dimensions verified: %dx%d\n", w, h);
     }
+    
+    // Reset watchdog after display initialization (heavy operation)
+    systemMonitor.forceResetWatchdog();
     
     // Setup debug functions for other modules
     wifiManager.setDebugFunctions(debugPrint, debugPrintf, &firstImageLoaded);
@@ -569,27 +648,37 @@ void setup() {
         
         debugPrint("ESP32 AllSky Display", COLOR_CYAN);
         debugPrint(" ", COLOR_WHITE);  // Spacing
-        debugPrint("Initializing...", COLOR_GREEN);
+        
+        debugPrint("Initializing hardware...", COLOR_YELLOW);
     }
     
     // Buffers already allocated before display init - just initialize PPA hardware acceleration
     ppaAccelerator.begin(w, h);
     
     if (!needsWiFiSetup) {
-        // Show hardware initialization status
-        debugPrint("Hardware ready", COLOR_GREEN);
+        // Show hardware initialization result
+        debugPrint("Hardware Ready!", COLOR_GREEN);
+        debugPrint(" ", COLOR_WHITE);  // Group spacing
     }
     
     // Initialize brightness control
     displayManager.initBrightness();
     
     // Check if WiFi is provisioned (first boot or after reset)
+    // Check if WiFi setup is needed
     if (!configStorage.isWiFiProvisioned()) {
-        // Clear screen and show only WiFi setup instructions
+        // Enter non-blocking WiFi setup mode
+        wifiSetupMode = true;
+        wifiSetupStartTime = millis();
+        
+        // Clear screen and show WiFi setup instructions
         displayManager.clearScreen();
         
+        // Reset watchdog before captive portal operations
+        systemMonitor.forceResetWatchdog();
+        
         // Start captive portal for WiFi configuration
-        if (captivePortal.begin("AllSky-Display-Setup")) {
+        if (captivePortal.begin("AllSky-Setup")) {
             // Reset watchdog before QR code display
             systemMonitor.forceResetWatchdog();
             
@@ -610,61 +699,40 @@ void setup() {
             debugPrint("WiFi Setup Required", COLOR_YELLOW);
             debugPrint(" ", COLOR_WHITE);
             debugPrint("Scan QR or Connect:", COLOR_CYAN);
-            debugPrint("AllSky-Display-Setup", COLOR_WHITE);
+            debugPrint("AllSky-Setup", COLOR_WHITE);
             debugPrint(" ", COLOR_WHITE);
             debugPrint("Open: 192.168.4.1", COLOR_GREEN);
             debugPrint(" ", COLOR_WHITE);
             debugPrint("Select WiFi & Connect", COLOR_CYAN);
             
-            // Wait for configuration with timeout
-            unsigned long portalStartTime = millis();
-            const unsigned long PORTAL_TIMEOUT = 300000; // 5 minutes timeout
-            
-            while (!captivePortal.isConfigured() && (millis() - portalStartTime) < PORTAL_TIMEOUT) {
-                captivePortal.handleClient();
-                systemMonitor.forceResetWatchdog();
-                delay(10);
-            }
-            
-            if (captivePortal.isConfigured()) {
-                debugPrint("WiFi configured successfully!", COLOR_GREEN);
-                debugPrint("Restarting device...", COLOR_YELLOW);
-                captivePortal.stop();
-                delay(2000);
-                crashLogger.saveBeforeReboot();
-                delay(100);
-                ESP.restart();
-            } else {
-                debugPrint("Configuration timeout - continuing without WiFi", COLOR_RED);
-                captivePortal.stop();
-                // Re-enable auto-scroll after WiFi setup
-                displayManager.setDisableAutoScroll(false);
-            }
+            Serial.println("✓ Captive portal started - waiting for WiFi configuration in loop()");
         } else {
             debugPrint("ERROR: Failed to start captive portal", COLOR_RED);
+            wifiSetupMode = false;  // Disable setup mode if portal failed
             // Re-enable auto-scroll
             displayManager.setDisableAutoScroll(false);
         }
-    }
-    
-    // Initialize WiFi manager
-    if (!wifiManager.begin()) {
-        debugPrint("ERROR: WiFi initialization failed!", COLOR_RED);
-        debugPrint("Please configure WiFi in config.cpp", COLOR_YELLOW);
     } else {
-        // Try to connect to WiFi with watchdog protection
-        systemMonitor.forceResetWatchdog();
-        
-        // CRITICAL: Allow WiFi hardware to fully initialize before connection attempt
-        // Without this delay, MAC address may show as 00:00:00:00:00:00 and connection fails
-        delay(500);
-        
-        wifiManager.connectToWiFi();
-        systemMonitor.forceResetWatchdog();  // Reset after WiFi connect attempt
-        
-        // Check if WiFi connection failed
-        if (!wifiManager.isConnected()) {
+        // WiFi is already configured - connect normally
+        // Initialize WiFi manager
+        if (!wifiManager.begin()) {
+            debugPrint("ERROR: WiFi initialization failed!", COLOR_RED);
+            debugPrint("Please configure WiFi in config.cpp", COLOR_YELLOW);
+        } else {
+            // Try to connect to WiFi with watchdog protection
             systemMonitor.forceResetWatchdog();
+            
+            // CRITICAL: Allow WiFi hardware to fully initialize before connection attempt
+            // Without this delay, MAC address may show as 00:00:00:00:00:00 and connection fails
+            delay(500);
+            
+            wifiManager.connectToWiFi();
+            systemMonitor.forceResetWatchdog();  // Reset after WiFi connect attempt
+            
+            // Check if WiFi connection failed
+            if (!wifiManager.isConnected()) {
+                systemMonitor.forceResetWatchdog();
+            }
         }
     }
     
@@ -675,15 +743,20 @@ void setup() {
     otaManager.begin();
     otaManager.setDebugFunction(debugPrint);
     
+    // Initialize Home Assistant REST client (runs on Core 0)
+    haRestClient.begin();
+    
     // Start web configuration server if WiFi is connected
     if (wifiManager.isConnected()) {
         webConfig.begin(8080);
         wifiManager.initOTA();
         
         if (!needsWiFiSetup) {
-            debugPrint(" ", COLOR_WHITE);
             debugPrint("System Ready!", COLOR_GREEN);
-            debugPrintf(COLOR_CYAN, "IP: %s", WiFi.localIP().toString().c_str());
+            debugPrint(" ", COLOR_WHITE);  // Group spacing
+            
+            // Pause to allow user to read boot messages
+            delay(2000);
         }
     }
     
@@ -695,6 +768,40 @@ void setup() {
     
     // Initialize touch controller
     initializeTouchController();
+    
+    // Ensure image processing flag is reset (in case of crash/reboot during processing)
+    imageProcessing = false;
+    
+    // =============================================================================
+    // INITIALIZE ASYNC DOWNLOAD TASK
+    // =============================================================================
+    // Create synchronization primitives for async image downloads
+    imageBufferMutex = xSemaphoreCreateMutex();
+    if (!imageBufferMutex) {
+        Serial.println("ERROR: Failed to create image buffer mutex");
+    }
+    
+    imageReadyQueue = xQueueCreate(1, sizeof(uint8_t*));
+    if (!imageReadyQueue) {
+        Serial.println("ERROR: Failed to create image ready queue");
+    }
+    
+    // Create download task on Core 0 (network/WiFi core)
+    BaseType_t taskCreated = xTaskCreatePinnedToCore(
+        downloadTask,                    // Task function
+        "ImageDownloader",               // Task name
+        DOWNLOAD_TASK_STACK_SIZE,        // Stack size
+        NULL,                            // Task parameters
+        DOWNLOAD_TASK_PRIORITY,          // Task priority
+        &downloadTaskHandle,             // Task handle
+        0                                // Pin to Core 0 (Network Core)
+    );
+    
+    if (taskCreated != pdPASS) {
+        Serial.println("ERROR: Failed to create download task");
+    } else {
+        Serial.println("✓ Async download task created on Core 0");
+    }
     
     delay(1000);
 }
@@ -834,41 +941,61 @@ void renderFullImage() {
             }
         }
         
-        // Software fallback - for now, just do basic scaling without rotation
-        debugPrint("DEBUG: Software fallback - basic scaling only", COLOR_YELLOW);
+        // Software fallback using ImageUtils bilinear scaling
+        Serial.println("[Render] Using software transformation fallback");
+        debugPrint("DEBUG: Software scaling (bilinear)", COLOR_YELLOW);
         systemMonitor.forceResetWatchdog();
         
-        if (rotationAngle == 0.0 && scaledImageSize <= scaledBufferSize) {
-            // Simple software scaling (simplified version)
-            displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+        if (scaledImageSize <= scaledBufferSize) {
+            // Use ImageUtils for software scaling
+            unsigned long swStart = millis();
             
-            // Flush to display
-            Arduino_DSI_Display* gfx = displayManager.getGFX();
-            if (gfx) gfx->flush();
-            
-            systemMonitor.forceResetWatchdog();
-            
-            // Update tracking variables for next transition
-            prevImageX = finalX;
-            prevImageY = finalY;
-            prevImageWidth = fullImageWidth;
-            prevImageHeight = fullImageHeight;
-        } else {
-            // Just draw original image as fallback
-            displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
-            
-            // Flush to display
-            Arduino_DSI_Display* gfx = displayManager.getGFX();
-            if (gfx) gfx->flush();
-            
-            systemMonitor.forceResetWatchdog();
-            
-            // Update tracking variables for next transition
-            prevImageX = finalX;
-            prevImageY = finalY;
-            prevImageWidth = fullImageWidth;
-            prevImageHeight = fullImageHeight;
+            if (ImageUtils::softwareTransform(
+                fullImageBuffer, fullImageWidth, fullImageHeight,
+                scaledBuffer, scaledWidth, scaledHeight,
+                (int)rotationAngle
+            )) {
+                unsigned long swTime = millis() - swStart;
+                Serial.printf("[Render] ✓ Software scaling complete in %lu ms\n", swTime);
+                debugPrintf(COLOR_GREEN, "SW render: %lu ms", swTime);
+                
+                // Draw the software-processed image
+                displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
+                
+                // Flush to display
+                Arduino_DSI_Display* gfx = displayManager.getGFX();
+                if (gfx) gfx->flush();
+                
+                systemMonitor.forceResetWatchdog();
+                
+                // Update tracking variables for next transition
+                prevImageX = finalX;
+                prevImageY = finalY;
+                prevImageWidth = scaledWidth;
+                prevImageHeight = scaledHeight;
+                return;
+            } else {
+                Serial.println("[Render] ✗ Software scaling failed");
+                debugPrint("ERROR: Software scaling failed", COLOR_RED);
+            }
         }
+        
+        // Ultimate fallback: draw original unscaled image
+        Serial.println("[Render] Drawing original unscaled image");
+        debugPrint("WARNING: Showing unscaled image", COLOR_YELLOW);
+        displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+        
+        // Flush to display
+        Arduino_DSI_Display* gfx = displayManager.getGFX();
+        if (gfx) gfx->flush();
+        
+        systemMonitor.forceResetWatchdog();
+        
+        // Update tracking variables for next transition
+        prevImageX = finalX;
+        prevImageY = finalY;
+        prevImageWidth = fullImageWidth;
+        prevImageHeight = fullImageHeight;
     }
     
     // Final watchdog reset before function exit
@@ -876,6 +1003,15 @@ void renderFullImage() {
 }
 
 void downloadAndDisplayImage() {
+    // Check if already processing an image (mutex protection)
+    if (imageProcessing) {
+        Serial.println("WARNING: Image processing already in progress - skipping concurrent call");
+        return;
+    }
+    
+    // Set processing flag (simple mutex)
+    imageProcessing = true;
+    
     // Immediate debug output with Serial.println to ensure it shows up
     Serial.println("=== DOWNLOADANDDISPLAYIMAGE FUNCTION START ===");
     Serial.flush();
@@ -891,6 +1027,7 @@ void downloadAndDisplayImage() {
         Serial.println("ERROR: No WiFi connection");
         Serial.flush();
         systemMonitor.forceResetWatchdog();
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -979,6 +1116,7 @@ void downloadAndDisplayImage() {
         debugPrintf(COLOR_RED, "ERROR: HTTP begin took too long: %lu ms", httpBeginTime);
         http.end();
         systemMonitor.forceResetWatchdog();
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -986,6 +1124,7 @@ void downloadAndDisplayImage() {
         debugPrintf(COLOR_RED, "ERROR: HTTP begin failed after %lu ms", httpBeginTime);
         http.end();
         systemMonitor.forceResetWatchdog();
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -1027,6 +1166,7 @@ void downloadAndDisplayImage() {
         debugPrint("ERROR: Exception during HTTP GET", COLOR_RED);
         http.end();
         systemMonitor.forceResetWatchdog();
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -1037,6 +1177,7 @@ void downloadAndDisplayImage() {
         debugPrintf(COLOR_RED, "ERROR: HTTP GET timed out after %lu ms", getRequestTime);
         http.end();
         systemMonitor.forceResetWatchdog();
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -1071,6 +1212,7 @@ void downloadAndDisplayImage() {
         }
         http.end();
         systemMonitor.forceResetWatchdog();
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -1099,6 +1241,7 @@ void downloadAndDisplayImage() {
         debugPrintf(COLOR_RED, "Invalid size: %d bytes", size);
         http.end();
         systemMonitor.forceResetWatchdog();
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -1108,6 +1251,7 @@ void downloadAndDisplayImage() {
         debugPrintf(COLOR_RED, "Invalid size: %d bytes", size);
         http.end();
         systemMonitor.forceResetWatchdog();
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -1115,7 +1259,11 @@ void downloadAndDisplayImage() {
     
     Serial.println("[Image] Starting download stream...");
     Serial.printf("[Image] Download config: 1KB chunks, 50ms watchdog, 5s timeout\n");
-    debugPrint("Downloading image data...", COLOR_YELLOW);
+    // Show downloading message on display for first image only
+    if (!firstImageLoaded) {
+        debugPrint("Downloading Image...", COLOR_YELLOW);
+    }
+    LOG_DEBUG("Downloading image data...");
     
     size_t bytesRead = 0;
     uint8_t* buffer = imageBuffer;
@@ -1239,8 +1387,9 @@ void downloadAndDisplayImage() {
     
     unsigned long readTime = millis() - readStart;
     
-    // Close HTTP connection immediately
+    // Close HTTP connection immediately (also cleans up WiFiClient)
     http.end();
+    
     systemMonitor.forceResetWatchdog();
     
     float avgSpeed = readTime > 0 ? (bytesRead * 1000.0) / readTime : 0; // bytes/sec
@@ -1256,6 +1405,7 @@ void downloadAndDisplayImage() {
         debugPrintf(COLOR_RED, "Incomplete download: %d/%d bytes", bytesRead, size);
         Serial.printf("ERROR: Incomplete download: %d/%d bytes\n", bytesRead, size);
         systemMonitor.forceResetWatchdog();
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -1265,6 +1415,7 @@ void downloadAndDisplayImage() {
         debugPrintf(COLOR_RED, "Downloaded data too small: %d bytes", bytesRead);
         Serial.printf("ERROR: Downloaded data too small: %d bytes (minimum 1024)\n", bytesRead);
         systemMonitor.forceResetWatchdog();
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -1280,6 +1431,7 @@ void downloadAndDisplayImage() {
         Serial.printf("[Image] ✗ Data too small for header validation: %d bytes (need 10)\n", bytesRead);
         debugPrintf(COLOR_RED, "ERROR: Downloaded data too small: %d bytes", bytesRead);
         Serial.printf("ERROR: Downloaded data too small for header check: %d bytes\n", bytesRead);
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -1296,6 +1448,7 @@ void downloadAndDisplayImage() {
         debugPrint("ERROR: PNG format detected - not supported (JPEG only)", COLOR_RED);
         Serial.println("ERROR: PNG format detected - not supported (JPEG only)");
         Serial.println("This device only supports JPEG images. Please use a JPEG format image URL.");
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -1307,6 +1460,7 @@ void downloadAndDisplayImage() {
         Serial.printf("[Image] ✗ Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)\n", imageBuffer[0], imageBuffer[1]);
         debugPrintf(COLOR_RED, "ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)", imageBuffer[0], imageBuffer[1]);
         Serial.printf("ERROR: Invalid JPEG header: 0x%02X%02X (expected 0xFFD8)\n", imageBuffer[0], imageBuffer[1]);
+        imageProcessing = false;  // Clear mutex before return
         return;
     }
     
@@ -1436,6 +1590,9 @@ void downloadAndDisplayImage() {
     debugPrintf(COLOR_WHITE, "Free heap: %d bytes", systemMonitor.getCurrentFreeHeap());
     Serial.printf("[Image] Download cycle completed for image %d/%d\n", currentImageIndex + 1, imageSourceCount);
     debugPrint("Download cycle completed", COLOR_GREEN);
+    
+    // Clear processing flag (release mutex)
+    imageProcessing = false;
 }
 
 // Load cycling configuration from storage
@@ -1518,11 +1675,86 @@ String getCurrentImageURL() {
     return configStorage.getImageURL();
 }
 
+// =============================================================================
+// ASYNC DOWNLOAD TASK (FreeRTOS Task on Core 0)
+// =============================================================================
+// This task runs on Core 0 to handle image downloads asynchronously,
+// preventing the main UI loop from freezing during network operations.
+void downloadTask(void* params) {
+    const TickType_t xDelay = pdMS_TO_TICKS(100);
+    
+    // Subscribe this task to the watchdog
+    esp_task_wdt_add(NULL);  // NULL = current task
+    Serial.println("[DownloadTask] Task subscribed to watchdog");
+    
+    for(;;) {
+        if (imageDownloadPending) {
+            // Reset WDT once at start of heavy operation
+            esp_task_wdt_reset();
+            
+            Serial.println("[DownloadTask] Image download triggered");
+            
+            // Perform the download operation
+            // NOTE: downloadAndDisplayImage currently writes to fullImageBuffer
+            // In a future optimization, this should be refactored to write to
+            // pendingFullImageBuffer and signal via queue when ready
+            downloadAndDisplayImage();
+            
+            // Clear the pending flag
+            imageDownloadPending = false;
+            
+            Serial.println("[DownloadTask] Download complete, flag cleared");
+        }
+        
+        // Reset watchdog before yielding
+        esp_task_wdt_reset();
+        
+        // Yield to other tasks
+        vTaskDelay(xDelay);
+    }
+}
 
 
 void loop() {
     // Force watchdog reset at start of each loop iteration
     systemMonitor.forceResetWatchdog();
+    
+    // =============================================================================
+    // WIFI SETUP MODE - NON-BLOCKING CAPTIVE PORTAL HANDLING
+    // =============================================================================
+    // If in WiFi setup mode, handle captive portal and skip rest of loop
+    if (wifiSetupMode) {
+        captivePortal.handleClient();
+        systemMonitor.forceResetWatchdog();
+        
+        // Check if WiFi configuration is complete
+        if (captivePortal.isConfigured()) {
+            displayManager.setDisableAutoScroll(false);  // Re-enable auto-scroll
+            debugPrint("WiFi configured successfully!", COLOR_GREEN);
+            debugPrint("Restarting device...", COLOR_YELLOW);
+            captivePortal.stop();
+            delay(2000);
+            crashLogger.saveBeforeReboot();
+            delay(100);
+            ESP.restart();
+        }
+        
+        // Check for timeout (5 minutes)
+        if (millis() - wifiSetupStartTime > 300000) {
+            Serial.println("WiFi setup timeout - continuing without WiFi");
+            debugPrint("Configuration timeout", COLOR_RED);
+            debugPrint("Continuing without WiFi...", COLOR_YELLOW);
+            captivePortal.stop();
+            displayManager.setDisableAutoScroll(false);  // Re-enable auto-scroll
+            wifiSetupMode = false;  // Exit setup mode
+            delay(2000);
+            displayManager.clearScreen();  // Clear setup screen
+        }
+        
+        // Skip rest of loop during WiFi setup
+        delay(10);
+        return;
+    }
     
     // Process background retry tasks (handles network, MQTT, and image download failures)
     taskRetryHandler.process();
@@ -1605,11 +1837,14 @@ void loop() {
     }
     
     // Periodically save crash logs to NVS (every hour to reduce flash wear)
-    static unsigned long lastNVSSave = 0;
+    // DISABLED: This was causing hourly reboots due to watchdog timeout during NVS write
+    // Crash logger already auto-saves on crashes, panics, and intentional reboots
+    /* static unsigned long lastNVSSave = 0;
     if (millis() - lastNVSSave > 3600000) {  // 1 hour
         crashLogger.saveToNVS();
         lastNVSSave = millis();
     }
+    */
     
     // Check for critical system health issues
     if (!systemMonitor.isSystemHealthy()) {
@@ -1708,60 +1943,21 @@ void loop() {
     
     // Check if it's time to update the image (either scheduled update or cycling)
     // Skip image processing during OTA to prevent interference
-    if (!imageProcessing && !webConfig.isOTAInProgress() && (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0)) {
+    if (!imageProcessing && !imageDownloadPending && !webConfig.isOTAInProgress() && (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0)) {
         // Pre-download system health check
         if (!wifiManager.isConnected()) {
             Serial.println("WARNING: WiFi disconnected, skipping image download");
             lastUpdate = currentTime; // Update timestamp to prevent immediate retry
             systemMonitor.forceResetWatchdog();
         } else {
-            Serial.printf("DEBUG: Starting image download cycle (last update: %lu ms ago)\n", 
+            Serial.printf("DEBUG: Triggering async image download (last update: %lu ms ago)\n", 
                          currentTime - lastUpdate);
             
-            imageProcessing = true;
-            lastImageProcessTime = currentTime;
-            systemMonitor.forceResetWatchdog();
-            
-            // Wrap download in timeout protection with absolute timeout
-            unsigned long downloadStartTime = millis();
-
-            
-            // Create a flag to track download completion
-            bool downloadCompleted = false;
-            
-            // Try the download with timeout monitoring
-            unsigned long downloadCheckTime = millis();
-            while (!downloadCompleted && (millis() - downloadStartTime) < ABSOLUTE_DOWNLOAD_TIMEOUT) {
-                // Reset watchdog frequently during download attempt
-                systemMonitor.forceResetWatchdog();
-                
-                // Try download
-                downloadAndDisplayImage();
-                downloadCompleted = true;
-                
-                // Check if we're taking too long
-                if (millis() - downloadCheckTime > 1000) {
-                    Serial.printf("DEBUG: Download attempt running for %lu ms\n", millis() - downloadStartTime);
-                    downloadCheckTime = millis();
-                }
-            }
-            
-            unsigned long downloadDuration = millis() - downloadStartTime;
-            
-            if (downloadCompleted) {
-                Serial.printf("DEBUG: Download cycle completed in %lu ms\n", downloadDuration);
-                
-                // Log warning if download took unusually long
-                if (downloadDuration > 15000) {
-                    Serial.printf("WARNING: Download cycle took %lu ms (unusually long)\n", downloadDuration);
-                }
-            } else {
-                Serial.printf("ERROR: Download cycle timed out after %lu ms\n", downloadDuration);
-                debugPrint("ERROR: Download timed out completely", COLOR_RED);
-            }
-            
+            // Trigger async download on Core 0
+            imageDownloadPending = true;
             lastUpdate = currentTime;
-            imageProcessing = false;
+            lastImageProcessTime = currentTime;
+            
             systemMonitor.forceResetWatchdog();
         }
     }
@@ -1826,7 +2022,9 @@ void loop() {
 // Touch controller functions implementation
 
 void initializeTouchController() {
-    debugPrint("Initializing touch controller...", COLOR_YELLOW);
+    // Don't show on display during boot - only log to serial
+    // debugPrint("Initializing touch controller...", COLOR_YELLOW);
+    LOG_DEBUG("Initializing touch controller...");
     
     try {
         // Initialize I2C interface first
@@ -1837,8 +2035,9 @@ void initializeTouchController() {
         
         if (touchHandle != nullptr) {
             touchEnabled = true;
-            debugPrint("Touch controller initialized successfully!", COLOR_GREEN);
-            Serial.println("GT911 touch controller ready");
+            // Don't show on display - only log
+            // debugPrint("Touch controller initialized successfully!", COLOR_GREEN);
+            LOG_INFO("GT911 touch controller ready");
         } else {
             debugPrint("Touch controller initialization failed", COLOR_RED);
             Serial.println("Warning: Touch functionality disabled - GT911 init failed");
@@ -1981,3 +2180,5 @@ void handleDoubleTap() {
     // Set flag to trigger mode toggle in main loop
     touchTriggeredModeToggle = true;
 }
+
+

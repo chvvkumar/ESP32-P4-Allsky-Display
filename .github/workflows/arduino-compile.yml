@@ -195,10 +195,23 @@ jobs:
           arduino-cli lib install "WebSockets@2.7.1"
         fi
         
+        # Check and install ArduinoJson 7.2.1
+        if [ -d ~/Arduino/libraries/ArduinoJson ]; then
+          INSTALLED_VERSION=$(arduino-cli lib list | grep "ArduinoJson" | awk '{print $2}')
+          if [ "$INSTALLED_VERSION" = "7.2.1" ]; then
+            echo "✅ ArduinoJson 7.2.1 already installed (cached)"
+          else
+            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 7.2.1"
+            arduino-cli lib install "ArduinoJson@7.2.1"
+          fi
+        else
+          arduino-cli lib install "ArduinoJson@7.2.1"
+        fi
+        
         # Verify installed versions
         echo ""
         echo "📦 Final installed library versions:"
-        arduino-cli lib list | grep -E "GFX Library|JPEGDEC|PubSubClient|ElegantOTA|WebSockets"
+        arduino-cli lib list | grep -E "GFX Library|JPEGDEC|PubSubClient|ElegantOTA|WebSockets|ArduinoJson"
     
     - name: Patch GFX Library for ESP32-P4 compatibility
       run: |
@@ -513,6 +526,36 @@ jobs:
         name: firmware-${{ github.sha }}
         path: release/
     
+    - name: Generate commit history
+      id: changelog
+      run: |
+        # Get the previous tag for this branch (excluding the tag we're about to create)
+        TAG_PREFIX="${{ needs.build.outputs.release_type == 'test' && format('{0}-', needs.build.outputs.branch) || '' }}v"
+        TAG_PATTERN="${TAG_PREFIX}*"
+        NEW_TAG="${{ needs.build.outputs.tag }}"
+        
+        # Get all matching tags, exclude the new tag if it exists, and get the latest
+        PREVIOUS_TAG=$(git tag -l "${TAG_PATTERN}" | grep -v "^${NEW_TAG}$" | sort -V | tail -n1)
+        
+        if [ -z "$PREVIOUS_TAG" ]; then
+          echo "No previous tag found, showing last 20 commits"
+          COMMITS=$(git log -20 --pretty=format:"- %s (%h)" --no-merges)
+        else
+          echo "Generating changelog from $PREVIOUS_TAG to HEAD"
+          COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          
+          # If no commits found, it means we're on the same commit
+          if [ -z "$COMMITS" ]; then
+            echo "No new commits since $PREVIOUS_TAG"
+            COMMITS="- No changes since previous release"
+          fi
+        fi
+        
+        # Save to output using heredoc to handle multiline
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$COMMITS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
     - name: Create and push tag
       run: |
         git config user.name "github-actions[bot]"
@@ -573,16 +616,16 @@ jobs:
           1. Select network port in Arduino IDE: `Tools → Port → esp32-allsky-display at [IP]`
           2. Click Upload button
           
-          ### ✨ Features
-          - ✅ **OTA Updates**: Update wirelessly via web interface or Arduino IDE
-          - ✅ **Safe A/B Partitioning**: Automatic rollback if update fails
-          - ✅ **Configuration Preserved**: WiFi, MQTT, and image settings survive updates
-          - ✅ **Multi-Image Cycling**: Display from up to 10 image sources
-          - ✅ **Home Assistant Integration**: Full MQTT discovery support
-          - ✅ **Touch Controls**: Single/double tap gestures
-          - ✅ **Hardware Acceleration**: ESP32-P4 PPA for fast image processing
+          ### Key Features
+          - **Over-the-Air Updates**: Wireless firmware updates via web interface or Arduino IDE with automatic rollback protection
+          - **Dual Partition System**: Safe A/B partition scheme ensures system stability during updates
+          - **Persistent Configuration**: Network credentials, MQTT settings, and display preferences are preserved across firmware updates
+          - **Multi-Source Image Display**: Support for up to 10 configurable image sources with automatic cycling
+          - **Home Assistant Integration**: Native MQTT auto-discovery for seamless smart home integration
+          - **Touch Interface**: Responsive single and double-tap gesture controls
+          - **Hardware-Accelerated Processing**: Leverages ESP32-P4 PPA engine for optimized image transformation
           
-          ### 📖 Documentation
+          ### Documentation
           - [README.md](README.md) - Complete setup and features
           - [OTA_GUIDE.md](OTA_GUIDE.md) - Detailed OTA update instructions
           
@@ -593,7 +636,7 @@ jobs:
           - **Supported Displays**: Waveshare ESP32-P4 3.4" & 4.0" DSI touch displays
           ${{ needs.build.outputs.release_type == 'test' && format('- **Branch**: {0}', needs.build.outputs.branch) || '' }}
           
-          ### 📝 What's Changed
-          See commit history for detailed changes in this release.
+          ### Changes in This Release
+          ${{ steps.changelog.outputs.changelog || '_No commits found_' }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

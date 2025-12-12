@@ -20,6 +20,17 @@ Transform your ESP32-P4 display into a all-sky camera viewer with multi-image cy
 - [OTA Updates](OTA_GUIDE.md) - Wireless firmware updates
 - [Troubleshooting](#-troubleshooting) - Common issues and solutions
 
+## 📚 Documentation
+
+Comprehensive developer documentation is available in the [`docs/`](docs/) folder:
+
+- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design, Mermaid diagrams, control flow, memory layout
+- **[API Reference](docs/API_REFERENCE.md)** - Doxygen-style documentation for all core classes
+- **[Hardware & Dependencies](docs/HARDWARE_AND_DEPENDENCIES.md)** - Complete hardware specs, pin assignments, library installation
+- **[Configuration Guide](docs/CONFIGURATION_GUIDE.md)** - Compile-time vs. runtime settings, Web UI guide, MQTT setup
+- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Common issues, crash diagnosis, performance tuning
+- **[ESP-Hosted Slave OTA Guide](docs/ESP-Hosted-Slave-OTA-Update-Guide.md)** - Updating ESP32-C6 co-processor firmware via SDIO from ESP32-P4 host
+
 [![Arduino Compilation](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml/badge.svg?labelColor=1a1a2e)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/actions/workflows/arduino-compile.yml)
 [![Release](https://img.shields.io/github/v/release/chvvkumar/ESP32-P4-Allsky-Display?labelColor=1a1a2e&color=16537e)](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
 ![Flash Usage](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/chvvkumar/ESP32-P4-Allsky-Display/badges/.github/badges/flash-usage.json&query=$.message&label=Flash&labelColor=1a1a2e&color=16537e)
@@ -233,6 +244,7 @@ B : Reboot                I : Status            H/? : Help
 | **Touch not working** | Verify GT911 I2C connections, check debug output |
 | **Images won't load** | Verify URL accessible, check image size, use resized images |
 | **OTA fails** | See [OTA_GUIDE.md](OTA_GUIDE.md) troubleshooting section |
+| **Version mismatch / RPC errors** | If you see:<br>`Version on Host is NEWER than version on co-processor`<br>`RPC requests sent by host may encounter timeout errors`<br>`E (5722) rpc_core: Response not received`<br><br>**Root cause:** ESP-Hosted firmware mismatch between ESP32-P4 host and ESP32-C6 WiFi co-processor. The P4 has no built-in WiFi and relies on RPC (Remote Procedure Call) to the co-processor. Version mismatches cause the host's internal state ("I am connected") to get out of sync with the co-processor reality, leading to "zombie" connections and RPC timeouts.<br><br>**Solution:** ESP32-C6 slave firmware must be the same version or higher than the ESP32-P4 host firmware. Update the co-processor firmware - see [ESP-Hosted Slave OTA Guide](docs/ESP-Hosted-Slave-OTA-Update-Guide.md) |
 
 **Debug Tools:** 
 - Serial monitor (9600 baud) - Comprehensive debug output for all operations

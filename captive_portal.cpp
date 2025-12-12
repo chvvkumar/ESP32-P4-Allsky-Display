@@ -19,7 +19,7 @@ CaptivePortal::CaptivePortal() :
 }
 
 bool CaptivePortal::begin(const char* apSSID, const char* apPassword) {
-    LOG_INFO("[CaptivePortal] Starting WiFi setup captive portal");
+    LOG_DEBUG("[CaptivePortal] Starting WiFi setup captive portal");
     
     // Reset watchdog before potentially long operations
     esp_task_wdt_reset();

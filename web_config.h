@@ -50,6 +50,7 @@ private:
     void handleRemoveImageSource();
     void handleUpdateImageSource();
     void handleClearImageSources();
+    void handleBulkDeleteImageSources();
     void handleNextImage();
     void handleUpdateImageTransform();
     void handleCopyDefaultsToImage();
@@ -58,6 +59,7 @@ private:
     void handleFactoryReset();
     void handleSetLogSeverity();
     void handleClearCrashLogs();
+    void handleGetHealth();
     
 public:
     // WebSocket log broadcasting with severity filtering
