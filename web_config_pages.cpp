@@ -509,8 +509,73 @@ String WebConfig::generateDisplayPage() {
     html += "<div class='form-group'><label for='backlight_resolution'>PWM Resolution (bits)</label>";
     html += "<input type='number' id='backlight_resolution' name='backlight_resolution' class='form-control' value='" + String(configStorage.getBacklightResolution()) + "' min='8' max='16'>";
     html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>Higher resolution provides smoother brightness control. Typical: 10-12 bits</p></div>";
+    html += "</div>";
     
-    html += "<button type='submit' class='btn btn-primary'>💾 Save Brightness Settings</button></div>";
+    // Home Assistant REST Control Card
+    html += "<div class='card' style='border-left:4px solid #38bdf8'><h2> Home Assistant Light Control</h2>";
+    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1.5rem'>Automatically adjust screen brightness using a Home Assistant light sensor entity. Runs on Core 0 (non-blocking).</p>";
+    
+    // Enable Switch
+    html += "<div class='form-group'>";
+    html += "<div style='display:flex;align-items:center;margin-bottom:1rem'>";
+    html += "<input type='checkbox' id='use_ha_rest_control' name='use_ha_rest_control' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px' " + String(configStorage.getUseHARestControl() ? "checked" : "") + ">";
+    html += "<label for='use_ha_rest_control' style='margin-bottom:0;cursor:pointer;font-size:1rem'>Enable Ambient Light Sensor</label>";
+    html += "</div>";
+    html += "<input type='hidden' name='use_ha_rest_control_present' value='1'>";
+    html += "<p style='color:#64748b;font-size:0.85rem;background:rgba(245,158,11,0.1);padding:0.5rem;border-radius:6px;border-left:3px solid #f59e0b'><i class='fas fa-info-circle' style='margin-right:0.5rem'></i>Enabling this will automatically disable MQTT Auto Mode to prevent conflicts.</p>";
+    html += "</div>";
+    
+    // Connection Details Section
+    html += "<div style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<h3 style='color:#38bdf8;font-size:1rem;margin-bottom:1rem;display:flex;align-items:center'><i class='fas fa-plug' style='margin-right:8px'></i>Connection Details</h3>";
+    
+    html += "<div class='form-group'><label for='ha_base_url'>Home Assistant URL</label>";
+    html += "<input type='text' id='ha_base_url' name='ha_base_url' class='form-control' value='" + configStorage.getHABaseUrl() + "' placeholder='http://homeassistant.local:8123'></div>";
+    
+    html += "<div class='form-group'><label for='ha_access_token'>Long-Lived Access Token</label>";
+    html += "<input type='password' id='ha_access_token' name='ha_access_token' class='form-control' placeholder='Leave blank to keep existing token'>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.5rem'>Create at <strong>Profile  Long-Lived Access Tokens</strong></p></div>";
+    
+    html += "<div class='grid' style='grid-template-columns:2fr 1fr'>";
+    html += "<div class='form-group'><label for='ha_light_sensor_entity'>Sensor Entity ID</label>";
+    html += "<input type='text' id='ha_light_sensor_entity' name='ha_light_sensor_entity' class='form-control' value='" + configStorage.getHALightSensorEntity() + "' placeholder='sensor.living_room_illuminance'></div>";
+    html += "<div class='form-group'><label for='ha_poll_interval'>Poll Interval (s)</label>";
+    html += "<input type='number' id='ha_poll_interval' name='ha_poll_interval' class='form-control' value='" + String(configStorage.getHAPollInterval()) + "' min='10' max='3600'></div>";
+    html += "</div></div>";
+    
+    // Brightness Mapping Section
+    html += "<div style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155'>";
+    html += "<h3 style='color:#38bdf8;font-size:1rem;margin-bottom:1rem;display:flex;align-items:center'><i class='fas fa-sliders-h' style='margin-right:8px'></i>Brightness Mapping</h3>";
+    
+    html += "<div class='form-group'><label for='light_sensor_mapping_mode'>Response Curve</label>";
+    html += "<select id='light_sensor_mapping_mode' name='light_sensor_mapping_mode' class='form-control'>";
+    html += "<option value='0'" + String(configStorage.getLightSensorMappingMode() == 0 ? " selected" : "") + ">Linear (Indoor / Low Range)</option>";
+    html += "<option value='1'" + String(configStorage.getLightSensorMappingMode() == 1 ? " selected" : "") + ">Logarithmic (Outdoor / High Range)</option>";
+    html += "<option value='2'" + String(configStorage.getLightSensorMappingMode() == 2 ? " selected" : "") + ">Threshold Switch (Day/Night)</option>";
+    html += "</select>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.5rem'>Use <strong>Logarithmic</strong> for sensors that go from 0 to 100,000+ lux (outdoors). Use <strong>Linear</strong> for dark rooms (0-500 lux).</p></div>";
+    
+    html += "<div class='grid'>";
+    // Sensor Range
+    html += "<div><label style='color:#94a3b8;font-size:0.9rem'>Sensor Range (Lux)</label>";
+    html += "<div style='display:flex;gap:0.5rem;align-items:center'>";
+    html += "<input type='number' id='light_sensor_min_lux' name='light_sensor_min_lux' class='form-control' value='" + String(configStorage.getLightSensorMinLux(), 1) + "' min='0' max='10000' step='0.1' placeholder='Min'>";
+    html += "<span style='color:#64748b'>to</span>";
+    html += "<input type='number' id='light_sensor_max_lux' name='light_sensor_max_lux' class='form-control' value='" + String(configStorage.getLightSensorMaxLux(), 1) + "' min='0' max='100000' step='0.1' placeholder='Max'>";
+    html += "</div></div>";
+    // Display Range
+    html += "<div><label style='color:#94a3b8;font-size:0.9rem'>Display Brightness (%)</label>";
+    html += "<div style='display:flex;gap:0.5rem;align-items:center'>";
+    html += "<input type='number' id='display_min_brightness' name='display_min_brightness' class='form-control' value='" + String(configStorage.getDisplayMinBrightness()) + "' min='0' max='100' placeholder='Min'>";
+    html += "<span style='color:#64748b'>to</span>";
+    html += "<input type='number' id='display_max_brightness' name='display_max_brightness' class='form-control' value='" + String(configStorage.getDisplayMaxBrightness()) + "' min='0' max='100' placeholder='Max'>";
+    html += "</div></div>";
+    html += "</div></div></div>";
+    
+    // Save button card
+    html += "<div class='card'>";
+    html += "<button type='submit' class='btn btn-primary'>💾 Save Display Settings</button>";
+    html += "</div>";
     
     html += "</form></div></div>";
     return html;
@@ -1386,3 +1451,5 @@ String WebConfig::generateConsolePage() {
     
     return html;
 }
+
+

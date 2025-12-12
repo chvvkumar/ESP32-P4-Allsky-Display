@@ -86,6 +86,18 @@ void ConfigStorage::setDefaults() {
   config.ntpServer = "pool.ntp.org";
   config.timezone = "CST6CDT,M3.2.0,M11.1.0"; // US Central Time by default
   config.ntpEnabled = true;
+  
+  // Home Assistant REST Control defaults
+  config.haBaseUrl = "http://homeassistant.local:8123";
+  config.haAccessToken = "";
+  config.haLightSensorEntity = "sensor.foyer_night_light_illuminance";
+  config.lightSensorMinLux = 0.0;
+  config.lightSensorMaxLux = 300.0;
+  config.displayMinBrightness = 10;
+  config.displayMaxBrightness = 100;
+  config.useHaRestControl = false;
+  config.haPollInterval = 60;  // 60 seconds
+  config.lightSensorMappingMode = 1;  // Logarithmic by default
 
   _dirty = false; // Defaults are set, but not considered a "change" from saved
                   // state until modified
@@ -193,6 +205,18 @@ void ConfigStorage::loadConfig() {
     config.ntpServer = preferences.getString("ntp_server", config.ntpServer);
     config.timezone = preferences.getString("timezone", config.timezone);
     config.ntpEnabled = preferences.getBool("ntp_enabled", config.ntpEnabled);
+    
+    // Load Home Assistant REST Control settings
+    config.haBaseUrl = preferences.getString("ha_base_url", config.haBaseUrl);
+    config.haAccessToken = preferences.getString("ha_token", config.haAccessToken);
+    config.haLightSensorEntity = preferences.getString("ha_sensor_ent", config.haLightSensorEntity);
+    config.lightSensorMinLux = preferences.getFloat("sensor_min_lux", config.lightSensorMinLux);
+    config.lightSensorMaxLux = preferences.getFloat("sensor_max_lux", config.lightSensorMaxLux);
+    config.displayMinBrightness = preferences.getInt("disp_min_br", config.displayMinBrightness);
+    config.displayMaxBrightness = preferences.getInt("disp_max_br", config.displayMaxBrightness);
+    config.useHaRestControl = preferences.getBool("use_ha_rest", config.useHaRestControl);
+    config.haPollInterval = preferences.getULong("ha_poll_int", config.haPollInterval);
+    config.lightSensorMappingMode = preferences.getInt("sensor_map_mode", config.lightSensorMappingMode);
   }
 
   preferences.end();
@@ -277,6 +301,18 @@ void ConfigStorage::saveConfig() {
   preferences.putString("ntp_server", config.ntpServer);
   preferences.putString("timezone", config.timezone);
   preferences.putBool("ntp_enabled", config.ntpEnabled);
+  
+  // Save Home Assistant REST Control settings
+  preferences.putString("ha_base_url", config.haBaseUrl);
+  preferences.putString("ha_token", config.haAccessToken);
+  preferences.putString("ha_sensor_ent", config.haLightSensorEntity);
+  preferences.putFloat("sensor_min_lux", config.lightSensorMinLux);
+  preferences.putFloat("sensor_max_lux", config.lightSensorMaxLux);
+  preferences.putInt("disp_min_br", config.displayMinBrightness);
+  preferences.putInt("disp_max_br", config.displayMaxBrightness);
+  preferences.putBool("use_ha_rest", config.useHaRestControl);
+  preferences.putULong("ha_poll_int", config.haPollInterval);
+  preferences.putInt("sensor_map_mode", config.lightSensorMappingMode);
 
   preferences.end();
 }
@@ -862,3 +898,86 @@ void ConfigStorage::setNTPEnabled(bool enabled) {
 }
 
 bool ConfigStorage::getNTPEnabled() { return config.ntpEnabled; }
+
+// Home Assistant REST Control setters
+void ConfigStorage::setHABaseUrl(const String &url) {
+  if (config.haBaseUrl != url) {
+    config.haBaseUrl = url;
+    _dirty = true;
+  }
+}
+
+void ConfigStorage::setHAAccessToken(const String &token) {
+  if (config.haAccessToken != token) {
+    config.haAccessToken = token;
+    _dirty = true;
+  }
+}
+
+void ConfigStorage::setHALightSensorEntity(const String &entity) {
+  if (config.haLightSensorEntity != entity) {
+    config.haLightSensorEntity = entity;
+    _dirty = true;
+  }
+}
+
+void ConfigStorage::setLightSensorMinLux(float minLux) {
+  if (config.lightSensorMinLux != minLux) {
+    config.lightSensorMinLux = minLux;
+    _dirty = true;
+  }
+}
+
+void ConfigStorage::setLightSensorMaxLux(float maxLux) {
+  if (config.lightSensorMaxLux != maxLux) {
+    config.lightSensorMaxLux = maxLux;
+    _dirty = true;
+  }
+}
+
+void ConfigStorage::setDisplayMinBrightness(int minBrightness) {
+  if (config.displayMinBrightness != minBrightness) {
+    config.displayMinBrightness = minBrightness;
+    _dirty = true;
+  }
+}
+
+void ConfigStorage::setDisplayMaxBrightness(int maxBrightness) {
+  if (config.displayMaxBrightness != maxBrightness) {
+    config.displayMaxBrightness = maxBrightness;
+    _dirty = true;
+  }
+}
+
+void ConfigStorage::setUseHARestControl(bool enabled) {
+  if (config.useHaRestControl != enabled) {
+    config.useHaRestControl = enabled;
+    _dirty = true;
+  }
+}
+
+void ConfigStorage::setHAPollInterval(unsigned long interval) {
+  if (config.haPollInterval != interval) {
+    config.haPollInterval = interval;
+    _dirty = true;
+  }
+}
+
+void ConfigStorage::setLightSensorMappingMode(int mode) {
+  if (config.lightSensorMappingMode != mode) {
+    config.lightSensorMappingMode = mode;
+    _dirty = true;
+  }
+}
+
+// Home Assistant REST Control getters
+String ConfigStorage::getHABaseUrl() { return config.haBaseUrl; }
+String ConfigStorage::getHAAccessToken() { return config.haAccessToken; }
+String ConfigStorage::getHALightSensorEntity() { return config.haLightSensorEntity; }
+float ConfigStorage::getLightSensorMinLux() { return config.lightSensorMinLux; }
+float ConfigStorage::getLightSensorMaxLux() { return config.lightSensorMaxLux; }
+int ConfigStorage::getDisplayMinBrightness() { return config.displayMinBrightness; }
+int ConfigStorage::getDisplayMaxBrightness() { return config.displayMaxBrightness; }
+bool ConfigStorage::getUseHARestControl() { return config.useHaRestControl; }
+unsigned long ConfigStorage::getHAPollInterval() { return config.haPollInterval; }
+int ConfigStorage::getLightSensorMappingMode() { return config.lightSensorMappingMode; }

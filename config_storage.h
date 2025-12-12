@@ -141,6 +141,30 @@ public:
     String getTimezone();
     void setNTPEnabled(bool enabled);
     bool getNTPEnabled();
+    
+    // Home Assistant REST Control setters
+    void setHABaseUrl(const String& url);
+    void setHAAccessToken(const String& token);
+    void setHALightSensorEntity(const String& entity);
+    void setLightSensorMinLux(float minLux);
+    void setLightSensorMaxLux(float maxLux);
+    void setDisplayMinBrightness(int minBrightness);
+    void setDisplayMaxBrightness(int maxBrightness);
+    void setUseHARestControl(bool enabled);
+    void setHAPollInterval(unsigned long interval);
+    void setLightSensorMappingMode(int mode);
+    
+    // Home Assistant REST Control getters
+    String getHABaseUrl();
+    String getHAAccessToken();
+    String getHALightSensorEntity();
+    float getLightSensorMinLux();
+    float getLightSensorMaxLux();
+    int getDisplayMinBrightness();
+    int getDisplayMaxBrightness();
+    bool getUseHARestControl();
+    unsigned long getHAPollInterval();
+    int getLightSensorMappingMode();
 
 private:
     Preferences preferences;
@@ -215,6 +239,18 @@ private:
         String ntpServer;
         String timezone;  // POSIX timezone string
         bool ntpEnabled;
+        
+        // Home Assistant REST Control settings
+        String haBaseUrl;
+        String haAccessToken;
+        String haLightSensorEntity;
+        float lightSensorMinLux;
+        float lightSensorMaxLux;
+        int displayMinBrightness;
+        int displayMaxBrightness;
+        bool useHaRestControl;
+        unsigned long haPollInterval;
+        int lightSensorMappingMode;  // 0=Linear, 1=Logarithmic, 2=Threshold
     } config;
     
     void setDefaults();

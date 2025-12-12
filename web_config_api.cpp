@@ -137,7 +137,23 @@ void WebConfig::handleSaveConfig() {
         else if (name == "critical_heap_threshold") configStorage.setCriticalHeapThreshold(value.toInt());
         else if (name == "critical_psram_threshold") configStorage.setCriticalPSRAMThreshold(value.toInt());
         
-        // Time settings
+        
+        // Home Assistant REST Control settings
+        else if (name == "ha_base_url") configStorage.setHABaseUrl(value);
+        else if (name == "ha_access_token") {
+            // Only update token if not empty (allows saving other settings without re-entering token)
+            if (!value.isEmpty()) {
+                LOG_DEBUG("[WebAPI] HA Access Token updated (value hidden for security)");
+                configStorage.setHAAccessToken(value);
+            }
+        }
+        else if (name == "ha_light_sensor_entity") configStorage.setHALightSensorEntity(value);
+        else if (name == "light_sensor_min_lux") configStorage.setLightSensorMinLux(value.toFloat());
+        else if (name == "light_sensor_max_lux") configStorage.setLightSensorMaxLux(value.toFloat());
+        else if (name == "display_min_brightness") configStorage.setDisplayMinBrightness(value.toInt());
+        else if (name == "display_max_brightness") configStorage.setDisplayMaxBrightness(value.toInt());
+        else if (name == "ha_poll_interval") configStorage.setHAPollInterval(value.toInt());
+        else if (name == "light_sensor_mapping_mode") configStorage.setLightSensorMappingMode(value.toInt());        // Time settings
         else if (name == "ntp_server") configStorage.setNTPServer(value);
         else if (name == "timezone") configStorage.setTimezone(value);
     }
@@ -153,6 +169,18 @@ void WebConfig::handleSaveConfig() {
     bool hasBrightnessAutoMode = server->hasArg("brightness_auto_mode") || server->hasArg("brightness_auto_mode_present");
     bool hasHADiscovery = server->hasArg("ha_discovery_enabled") || server->hasArg("ha_discovery_enabled_present");
     bool hasNTPEnabled = server->hasArg("ntp_enabled") || server->hasArg("ntp_enabled_present");
+    bool hasUseHARestControl = server->hasArg("use_ha_rest_control") || server->hasArg("use_ha_rest_control_present");
+    
+    // Logic: If enabling HA REST control, automatically disable MQTT auto mode to prevent conflicts
+    if (hasUseHARestControl) {
+        bool enableHARestControl = server->hasArg("use_ha_rest_control");
+        configStorage.setUseHARestControl(enableHARestControl);
+        
+        if (enableHARestControl) {
+            LOG_INFO("[WebAPI] HA REST Control enabled - auto-disabling MQTT brightness control");
+            configStorage.setBrightnessAutoMode(false);
+        }
+    }
     
     // Only update checkboxes that are explicitly present in this request
     bool wasCycling = configStorage.getCyclingEnabled();
@@ -176,7 +204,13 @@ void WebConfig::handleSaveConfig() {
     }
     
     if (hasBrightnessAutoMode) {
-        configStorage.setBrightnessAutoMode(server->hasArg("brightness_auto_mode"));
+        bool enableMQTTBrightness = server->hasArg("brightness_auto_mode");
+        configStorage.setBrightnessAutoMode(enableMQTTBrightness);
+        
+        if (enableMQTTBrightness) {
+            LOG_INFO("[WebAPI] MQTT brightness control enabled - auto-disabling HA REST Control");
+            configStorage.setUseHARestControl(false);
+        }
     }
     
     if (hasHADiscovery) {
@@ -837,3 +871,4 @@ void WebConfig::handleGetHealth() {
     
     sendResponse(200, "application/json", json);
 }
+
