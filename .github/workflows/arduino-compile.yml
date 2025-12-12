@@ -195,10 +195,23 @@ jobs:
           arduino-cli lib install "WebSockets@2.7.1"
         fi
         
+        # Check and install ArduinoJson 7.2.1
+        if [ -d ~/Arduino/libraries/ArduinoJson ]; then
+          INSTALLED_VERSION=$(arduino-cli lib list | grep "ArduinoJson" | awk '{print $2}')
+          if [ "$INSTALLED_VERSION" = "7.2.1" ]; then
+            echo "✅ ArduinoJson 7.2.1 already installed (cached)"
+          else
+            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 7.2.1"
+            arduino-cli lib install "ArduinoJson@7.2.1"
+          fi
+        else
+          arduino-cli lib install "ArduinoJson@7.2.1"
+        fi
+        
         # Verify installed versions
         echo ""
         echo "📦 Final installed library versions:"
-        arduino-cli lib list | grep -E "GFX Library|JPEGDEC|PubSubClient|ElegantOTA|WebSockets"
+        arduino-cli lib list | grep -E "GFX Library|JPEGDEC|PubSubClient|ElegantOTA|WebSockets|ArduinoJson"
     
     - name: Patch GFX Library for ESP32-P4 compatibility
       run: |
