@@ -262,7 +262,7 @@ String WebConfig::generateImagePage() {
     html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1.5rem'>Configure single image display or cycle through multiple sources</p>";
     
     // Radio button mode selector
-    html += "<form id='imageForm'>";
+    html += "<form id='imageForm' novalidate>";
     html += "<div style='display:flex;gap:1.25rem;margin-bottom:1.5rem;padding:1rem;background:#1e293b;border-radius:8px'>";
     bool isCycling = configStorage.getCyclingEnabled();
     
@@ -282,8 +282,46 @@ String WebConfig::generateImagePage() {
     // Single Image Section (conditional visibility)
     html += "<div id='singleImageSection' style='display:" + String(isCycling ? "none" : "block") + "'>";
     html += "<div style='padding:1rem;background:#0f172a;border-radius:8px;border:1px solid #334155'>";
+    
+    // URL field with transform button on the right
     html += "<div class='form-group'><label for='image_url'>Image URL</label>";
-    html += "<input type='url' id='image_url' name='image_url' class='form-control' value='" + escapeHtml(configStorage.getImageURL()) + "' placeholder='http://allsky.local/image.jpg'></div>";
+    html += "<div style='display:flex;align-items:center;gap:0.75rem'>";
+    html += "<input type='url' id='image_url' name='image_url' class='form-control' style='flex:1' value='" + escapeHtml(configStorage.getImageURL()) + "' placeholder='http://allsky.local/image.jpg'>";
+    html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(0)' title='Image Transformations'><i class='fas fa-sliders-h'></i></button>";
+    html += "</div></div>";
+    
+    // Collapsible transform section for single image (uses index 0)
+    html += "<div id='transformSection_0' style='display:none;margin-top:0.75rem;padding:1rem;background:#0f172a;border-radius:4px;border-left:3px solid #3b82f6'>";
+    html += "<p style='color:#64748b;font-size:0.85rem;margin-bottom:0.75rem'><i class='fas fa-info-circle' style='margin-right:6px'></i>Image transformation settings (scale, offset, rotation)</p>";
+    html += "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.75rem'>";
+    
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale X</label>";
+    html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleX(0)) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(0, \"scaleX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
+    
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale Y</label>";
+    html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleY(0)) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(0, \"scaleY\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
+    
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Offset X</label>";
+    html += "<input type='number' class='form-control' value='" + String(configStorage.getImageOffsetX(0)) + "' onchange='updateImageTransform(0, \"offsetX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
+    
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Offset Y</label>";
+    html += "<input type='number' class='form-control' value='" + String(configStorage.getImageOffsetY(0)) + "' onchange='updateImageTransform(0, \"offsetY\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
+    
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Rotation</label>";
+    html += "<select class='form-control' onchange='updateImageTransform(0, \"rotation\", this)' style='font-size:0.9rem;padding:0.5rem'>";
+    int singleRotation = (int)configStorage.getImageRotation(0);
+    html += String("<option value='0'") + (singleRotation == 0 ? " selected" : "") + ">0°</option>";
+    html += String("<option value='90'") + (singleRotation == 90 ? " selected" : "") + ">90°</option>";
+    html += String("<option value='180'") + (singleRotation == 180 ? " selected" : "") + ">180°</option>";
+    html += String("<option value='270'") + (singleRotation == 270 ? " selected" : "") + ">270°</option>";
+    html += "</select></div>";
+    
+    html += "</div>";
+    html += "<div style='margin-top:0.75rem;display:flex;gap:0.5rem'>";
+    html += "<button type='button' class='btn btn-secondary' onclick='copyDefaultsToImage(0, this)' style='font-size:0.85rem;padding:0.5rem 0.75rem'>Reset to Defaults</button>";
+    html += "<button type='button' class='btn btn-secondary' onclick='applyTransformImmediately(0, this)' style='font-size:0.85rem;padding:0.5rem 0.75rem'>Apply Now</button>";
+    html += "</div></div>";
+    
     html += "<div class='form-group'><label for='update_interval'>";
     html += "<span style='color:#38bdf8'>Download Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
     html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'" + String(isCycling ? " disabled" : "") + ">";
@@ -374,10 +412,10 @@ String WebConfig::generateImagePage() {
         html += "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.75rem'>";
         
         html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale X</label>";
-        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleX(i)) + "' step='0.1' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(" + String(i) + ", \"scaleX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
+        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleX(i)) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(" + String(i) + ", \"scaleX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
         
         html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale Y</label>";
-        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleY(i)) + "' step='0.1' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(" + String(i) + ", \"scaleY\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
+        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleY(i)) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(" + String(i) + ", \"scaleY\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
         
         html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Offset X</label>";
         html += "<input type='number' class='form-control' value='" + String(configStorage.getImageOffsetX(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
@@ -418,9 +456,9 @@ String WebConfig::generateImagePage() {
     html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1rem'>These settings apply to all images unless overridden per-source</p>";
     html += "<div class='grid'>";
     html += "<div class='form-group'><label for='default_scale_x'>Scale X</label>";
-    html += "<input type='number' id='default_scale_x' name='default_scale_x' class='form-control' value='" + String(configStorage.getDefaultScaleX()) + "' step='0.1' min='0.1' max='" + String(MAX_SCALE, 1) + "'></div>";
+    html += "<input type='number' id='default_scale_x' name='default_scale_x' class='form-control' value='" + String(configStorage.getDefaultScaleX()) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "'></div>";
     html += "<div class='form-group'><label for='default_scale_y'>Scale Y</label>";
-    html += "<input type='number' id='default_scale_y' name='default_scale_y' class='form-control' value='" + String(configStorage.getDefaultScaleY()) + "' step='0.1' min='0.1' max='" + String(MAX_SCALE, 1) + "'></div>";
+    html += "<input type='number' id='default_scale_y' name='default_scale_y' class='form-control' value='" + String(configStorage.getDefaultScaleY()) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "'></div>";
     html += "<div class='form-group'><label for='default_offset_x'>Offset X</label>";
     html += "<input type='number' id='default_offset_x' name='default_offset_x' class='form-control' value='" + String(configStorage.getDefaultOffsetX()) + "'></div>";
     html += "<div class='form-group'><label for='default_offset_y'>Offset Y</label>";

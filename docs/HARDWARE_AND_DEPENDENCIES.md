@@ -236,7 +236,7 @@ static const lcd_init_cmd_t vendor_specific_init_default[] = {
 ### Arduino_GFX (Display)
 
 **Repository:** https://github.com/moononournation/Arduino_GFX  
-**Version:** Latest (tested with 1.4.7)
+**Version:** 1.6.0 (required)
 
 **Purpose:** Hardware-accelerated graphics library with MIPI DSI support for ESP32-P4.
 
@@ -248,8 +248,9 @@ static const lcd_init_cmd_t vendor_specific_init_default[] = {
 
 **Installation:**
 ```
-Arduino IDE: Library Manager → Search "GFX Library for Arduino" by moononournation
-PlatformIO: lib_deps = moononournation/GFX Library for Arduino @ ^1.4.7
+Arduino IDE: Library Manager → Search "GFX Library for Arduino" by moononournation → Install 1.6.0
+Arduino CLI: arduino-cli lib install "GFX Library for Arduino@1.6.0"
+PlatformIO: lib_deps = moononournation/GFX Library for Arduino @ 1.6.0
 ```
 
 **Critical Patch Required:**
@@ -274,7 +275,7 @@ The library has a type mismatch with ESP-IDF 5.5+. You must apply this patch to 
 ### JPEGDEC (Image Decoding)
 
 **Repository:** https://github.com/bitbank2/JPEGDEC  
-**Version:** Latest (tested with 1.4.1)
+**Version:** 1.8.2 (required)
 
 **Purpose:** Fast JPEG decoder optimized for embedded systems.
 
@@ -291,8 +292,9 @@ The library has a type mismatch with ESP-IDF 5.5+. You must apply this patch to 
 
 **Installation:**
 ```
-Arduino IDE: Library Manager → Search "JPEGDEC" by bitbank2
-PlatformIO: lib_deps = bitbank2/JPEGDEC @ ^1.4.1
+Arduino IDE: Library Manager → Search "JPEGDEC" by bitbank2 → Install 1.8.2
+Arduino CLI: arduino-cli lib install "JPEGDEC@1.8.2"
+PlatformIO: lib_deps = bitbank2/JPEGDEC @ 1.8.2
 ```
 
 **Usage Pattern:**
@@ -309,7 +311,7 @@ if (jpeg.openRAM(imageBuffer, size, JPEGDrawCallback)) {
 ### PubSubClient (MQTT)
 
 **Repository:** https://github.com/knolleary/pubsubclient  
-**Version:** 2.8 or later
+**Version:** 2.8 (required)
 
 **Purpose:** MQTT client for Home Assistant integration.
 
@@ -322,8 +324,9 @@ if (jpeg.openRAM(imageBuffer, size, JPEGDrawCallback)) {
 
 **Installation:**
 ```
-Arduino IDE: Library Manager → Search "PubSubClient" by Nick O'Leary
-PlatformIO: lib_deps = knolleary/PubSubClient @ ^2.8
+Arduino IDE: Library Manager → Search "PubSubClient" by Nick O'Leary → Install 2.8
+Arduino CLI: arduino-cli lib install "PubSubClient@2.8"
+PlatformIO: lib_deps = knolleary/PubSubClient @ 2.8
 ```
 
 ### WebServer (ESP32 Core)
@@ -344,14 +347,15 @@ PlatformIO: lib_deps = knolleary/PubSubClient @ ^2.8
 ### WebSocketsServer
 
 **Repository:** https://github.com/Links2004/arduinoWebSockets  
-**Version:** 2.4.1 or later
+**Version:** 2.7.1 (required)
 
 **Purpose:** WebSocket support for real-time console.
 
 **Installation:**
 ```
-Arduino IDE: Library Manager → Search "WebSockets" by Markus Sattler
-PlatformIO: lib_deps = links2004/WebSockets @ ^2.4.1
+Arduino IDE: Library Manager → Search "WebSockets" by Markus Sattler → Install 2.7.1
+Arduino CLI: arduino-cli lib install "WebSockets@2.7.1"
+PlatformIO: lib_deps = links2004/WebSockets @ 2.7.1
 ```
 
 **Usage:**
@@ -364,7 +368,7 @@ wsServer.loop();  // Call in main loop
 ### ElegantOTA
 
 **Repository:** https://github.com/ayushsharma82/ElegantOTA  
-**Version:** 3.1.0 or later
+**Version:** 3.1.7 (required)
 
 **Purpose:** Web-based OTA firmware upload UI.
 
@@ -376,8 +380,9 @@ wsServer.loop();  // Call in main loop
 
 **Installation:**
 ```
-Arduino IDE: Library Manager → Search "ElegantOTA" by Ayush Sharma
-PlatformIO: lib_deps = ayushsharma82/ElegantOTA @ ^3.1.0
+Arduino IDE: Library Manager → Search "ElegantOTA" by Ayush Sharma → Install 3.1.7
+Arduino CLI: arduino-cli lib install "ElegantOTA@3.1.7"
+PlatformIO: lib_deps = ayushsharma82/ElegantOTA @ 3.1.7
 ```
 
 **Integration:**
@@ -389,6 +394,36 @@ ElegantOTA.begin(&webServer);  // Adds /update endpoint
 
 // In loop()
 ElegantOTA.loop();
+```
+
+### ArduinoJson
+
+**Repository:** https://github.com/bblanchon/ArduinoJson  
+**Version:** 7.2.1 (required)
+
+**Purpose:** JSON parsing and serialization for API responses and configuration.
+
+**Features:**
+- Efficient memory management
+- Support for nested objects and arrays
+- Zero-copy string handling
+- Type-safe API
+
+**Installation:**
+```
+Arduino IDE: Library Manager → Search "ArduinoJson" by Benoit Blanchon → Install 7.2.1
+Arduino CLI: arduino-cli lib install "ArduinoJson@7.2.1"
+PlatformIO: lib_deps = bblanchon/ArduinoJson @ 7.2.1
+```
+
+**Usage:**
+```cpp
+#include <ArduinoJson.h>
+
+JsonDocument doc;
+doc["status"] = "success";
+doc["value"] = 42;
+serializeJson(doc, Serial);
 ```
 
 ### HTTPClient (ESP32 Core)
@@ -435,14 +470,20 @@ prefs.end();
      ```
      https://espressif.github.io/arduino-esp32/package_esp32_index.json
      ```
-   - Tools → Board → Boards Manager → Search "esp32" → Install "esp32 by Espressif Systems"
+   - Tools → Board → Boards Manager → Search "esp32" → Install "esp32 by Espressif Systems" **version 3.3.4**
 
 2. **Select Board:**
    - Tools → Board → ESP32 Arduino → ESP32-P4-Function-EV-Board
 
 3. **Install Libraries:**
    - Sketch → Include Library → Manage Libraries
-   - Search and install each required library listed above
+   - Search and install the following libraries with exact versions:
+     - **GFX Library for Arduino** by moononournation → **1.6.0**
+     - **JPEGDEC** by bitbank2 → **1.8.2**
+     - **PubSubClient** by Nick O'Leary → **2.8**
+     - **WebSockets** by Markus Sattler → **2.7.1**
+     - **ElegantOTA** by Ayush Sharma → **3.1.7**
+     - **ArduinoJson** by Benoit Blanchon → **7.2.1**
 
 4. **Apply GFX Library Patch:**
    - Manually edit `Arduino_ESP32DSIPanel.cpp` as described above
@@ -475,11 +516,12 @@ monitor_speed = 9600
 
 ; Dependencies
 lib_deps = 
-    moononournation/GFX Library for Arduino @ ^1.4.7
-    bitbank2/JPEGDEC @ ^1.4.1
-    knolleary/PubSubClient @ ^2.8
-    links2004/WebSockets @ ^2.4.1
-    ayushsharma82/ElegantOTA @ ^3.1.0
+    moononournation/GFX Library for Arduino @ 1.6.0
+    bitbank2/JPEGDEC @ 1.8.2
+    knolleary/PubSubClient @ 2.8
+    links2004/WebSockets @ 2.7.1
+    ayushsharma82/ElegantOTA @ 3.1.7
+    bblanchon/ArduinoJson @ 7.2.1
 
 ; Extra scripts for library patching
 extra_scripts = pre:scripts/patch_arduino_gfx.py

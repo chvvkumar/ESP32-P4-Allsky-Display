@@ -12,7 +12,7 @@
 
 - **Arduino IDE** 1.8.19+ or **PlatformIO**
 - **ESP32 Arduino Core** 3.3.4+
-- **Required Libraries:** GFX Library for Arduino (1.6.3+), JPEGDEC (1.8.4+), PubSubClient (2.8.0+), ElegantOTA
+- **Required Libraries:** GFX Library for Arduino (1.6.0), JPEGDEC (1.8.2), PubSubClient (2.8), WebSockets (2.7.1), ElegantOTA (3.1.7), ArduinoJson (7.2.1)
 
 ### Library Installation & Patching
 
@@ -21,10 +21,12 @@
 Via Arduino IDE Library Manager:
 1. Sketch → Include Library → Manage Libraries
 2. Search and install:
-   - GFX Library for Arduino (1.6.0+)
-   - JPEGDEC (1.8.2+)
-   - PubSubClient (2.8.0+)
-   - ElegantOTA (3.1.7+)
+   - GFX Library for Arduino (1.6.0)
+   - JPEGDEC (1.8.2)
+   - PubSubClient (2.8)
+   - WebSockets (2.7.1)
+   - ElegantOTA (3.1.7)
+   - ArduinoJson (7.2.1)
 
 **⚠️ Critical: Patch GFX Library for ESP32-P4 Compatibility**
 
