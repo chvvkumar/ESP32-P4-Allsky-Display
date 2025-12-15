@@ -19,27 +19,17 @@ String WebConfig::generateMainPage() {
     html += "<div class='stat-value'>" + formatUptime(millis()) + "</div>";
     html += "<div class='stat-label'>Uptime</div></div>";
     
-    html += "<div class='stat-card'><i class='fas fa-image stat-icon'></i>";
-    html += "<div class='stat-value'>" + String(configStorage.getCyclingEnabled() ? "Cycling" : "Single") + "</div>";
-    html += "<div class='stat-label'>Image Mode</div></div>";
+    html += "<div class='stat-card'><i class='fas fa-list stat-icon'></i>";
+    html += "<div class='stat-value'>" + String(configStorage.getCurrentImageIndex() + 1) + "/" + String(configStorage.getImageSourceCount()) + "</div>";
+    html += "<div class='stat-label'>Active Source</div></div>";
     
-    if (configStorage.getCyclingEnabled()) {
-        html += "<div class='stat-card'><i class='fas fa-list stat-icon'></i>";
-        html += "<div class='stat-value'>" + String(configStorage.getCurrentImageIndex() + 1) + "/" + String(configStorage.getImageSourceCount()) + "</div>";
-        html += "<div class='stat-label'>Active Source</div></div>";
-        
-        html += "<div class='stat-card'><i class='fas fa-sync-alt stat-icon'></i>";
-        html += "<div class='stat-value'>" + String(configStorage.getCycleInterval() / 1000) + "s</div>";
-        html += "<div class='stat-label'>Cycle Time</div></div>";
-    } else {
-        html += "<div class='stat-card'><i class='fas fa-download stat-icon'></i>";
-        html += "<div class='stat-value'>" + String(configStorage.getUpdateInterval() / 1000 / 60) + "m</div>";
-        html += "<div class='stat-label'>Update Interval</div></div>";
-        
-        html += "<div class='stat-card'><i class='fas fa-sun stat-icon'></i>";
-        html += "<div class='stat-value'>" + String(displayManager.getBrightness()) + "%</div>";
-        html += "<div class='stat-label'>Brightness</div></div>";
-    }
+    html += "<div class='stat-card'><i class='fas fa-sync-alt stat-icon'></i>";
+    html += "<div class='stat-value'>" + String(configStorage.getCycleInterval() / 1000) + "s</div>";
+    html += "<div class='stat-label'>Display Time</div></div>";
+    
+    html += "<div class='stat-card'><i class='fas fa-download stat-icon'></i>";
+    html += "<div class='stat-value'>" + String(configStorage.getUpdateInterval() / 1000 / 60) + "m</div>";
+    html += "<div class='stat-label'>Refresh Interval</div></div>";
     html += "</div>";
     
     // Row 1: Connection Status - Network & MQTT
@@ -254,128 +244,54 @@ String WebConfig::generateMQTTPage() {
 
 String WebConfig::generateImagePage() {
     String html;
-    html.reserve(8000);  // Pre-allocate ~8KB for image config page
+    html.reserve(8000);  // Pre-allocate ~8KB
     html = "<div class='main'><div class='container'>";
     
-    // Mode Selection Card
+    // Header
     html += "<div class='card'><h2>🖼️ Image Configuration</h2>";
-    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1.5rem'>Configure single image display or cycle through multiple sources</p>";
+    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1.5rem'>Manage image sources, display timing, and transformations.</p>";
     
-    // Radio button mode selector
     html += "<form id='imageForm' novalidate>";
-    html += "<div style='display:flex;gap:1.25rem;margin-bottom:1.5rem;padding:1rem;background:#1e293b;border-radius:8px'>";
-    bool isCycling = configStorage.getCyclingEnabled();
     
-    // Hidden checkbox for form submission (updated by toggleImageMode)
-    html += "<input type='checkbox' id='cycling_enabled' name='cycling_enabled' style='display:none'" + String(isCycling ? " checked" : "") + ">";
+    // 1. Force Cycling Enabled (Unified Mode)
+    // We send these hidden fields so the backend always saves the device in "Cycling" mode
+    html += "<input type='hidden' name='cycling_enabled' value='on'>";
     html += "<input type='hidden' name='cycling_enabled_present' value='1'>";
     
-    html += "<label style='display:flex;align-items:center;cursor:pointer;flex:1;padding:0.75rem;background:" + String(isCycling ? "#0f172a" : "#1e3a8a") + ";border:2px solid " + String(isCycling ? "#334155" : "#3b82f6") + ";border-radius:6px;transition:all 0.3s'>";
-    html += "<input type='radio' name='mode' value='single' style='width:20px;height:20px;margin-right:0.75rem;accent-color:#3b82f6'" + String(isCycling ? "" : " checked") + " onchange='toggleImageMode(false)'>";
-    html += "<div><strong style='color:#e2e8f0;font-size:1rem'>Single Image</strong><br><span style='color:#94a3b8;font-size:0.85rem'>One URL, periodic updates</span></div></label>";
+    // 2. Unified Timing & Order Section
+    html += "<div style='padding:1rem;background:#0f172a;border-radius:8px;border:1px solid #334155;margin-bottom:1.5rem'>";
+    html += "<h3 style='color:#38bdf8;margin:0 0 1rem 0;font-size:1rem'>⏱️ Timing & Order</h3>";
+    html += "<div class='grid'>";
     
-    html += "<label style='display:flex;align-items:center;cursor:pointer;flex:1;padding:0.75rem;background:" + String(isCycling ? "#1e3a8a" : "#0f172a") + ";border:2px solid " + String(isCycling ? "#3b82f6" : "#334155") + ";border-radius:6px;transition:all 0.3s'>";
-    html += "<input type='radio' name='mode' value='multi' style='width:20px;height:20px;margin-right:0.75rem;accent-color:#3b82f6'" + String(isCycling ? " checked" : "") + " onchange='toggleImageMode(true)'>";
-    html += "<div><strong style='color:#e2e8f0;font-size:1rem'>Multi-Image Cycling</strong><br><span style='color:#94a3b8;font-size:0.85rem'>Rotate through multiple sources</span></div></label>";
-    html += "</div>";
-    
-    // Single Image Section (conditional visibility)
-    html += "<div id='singleImageSection' style='display:" + String(isCycling ? "none" : "block") + "'>";
-    html += "<div style='padding:1rem;background:#0f172a;border-radius:8px;border:1px solid #334155'>";
-    
-    // URL field with transform button on the right
-    html += "<div class='form-group'><label for='image_url'>Image URL</label>";
-    html += "<div style='display:flex;align-items:center;gap:0.75rem'>";
-    html += "<input type='url' id='image_url' name='image_url' class='form-control' style='flex:1' value='" + escapeHtml(configStorage.getImageURL()) + "' placeholder='http://allsky.local/image.jpg'>";
-    html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(0)' title='Image Transformations'><i class='fas fa-sliders-h'></i></button>";
-    html += "</div></div>";
-    
-    // Collapsible transform section for single image (uses index 0)
-    html += "<div id='transformSection_0' style='display:none;margin-top:0.75rem;padding:1rem;background:#0f172a;border-radius:4px;border-left:3px solid #3b82f6'>";
-    html += "<p style='color:#64748b;font-size:0.85rem;margin-bottom:0.75rem'><i class='fas fa-info-circle' style='margin-right:6px'></i>Image transformation settings (scale, offset, rotation)</p>";
-    html += "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.75rem'>";
-    
-    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale X</label>";
-    html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleX(0)) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(0, \"scaleX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
-    
-    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale Y</label>";
-    html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleY(0)) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(0, \"scaleY\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
-    
-    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Offset X</label>";
-    html += "<input type='number' class='form-control' value='" + String(configStorage.getImageOffsetX(0)) + "' onchange='updateImageTransform(0, \"offsetX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
-    
-    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Offset Y</label>";
-    html += "<input type='number' class='form-control' value='" + String(configStorage.getImageOffsetY(0)) + "' onchange='updateImageTransform(0, \"offsetY\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
-    
-    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Rotation</label>";
-    html += "<select class='form-control' onchange='updateImageTransform(0, \"rotation\", this)' style='font-size:0.9rem;padding:0.5rem'>";
-    int singleRotation = (int)configStorage.getImageRotation(0);
-    html += String("<option value='0'") + (singleRotation == 0 ? " selected" : "") + ">0°</option>";
-    html += String("<option value='90'") + (singleRotation == 90 ? " selected" : "") + ">90°</option>";
-    html += String("<option value='180'") + (singleRotation == 180 ? " selected" : "") + ">180°</option>";
-    html += String("<option value='270'") + (singleRotation == 270 ? " selected" : "") + ">270°</option>";
-    html += "</select></div>";
-    
-    html += "</div>";
-    html += "<div style='margin-top:0.75rem;display:flex;gap:0.5rem'>";
-    html += "<button type='button' class='btn btn-secondary' onclick='copyDefaultsToImage(0, this)' style='font-size:0.85rem;padding:0.5rem 0.75rem'>Reset to Defaults</button>";
-    html += "<button type='button' class='btn btn-secondary' onclick='applyTransformImmediately(0, this)' style='font-size:0.85rem;padding:0.5rem 0.75rem'>Apply Now</button>";
-    html += "</div></div>";
-    
-    html += "<div class='form-group'><label for='update_interval'>";
-    html += "<span style='color:#38bdf8'>Download Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
-    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'" + String(isCycling ? " disabled" : "") + ">";
-    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
-    html += "<i class='fas fa-download' style='margin-right:6px;color:#0ea5e9'></i>";
-    html += "How often to <strong>re-download</strong> this URL to fetch updated content (e.g., latest AllSky image)";
-    html += "</p></div></div></div>";
-    
-    // Multi-Image Section (conditional visibility)
-    html += "<div id='multiImageSection' style='display:" + String(isCycling ? "block" : "none") + "'>";
-    html += "<div style='padding:1rem;background:#0f172a;border-radius:8px;border:1px solid #334155'>";
-    
-    // Explanation card for multi-image timing
-    html += "<div style='padding:1rem;background:#0f172a;border-radius:8px;border-left:4px solid #3b82f6;margin-bottom:1rem'>";
-    html += "<h4 style='color:#38bdf8;margin-top:0;display:flex;align-items:center;gap:0.5rem'>";
-    html += "<i class='fas fa-info-circle'></i>Understanding Multi-Image Timing</h4>";
-    html += "<div style='display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:0.75rem'>";
-    html += "<div style='padding:0.75rem;background:#1e293b;border-radius:6px;border:1px solid #334155'>";
-    html += "<div style='display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem'>";
-    html += "<i class='fas fa-sync-alt' style='color:#22c55e;font-size:1.2rem'></i>";
-    html += "<strong style='color:#e2e8f0'>Display Cycle</strong></div>";
-    html += "<p style='color:#94a3b8;font-size:0.85rem;margin:0'>Controls how fast you <strong>rotate</strong> through sources</p>";
-    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.5rem;font-style:italic'>Example: Show each image for 30 seconds</p></div>";
-    html += "<div style='padding:0.75rem;background:#1e293b;border-radius:6px;border:1px solid #334155'>";
-    html += "<div style='display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem'>";
-    html += "<i class='fas fa-download' style='color:#0ea5e9;font-size:1.2rem'></i>";
-    html += "<strong style='color:#e2e8f0'>Download Refresh</strong></div>";
-    html += "<p style='color:#94a3b8;font-size:0.85rem;margin:0'>Controls how often you <strong>fetch new</strong> content</p>";
-    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.5rem;font-style:italic'>Example: Re-download every 2 minutes</p></div>";
-    html += "</div></div>";
-    
-    // Cycling controls
-    html += "<div class='grid' style='margin-bottom:1rem'>";
+    // Display Duration (Cycle Interval)
     html += "<div class='form-group'><label for='cycle_interval'>";
-    html += "<span style='color:#38bdf8'>Display Cycle Interval</span> <span style='color:#94a3b8'>(seconds)</span></label>";
+    html += "<span style='color:#38bdf8'>Display Duration</span> <span style='color:#94a3b8'>(seconds)</span></label>";
     html += "<input type='number' id='cycle_interval' name='cycle_interval' class='form-control' value='" + String(configStorage.getCycleInterval() / 1000) + "' min='10' max='3600'>";
     html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
-    html += "<i class='fas fa-sync-alt' style='margin-right:6px;color:#22c55e'></i>";
-    html += "How long to <strong>display</strong> each image before switching to the next source";
+    html += "<i class='fas fa-clock' style='margin-right:6px;color:#22c55e'></i>";
+    html += "Time to display each image before switching (if >1 image)";
     html += "</p></div>";
-    html += "<div class='form-group'><label for='cycle_update_interval'>";
-    html += "<span style='color:#38bdf8'>Download Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
-    html += "<input type='number' id='cycle_update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'" + String(isCycling ? "" : " disabled") + ">";
+    
+    // Refresh Interval (Update Interval)
+    html += "<div class='form-group'><label for='update_interval'>";
+    html += "<span style='color:#38bdf8'>Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
+    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
     html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
     html += "<i class='fas fa-download' style='margin-right:6px;color:#0ea5e9'></i>";
-    html += "How often to <strong>re-download</strong> each source URL to fetch updated content";
-    html += "</p></div></div>";
+    html += "How often to re-download images from their URLs";
+    html += "</p></div>";
     
-    html += "<div class='form-group'><div style='display:flex;align-items:center'>";
+    html += "</div>"; // End Grid
+    
+    // Random Order Checkbox
+    html += "<div class='form-group' style='margin-bottom:0'><div style='display:flex;align-items:center'>";
     html += "<input type='checkbox' id='random_order' name='random_order' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'" + String(configStorage.getRandomOrder() ? " checked" : "") + ">";
     html += "<label for='random_order' style='margin-bottom:0;cursor:pointer'>Randomize display order</label>";
     html += "<input type='hidden' name='random_order_present' value='1'></div></div>";
     
-    // Image sources list
+    html += "</div>"; // End Timing Section
+    
+    // 3. Image Sources List
     int sourceCount = configStorage.getImageSourceCount();
     html += "<div style='display:flex;justify-content:space-between;align-items:center;margin-top:1.5rem;margin-bottom:1rem'>";
     html += "<h3 style='color:#38bdf8;margin:0'>Image Sources</h3>";
@@ -393,11 +309,21 @@ String WebConfig::generateImagePage() {
     
     for (int i = 0; i < sourceCount; i++) {
         String url = configStorage.getImageSource(i);
-        html += "<div class='image-source-item' style='margin-bottom:1rem;padding:1rem;border:1px solid #334155;border-radius:6px;background:#1e293b'>";
+        bool isEnabled = configStorage.isImageEnabled(i);
+        html += "<div class='image-source-item' style='margin-bottom:1rem;padding:1rem;border:1px solid #334155;border-radius:6px;background:#1e293b" + String(isEnabled ? "" : ";opacity:0.6") + "'>";
         html += "<div style='display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem'>";
         if (sourceCount > 1) {
             html += "<input type='checkbox' class='image-select-checkbox' data-index='" + String(i) + "' style='width:18px;height:18px;accent-color:#0ea5e9;cursor:pointer' onchange='updateBulkDeleteButton()'>";
         }
+        
+        // Enable/Disable toggle button
+        html += "<button type='button' class='btn " + String(isEnabled ? "btn-success" : "btn-secondary") + "' ";
+        html += "onclick='toggleImageEnabled(" + String(i) + ", this)' ";
+        html += "title='" + String(isEnabled ? "Enabled - Click to disable" : "Disabled - Click to enable") + "' ";
+        html += "style='min-width:40px;padding:0.4rem 0.6rem;font-size:0.85rem'>";
+        html += "<i class='fas fa-" + String(isEnabled ? "eye" : "eye-slash") + "'></i>";
+        html += "</button>";
+        
         html += "<span style='font-weight:bold;color:#38bdf8;min-width:2rem'>" + String(i + 1) + ".</span>";
         html += "<input type='url' class='form-control' id='imageUrl_" + String(i) + "' style='flex:1' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this)'>";
         html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(" + String(i) + ")'><i class='fas fa-sliders-h'></i></button>";
@@ -442,18 +368,18 @@ String WebConfig::generateImagePage() {
     }
     
     html += "</div>";
-    html += "<button type='button' class='btn btn-success' onclick='addImageSource(this)' style='margin-top:1rem'><i class='fas fa-plus' style='margin-right:6px'></i>Add Image Source</button>";
-    if (sourceCount > 1) {
-        html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources(this)' style='margin-left:0.75rem;margin-top:1rem'><i class='fas fa-broom' style='margin-right:6px'></i>Clear All</button>";
+    html += "<div style='display:flex;gap:0.75rem;margin-top:1rem'>";
+    html += "<button type='button' class='btn btn-success' onclick='addImageSource(this)'><i class='fas fa-plus' style='margin-right:6px'></i>Add Image Source</button>";
+    if (sourceCount > 0) {
+        html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources(this)'><i class='fas fa-broom' style='margin-right:6px'></i>Clear All</button>";
     }
+    html += "</div>";
     
-    html += "</div></div>";
+    html += "</div>"; // Close Image Config Card
     
-    html += "</div>"; // Close card
-    
-    // Default Transformations (always visible)
+    // 4. Default Transformations Card (Global Defaults)
     html += "<div class='card' style='margin-top:1.5rem'><h2>🎨 Default Transformations</h2>";
-    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1rem'>These settings apply to all images unless overridden per-source</p>";
+    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1rem'>These settings apply to all new images or those without overrides.</p>";
     html += "<div class='grid'>";
     html += "<div class='form-group'><label for='default_scale_x'>Scale X</label>";
     html += "<input type='number' id='default_scale_x' name='default_scale_x' class='form-control' value='" + String(configStorage.getDefaultScaleX()) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "'></div>";
@@ -473,27 +399,12 @@ String WebConfig::generateImagePage() {
     html += "</select></div>";
     html += "</div></div>";
     
-    // Save button
+    // Save Button
     html += "<div class='card' style='margin-top:1.5rem'>";
     html += "<button type='submit' class='btn btn-primary'><i class='fas fa-save' style='margin-right:6px'></i>Save All Settings</button>";
     html += "</div>";
     
     html += "</form></div></div>";
-    
-    // JavaScript for mode toggle
-    html += "<script>";
-    html += "function toggleImageMode(enableCycling) {";
-    html += "  document.getElementById('singleImageSection').style.display = enableCycling ? 'none' : 'block';";
-    html += "  document.getElementById('multiImageSection').style.display = enableCycling ? 'block' : 'none';";
-    html += "  document.getElementById('cycling_enabled').checked = enableCycling;";
-    html += "  ";
-    html += "  // Disable hidden section's update_interval to prevent duplicate form submission";
-    html += "  const singleUpdateInterval = document.getElementById('update_interval');";
-    html += "  const multiUpdateInterval = document.getElementById('cycle_update_interval');";
-    html += "  if (singleUpdateInterval) singleUpdateInterval.disabled = enableCycling;";
-    html += "  if (multiUpdateInterval) multiUpdateInterval.disabled = !enableCycling;";
-    html += "}";
-    html += "</script>";
     
     return html;
 }

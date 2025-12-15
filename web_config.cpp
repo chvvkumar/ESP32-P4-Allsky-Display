@@ -51,6 +51,7 @@ bool WebConfig::begin(int port) {
         server->on("/api/update-transform", HTTP_POST, [this]() { handleUpdateImageTransform(); });
         server->on("/api/copy-defaults", HTTP_POST, [this]() { handleCopyDefaultsToImage(); });
         server->on("/api/apply-transform", HTTP_POST, [this]() { handleApplyTransform(); });
+        server->on("/api/toggle-image-enabled", HTTP_POST, [this]() { handleToggleImageEnabled(); });
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
         server->on("/api/set-log-severity", HTTP_POST, [this]() { handleSetLogSeverity(); });

@@ -64,6 +64,8 @@ public:
     void addImageSource(const String& url);
     bool removeImageSource(int index);
     void clearImageSources();
+    void setImageEnabled(int index, bool enabled);
+    bool isImageEnabled(int index);
     
     // Individual parameter getters
     String getWiFiSSID();
@@ -210,6 +212,7 @@ private:
         int currentImageIndex;
         int imageSourceCount;
         String imageSources[10];  // Array of image source URLs (MAX_IMAGE_SOURCES)
+        bool imageEnabled[10];  // Array of enabled/disabled states for each image source
         
         // Per-image transformation settings
         ImageTransform imageTransforms[10];  // Transformation settings for each image source

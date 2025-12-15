@@ -55,6 +55,7 @@ private:
     void handleUpdateImageTransform();
     void handleCopyDefaultsToImage();
     void handleApplyTransform();
+    void handleToggleImageEnabled();
     void handleRestart();
     void handleFactoryReset();
     void handleSetLogSeverity();

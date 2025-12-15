@@ -576,6 +576,68 @@ void WebConfig::handleApplyTransform() {
     }
 }
 
+void WebConfig::handleToggleImageEnabled() {
+    if (!server->hasArg("index")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
+        return;
+    }
+    
+    int index = server->arg("index").toInt();
+    
+    if (index < 0 || index >= configStorage.getImageSourceCount()) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+        return;
+    }
+    
+    // Toggle the enabled state
+    bool currentState = configStorage.isImageEnabled(index);
+    bool newState = !currentState;
+    int currentImageIndex = configStorage.getCurrentImageIndex();
+    
+    configStorage.setImageEnabled(index, newState);
+    configStorage.saveConfig();
+    
+    LOG_INFO_F("[WebAPI] Image #%d %s\n", index + 1, newState ? "enabled" : "disabled");
+    LOG_INFO_F("[WebAPI] Current image index: %d, toggling index: %d\n", currentImageIndex, index);
+    
+    // Handle automatic image switching
+    bool shouldSwitchImage = false;
+    
+    if (!newState && index == currentImageIndex) {
+        // Disabling the currently displayed image - switch to next enabled image
+        LOG_INFO("[WebAPI] Currently displayed image disabled, switching to next image");
+        extern void advanceToNextImage();
+        advanceToNextImage();
+        shouldSwitchImage = true;
+    } else if (newState && index != currentImageIndex) {
+        // Enabling a different image - switch to it immediately
+        LOG_INFO_F("[WebAPI] Switching to newly enabled image #%d\n", index + 1);
+        LOG_INFO_F("[WebAPI] Setting current index from %d to %d\n", currentImageIndex, index);
+        configStorage.setCurrentImageIndex(index);
+        configStorage.saveConfig();
+        
+        // Update the global currentImageIndex variable used by getCurrentImageURL()
+        extern int currentImageIndex;
+        currentImageIndex = index;
+        
+        extern void updateCurrentImageTransformSettings();
+        updateCurrentImageTransformSettings();
+        shouldSwitchImage = true;
+        LOG_INFO("[WebAPI] Image switch flag set, will download new image");
+    }
+    
+    // Trigger image download and display if we switched
+    if (shouldSwitchImage) {
+        LOG_INFO("[WebAPI] Triggering downloadAndDisplayImage()");
+        extern void downloadAndDisplayImage();
+        downloadAndDisplayImage();
+    }
+    
+    String response = "{\"status\":\"success\",\"enabled\":" + String(newState ? "true" : "false") + 
+                      ",\"switched\":" + String(shouldSwitchImage ? "true" : "false") + "}";
+    sendResponse(200, "application/json", response);
+}
+
 void WebConfig::handleFactoryReset() {
     LOG_WARNING("[WebAPI] Factory reset requested via web interface");
     configStorage.resetToDefaults();
@@ -781,6 +843,7 @@ void WebConfig::handleGetAllInfo() {
             json += "{";
             json += "\"index\":" + String(i) + ",";
             json += "\"url\":\"" + escapeJson(configStorage.getImageSource(i)) + "\",";
+            json += "\"enabled\":" + String(configStorage.isImageEnabled(i) ? "true" : "false") + ",";
             json += "\"active\":" + String(i == configStorage.getCurrentImageIndex() ? "true" : "false") + ",";
             json += "\"scale_x\":" + String(configStorage.getImageScaleX(i), 4) + ",";
             json += "\"scale_y\":" + String(configStorage.getImageScaleY(i), 4) + ",";

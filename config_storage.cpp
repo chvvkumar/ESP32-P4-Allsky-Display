@@ -48,10 +48,12 @@ void ConfigStorage::setDefaults() {
   // Initialize with default image sources from config.cpp
   for (int i = 0; i < DEFAULT_IMAGE_SOURCE_COUNT && i < 10; i++) {
     config.imageSources[i] = String(DEFAULT_IMAGE_SOURCES[i]);
+    config.imageEnabled[i] = true;  // All images enabled by default
   }
   // Clear remaining slots
   for (int i = DEFAULT_IMAGE_SOURCE_COUNT; i < 10; i++) {
     config.imageSources[i] = "";
+    config.imageEnabled[i] = true;  // Default to enabled
   }
 
   // Initialize per-image transformation settings with global defaults
@@ -151,6 +153,9 @@ void ConfigStorage::loadConfig() {
       String key = "img_src_" + String(i);
       config.imageSources[i] =
           preferences.getString(key.c_str(), config.imageSources[i]);
+      String enabledKey = "img_en_" + String(i);
+      config.imageEnabled[i] =
+          preferences.getBool(enabledKey.c_str(), true);  // Default to enabled
     }
 
     // Load per-image transform settings
@@ -261,6 +266,8 @@ void ConfigStorage::saveConfig() {
   for (int i = 0; i < 10; i++) {
     String key = "img_src_" + String(i);
     preferences.putString(key.c_str(), config.imageSources[i]);
+    String enabledKey = "img_en_" + String(i);
+    preferences.putBool(enabledKey.c_str(), config.imageEnabled[i]);
   }
 
   // Save per-image transform settings
@@ -613,6 +620,7 @@ void ConfigStorage::setImageSource(int index, const String &url) {
 void ConfigStorage::addImageSource(const String &url) {
   if (config.imageSourceCount < 10) {
     config.imageSources[config.imageSourceCount] = url;
+    config.imageEnabled[config.imageSourceCount] = true;  // New images enabled by default
     config.imageSourceCount++;
     _dirty = true;
   }
@@ -640,10 +648,12 @@ bool ConfigStorage::removeImageSource(int index) {
   for (int i = index; i < config.imageSourceCount - 1; i++) {
     config.imageSources[i] = config.imageSources[i + 1];
     config.imageTransforms[i] = config.imageTransforms[i + 1];
+    config.imageEnabled[i] = config.imageEnabled[i + 1];  // Shift enabled states too
   }
 
   // Clear the last source and reset its transform to defaults
   config.imageSources[config.imageSourceCount - 1] = "";
+  config.imageEnabled[config.imageSourceCount - 1] = true;  // Reset to enabled
   config.imageTransforms[config.imageSourceCount - 1].scaleX = DEFAULT_SCALE_X;
   config.imageTransforms[config.imageSourceCount - 1].scaleY = DEFAULT_SCALE_Y;
   config.imageTransforms[config.imageSourceCount - 1].offsetX =
@@ -668,6 +678,7 @@ bool ConfigStorage::removeImageSource(int index) {
 void ConfigStorage::clearImageSources() {
   for (int i = 0; i < 10; i++) {
     config.imageSources[i] = "";
+    config.imageEnabled[i] = true;  // Reset to enabled
   }
   config.imageSourceCount = 0;
   config.currentImageIndex = 0;
@@ -968,6 +979,22 @@ void ConfigStorage::setLightSensorMappingMode(int mode) {
     config.lightSensorMappingMode = mode;
     _dirty = true;
   }
+}
+
+void ConfigStorage::setImageEnabled(int index, bool enabled) {
+  if (index >= 0 && index < 10) {
+    if (config.imageEnabled[index] != enabled) {
+      config.imageEnabled[index] = enabled;
+      _dirty = true;
+    }
+  }
+}
+
+bool ConfigStorage::isImageEnabled(int index) {
+  if (index >= 0 && index < 10) {
+    return config.imageEnabled[index];
+  }
+  return true;  // Default to enabled if index out of range
 }
 
 // Home Assistant REST Control getters
