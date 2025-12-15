@@ -76,7 +76,7 @@ ESP32-P4 firmware for displaying all-sky camera images with hardware-accelerated
 - **PSRAM**: Enabled (required, fail compilation if missing)
 - **Partition**: 13MB app / 7MB data (32MB) - uses `partitions.csv` in sketch folder
 - **Flash**: 32MB, 921600 baud
-- **Apply GFX patch manually** (see `MANUAL_SETUP.md` lines 30-65)
+- **Apply GFX patch manually** (see `docs/02_installation.md` - Compiling From Source section)
 
 ### Git Build Info
 - `build_info.h` auto-generated with `GIT_COMMIT_HASH`, `GIT_BRANCH`, `BUILD_DATE` - committed as template, updated at compile time
@@ -126,7 +126,7 @@ ESP32-P4 firmware for displaying all-sky camera images with hardware-accelerated
 - **Backtrace preserved**: Crash address saved to NVS + RTC memory
 - **Decode with addr2line**: `xtensa-esp32-elf-addr2line -e build/*.elf -f -p <address>`
 - **Web view**: `/console` shows crash section from `crashLogger.dumpCrashLogs()`
-- See `CRASH_DIAGNOSIS.md` for full workflow
+- See `docs/06_troubleshooting.md` for full crash diagnosis workflow
 
 ### Memory Issues
 - **Check PSRAM first**: `ESP.getFreePsram()` should be >100KB (critical threshold)
@@ -147,8 +147,8 @@ ESP32-P4 firmware for displaying all-sky camera images with hardware-accelerated
 - `partitions.csv`: Flash layout (OTA0/OTA1 must be equal size for bootloader)
 - `build_info.h`: Git metadata (auto-generated, shows in web UI version)
 - `compile-and-upload.ps1`: One-stop compile/upload/patch script
-- `MANUAL_SETUP.md`: Library patching, hardcoded WiFi, advanced config
-- `OTA_GUIDE.md`: ElegantOTA/ArduinoOTA workflows, safety mechanisms
+- `docs/02_installation.md`: Installation, library patching, hardcoded WiFi, advanced config
+- `docs/05_ota_updates.md`: ElegantOTA/ArduinoOTA workflows, safety mechanisms
 
 ## Testing Checklist
 - [ ] Compile with PSRAM enabled (compilation fails otherwise)
