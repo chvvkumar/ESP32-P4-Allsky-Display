@@ -749,8 +749,9 @@ jobs:
           
           # Make API request to Google Gemini
           echo "🔍 Making API request to Google Gemini..."
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=$GOOGLE_API_KEY" \
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent" \
             -H "Content-Type: application/json" \
+            -H "X-goog-api-key: $GOOGLE_API_KEY" \
             -d "$(jq -n \
               --arg prompt "$PROMPT" \
               '{
