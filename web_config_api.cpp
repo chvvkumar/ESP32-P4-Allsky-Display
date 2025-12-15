@@ -126,6 +126,10 @@ void WebConfig::handleSaveConfig() {
             unsigned long interval = value.toInt() * 1000UL;
             configStorage.setCycleInterval(interval);
         }
+        else if (name == "default_image_duration") {
+            unsigned long duration = value.toInt();
+            configStorage.setDefaultImageDuration(duration);
+        }
         
         // Advanced settings
         else if (name == "update_interval") {
@@ -474,6 +478,12 @@ void WebConfig::handleUpdateImageTransform() {
         String property = server->arg("property");
         String value = server->arg("value");
         
+        // Pause cycling when user is actively editing transforms
+        extern bool cyclingPausedForEditing;
+        extern unsigned long lastEditActivity;
+        cyclingPausedForEditing = true;
+        lastEditActivity = millis();
+        
         LOG_DEBUG_F("[WebAPI] Transform update: image %d, %s = %s\n", index, property.c_str(), value.c_str());
         
         bool success = true;
@@ -547,6 +557,12 @@ void WebConfig::handleCopyDefaultsToImage() {
 void WebConfig::handleApplyTransform() {
     if (server->hasArg("index")) {
         int index = server->arg("index").toInt();
+        
+        // Keep editing session active when applying transforms
+        extern bool cyclingPausedForEditing;
+        extern unsigned long lastEditActivity;
+        cyclingPausedForEditing = true;
+        lastEditActivity = millis();
         int currentIndex = configStorage.getCurrentImageIndex();
         
         if (index != currentIndex) {
@@ -574,6 +590,143 @@ void WebConfig::handleApplyTransform() {
     } else {
         sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
     }
+}
+
+void WebConfig::handleToggleImageEnabled() {
+    if (!server->hasArg("index")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
+        return;
+    }
+    
+    int index = server->arg("index").toInt();
+    
+    if (index < 0 || index >= configStorage.getImageSourceCount()) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+        return;
+    }
+    
+    // Toggle the enabled state
+    bool currentState = configStorage.isImageEnabled(index);
+    bool newState = !currentState;
+    int currentImageIndex = configStorage.getCurrentImageIndex();
+    
+    configStorage.setImageEnabled(index, newState);
+    configStorage.saveConfig();
+    
+    LOG_INFO_F("[WebAPI] Image #%d %s\n", index + 1, newState ? "enabled" : "disabled");
+    LOG_INFO_F("[WebAPI] Current image index: %d, toggling index: %d\n", currentImageIndex, index);
+    
+    // Handle automatic image switching
+    bool shouldSwitchImage = false;
+    
+    if (!newState && index == currentImageIndex) {
+        // Disabling the currently displayed image - switch to next enabled image
+        LOG_INFO("[WebAPI] Currently displayed image disabled, switching to next image");
+        extern void advanceToNextImage();
+        advanceToNextImage();
+        shouldSwitchImage = true;
+    } else if (newState && index != currentImageIndex) {
+        // Enabling a different image - switch to it immediately
+        LOG_INFO_F("[WebAPI] Switching to newly enabled image #%d\n", index + 1);
+        LOG_INFO_F("[WebAPI] Setting current index from %d to %d\n", currentImageIndex, index);
+        configStorage.setCurrentImageIndex(index);
+        configStorage.saveConfig();
+        
+        // Update the global currentImageIndex variable used by getCurrentImageURL()
+        extern int currentImageIndex;
+        currentImageIndex = index;
+        
+        extern void updateCurrentImageTransformSettings();
+        updateCurrentImageTransformSettings();
+        shouldSwitchImage = true;
+        LOG_INFO("[WebAPI] Image switch flag set, will download new image");
+    }
+    
+    // Trigger image download and display if we switched
+    if (shouldSwitchImage) {
+        LOG_INFO("[WebAPI] Triggering downloadAndDisplayImage()");
+        extern void downloadAndDisplayImage();
+        downloadAndDisplayImage();
+    }
+    
+    String response = "{\"status\":\"success\",\"enabled\":" + String(newState ? "true" : "false") + 
+                      ",\"switched\":" + String(shouldSwitchImage ? "true" : "false") + "}";
+    sendResponse(200, "application/json", response);
+}
+
+void WebConfig::handleSelectImage() {
+    if (!server->hasArg("index")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
+        return;
+    }
+    
+    int index = server->arg("index").toInt();
+    
+    if (index < 0 || index >= configStorage.getImageSourceCount()) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+        return;
+    }
+    
+    LOG_INFO_F("[WebAPI] Selecting image #%d for editing\n", index + 1);
+    
+    // Pause automatic cycling when user selects an image for editing
+    extern bool cyclingPausedForEditing;
+    extern unsigned long lastEditActivity;
+    cyclingPausedForEditing = true;
+    lastEditActivity = millis();
+    LOG_INFO("[WebAPI] Cycling paused for editing (will resume after 30s of inactivity)");
+    
+    // Update both the global and config storage index
+    configStorage.setCurrentImageIndex(index);
+    configStorage.saveConfig();
+    
+    extern int currentImageIndex;
+    currentImageIndex = index;
+    
+    // Update transform settings and switch to this image
+    extern void updateCurrentImageTransformSettings();
+    updateCurrentImageTransformSettings();
+    
+    extern void downloadAndDisplayImage();
+    downloadAndDisplayImage();
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"index\":" + String(index) + "}");
+}
+
+void WebConfig::handleClearEditingState() {
+    LOG_INFO("[WebAPI] Clearing editing state - resuming auto-cycling");
+    
+    // Clear the editing pause flag
+    extern bool cyclingPausedForEditing;
+    cyclingPausedForEditing = false;
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\"}");
+}
+
+void WebConfig::handleUpdateImageDuration() {
+    if (!server->hasArg("index") || !server->hasArg("duration")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing parameters\"}");
+        return;
+    }
+    
+    int index = server->arg("index").toInt();
+    unsigned long duration = server->arg("duration").toInt();
+    
+    if (index < 0 || index >= configStorage.getImageSourceCount()) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+        return;
+    }
+    
+    if (duration < 5 || duration > 3600) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Duration must be between 5 and 3600 seconds\"}");
+        return;
+    }
+    
+    LOG_INFO_F("[WebAPI] Updating image #%d duration to %lu seconds\n", index + 1, duration);
+    configStorage.setImageDuration(index, duration);
+    configStorage.saveConfig();
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\"}");
 }
 
 void WebConfig::handleFactoryReset() {
@@ -771,6 +924,7 @@ void WebConfig::handleGetAllInfo() {
     
     if (configStorage.getCyclingEnabled()) {
         json += "\"cycle_interval\":" + String(configStorage.getCycleInterval()) + ",";
+        json += "\"default_image_duration\":" + String(configStorage.getDefaultImageDuration()) + ",";
         json += "\"random_order\":" + String(configStorage.getRandomOrder() ? "true" : "false") + ",";
         json += "\"current_index\":" + String(configStorage.getCurrentImageIndex()) + ",";
         json += "\"source_count\":" + String(configStorage.getImageSourceCount()) + ",";
@@ -781,6 +935,7 @@ void WebConfig::handleGetAllInfo() {
             json += "{";
             json += "\"index\":" + String(i) + ",";
             json += "\"url\":\"" + escapeJson(configStorage.getImageSource(i)) + "\",";
+            json += "\"enabled\":" + String(configStorage.isImageEnabled(i) ? "true" : "false") + ",";
             json += "\"active\":" + String(i == configStorage.getCurrentImageIndex() ? "true" : "false") + ",";
             json += "\"scale_x\":" + String(configStorage.getImageScaleX(i), 4) + ",";
             json += "\"scale_y\":" + String(configStorage.getImageScaleY(i), 4) + ",";
