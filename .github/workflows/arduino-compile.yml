@@ -767,17 +767,30 @@ jobs:
                 temperature: 0.3
               }')")
           
+          # Debug: Show response status (without exposing full response)
+          if [ -z "$RESPONSE" ]; then
+            echo "❌ Error: Empty response from OpenAI API"
+            exit 1
+          fi
+          
           # Check for errors
           if echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
-            echo "Error from OpenAI API:"
+            echo "❌ Error from OpenAI API:"
             echo "$RESPONSE" | jq '.error'
+            exit 1
+          fi
+          
+          # Check if response has choices
+          if ! echo "$RESPONSE" | jq -e '.choices[0].message.content' > /dev/null 2>&1; then
+            echo "❌ Error: Invalid response structure from OpenAI"
+            echo "Response keys: $(echo "$RESPONSE" | jq -r 'keys | @json')"
             exit 1
           fi
           
           # Extract summary
           echo "$RESPONSE" | jq -r '.choices[0].message.content' > summary.md
           
-          echo "Summary generated successfully"
+          echo "✅ Summary generated successfully"
 
       - name: Post summary to PR
         uses: actions/github-script@v7
