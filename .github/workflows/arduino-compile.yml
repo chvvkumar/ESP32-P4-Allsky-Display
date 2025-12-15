@@ -11,7 +11,7 @@ on:
       - 'LICENSE'
   pull_request:
     types: [opened, synchronize, reopened]
-    branches: [ main, snd, dev ]
+    branches: [ main, snd, Dev ]
     paths-ignore:
       - '**.md'
       - 'docs/**'
