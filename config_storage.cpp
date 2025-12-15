@@ -49,11 +49,13 @@ void ConfigStorage::setDefaults() {
   for (int i = 0; i < DEFAULT_IMAGE_SOURCE_COUNT && i < 10; i++) {
     config.imageSources[i] = String(DEFAULT_IMAGE_SOURCES[i]);
     config.imageEnabled[i] = true;  // All images enabled by default
+    config.imageDurations[i] = 30;  // Default 30 seconds per image
   }
   // Clear remaining slots
   for (int i = DEFAULT_IMAGE_SOURCE_COUNT; i < 10; i++) {
     config.imageSources[i] = "";
     config.imageEnabled[i] = true;  // Default to enabled
+    config.imageDurations[i] = 30;  // Default 30 seconds per image
   }
 
   // Initialize per-image transformation settings with global defaults
@@ -72,6 +74,7 @@ void ConfigStorage::setDefaults() {
   config.defaultOffsetX = DEFAULT_OFFSET_X;
   config.defaultOffsetY = DEFAULT_OFFSET_Y;
   config.defaultRotation = DEFAULT_ROTATION;
+  config.defaultImageDuration = 30; // Default 30 seconds for new images
   config.backlightFreq = BACKLIGHT_FREQ;
   config.backlightResolution = BACKLIGHT_RESOLUTION;
 
@@ -156,6 +159,9 @@ void ConfigStorage::loadConfig() {
       String enabledKey = "img_en_" + String(i);
       config.imageEnabled[i] =
           preferences.getBool(enabledKey.c_str(), true);  // Default to enabled
+      String durationKey = "img_dur_" + String(i);
+      config.imageDurations[i] =
+          preferences.getULong(durationKey.c_str(), 30);  // Default to 30 seconds
     }
 
     // Load per-image transform settings
@@ -187,6 +193,8 @@ void ConfigStorage::loadConfig() {
         preferences.getInt("def_off_y", config.defaultOffsetY);
     config.defaultRotation =
         preferences.getFloat("def_rot", config.defaultRotation);
+    config.defaultImageDuration =
+        preferences.getULong("def_img_dur", config.defaultImageDuration);
     config.backlightFreq = preferences.getInt("bl_freq", config.backlightFreq);
     config.backlightResolution =
         preferences.getInt("bl_res", config.backlightResolution);
@@ -268,6 +276,8 @@ void ConfigStorage::saveConfig() {
     preferences.putString(key.c_str(), config.imageSources[i]);
     String enabledKey = "img_en_" + String(i);
     preferences.putBool(enabledKey.c_str(), config.imageEnabled[i]);
+    String durationKey = "img_dur_" + String(i);
+    preferences.putULong(durationKey.c_str(), config.imageDurations[i]);
   }
 
   // Save per-image transform settings
@@ -292,6 +302,7 @@ void ConfigStorage::saveConfig() {
   preferences.putInt("def_off_x", config.defaultOffsetX);
   preferences.putInt("def_off_y", config.defaultOffsetY);
   preferences.putFloat("def_rot", config.defaultRotation);
+  preferences.putULong("def_img_dur", config.defaultImageDuration);
   preferences.putInt("bl_freq", config.backlightFreq);
   preferences.putInt("bl_res", config.backlightResolution);
 
@@ -485,6 +496,12 @@ void ConfigStorage::setDefaultRotation(float rotation) {
     _dirty = true;
   }
 }
+void ConfigStorage::setDefaultImageDuration(unsigned long duration) {
+  if (config.defaultImageDuration != duration) {
+    config.defaultImageDuration = duration;
+    _dirty = true;
+  }
+}
 void ConfigStorage::setBacklightFreq(int freq) {
   if (config.backlightFreq != freq) {
     config.backlightFreq = freq;
@@ -553,6 +570,7 @@ float ConfigStorage::getDefaultScaleY() { return config.defaultScaleY; }
 int ConfigStorage::getDefaultOffsetX() { return config.defaultOffsetX; }
 int ConfigStorage::getDefaultOffsetY() { return config.defaultOffsetY; }
 float ConfigStorage::getDefaultRotation() { return config.defaultRotation; }
+unsigned long ConfigStorage::getDefaultImageDuration() { return config.defaultImageDuration; }
 int ConfigStorage::getBacklightFreq() { return config.backlightFreq; }
 int ConfigStorage::getBacklightResolution() {
   return config.backlightResolution;
@@ -621,6 +639,7 @@ void ConfigStorage::addImageSource(const String &url) {
   if (config.imageSourceCount < 10) {
     config.imageSources[config.imageSourceCount] = url;
     config.imageEnabled[config.imageSourceCount] = true;  // New images enabled by default
+    config.imageDurations[config.imageSourceCount] = config.defaultImageDuration;  // Use default duration for new images
     config.imageSourceCount++;
     _dirty = true;
   }
@@ -995,6 +1014,22 @@ bool ConfigStorage::isImageEnabled(int index) {
     return config.imageEnabled[index];
   }
   return true;  // Default to enabled if index out of range
+}
+
+void ConfigStorage::setImageDuration(int index, unsigned long duration) {
+  if (index >= 0 && index < 10) {
+    if (config.imageDurations[index] != duration) {
+      config.imageDurations[index] = duration;
+      _dirty = true;
+    }
+  }
+}
+
+unsigned long ConfigStorage::getImageDuration(int index) {
+  if (index >= 0 && index < 10) {
+    return config.imageDurations[index];
+  }
+  return 30;  // Default to 30 seconds if index out of range
 }
 
 // Home Assistant REST Control getters

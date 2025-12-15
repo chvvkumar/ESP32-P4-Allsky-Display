@@ -58,6 +58,7 @@ private:
     void handleToggleImageEnabled();
     void handleSelectImage();
     void handleClearEditingState();
+    void handleUpdateImageDuration();
     void handleRestart();
     void handleFactoryReset();
     void handleSetLogSeverity();

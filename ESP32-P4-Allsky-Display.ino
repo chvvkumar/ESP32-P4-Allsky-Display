@@ -1977,7 +1977,9 @@ void loop() {
     
     // Only auto-cycle if not in single image refresh mode and not paused for editing
     if (cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode && !cyclingPausedForEditing) {
-        if (currentTime - lastCycleTime >= currentCycleInterval || lastCycleTime == 0) {
+        // Use per-image duration instead of global cycle interval
+        unsigned long currentImageDuration = configStorage.getImageDuration(currentImageIndex) * 1000;  // Convert seconds to milliseconds
+        if (currentTime - lastCycleTime >= currentImageDuration || lastCycleTime == 0) {
             shouldCycle = true;
             lastCycleTime = currentTime;
             Serial.println("DEBUG: Time to cycle to next image source");

@@ -54,6 +54,7 @@ bool WebConfig::begin(int port) {
         server->on("/api/toggle-image-enabled", HTTP_POST, [this]() { handleToggleImageEnabled(); });
         server->on("/api/select-image", HTTP_POST, [this]() { handleSelectImage(); });
         server->on("/api/clear-editing-state", HTTP_POST, [this]() { handleClearEditingState(); });
+        server->on("/api/update-image-duration", HTTP_POST, [this]() { handleUpdateImageDuration(); });
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
         server->on("/api/set-log-severity", HTTP_POST, [this]() { handleSetLogSeverity(); });

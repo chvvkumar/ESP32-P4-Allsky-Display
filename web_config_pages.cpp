@@ -247,9 +247,8 @@ String WebConfig::generateImagePage() {
     html.reserve(8000);  // Pre-allocate ~8KB
     html = "<div class='main'><div class='container'>";
     
-    // Header
-    html += "<div class='card'><h2>🖼️ Image Configuration</h2>";
-    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1.5rem'>Manage image sources, display timing, and transformations.</p>";
+    // Header with controls on same line
+    html += "<div class='card'>";
     
     html += "<form id='imageForm' novalidate>";
     
@@ -258,53 +257,20 @@ String WebConfig::generateImagePage() {
     html += "<input type='hidden' name='cycling_enabled' value='on'>";
     html += "<input type='hidden' name='cycling_enabled_present' value='1'>";
     
-    // 2. Unified Timing & Order Section
-    html += "<div style='padding:0.75rem;background:#0f172a;border-radius:8px;border:1px solid #334155;margin-bottom:0.75rem'>";
-    html += "<h3 style='color:#38bdf8;margin:0 0 0.5rem 0;font-size:1rem'>⏱️ Timing & Order</h3>";
-    html += "<div class='grid'>";
-    
-    // Display Duration (Cycle Interval)
-    html += "<div class='form-group'><label for='cycle_interval'>";
-    html += "<span style='color:#38bdf8'>Display Duration</span> <span style='color:#94a3b8'>(seconds)</span></label>";
-    html += "<input type='number' id='cycle_interval' name='cycle_interval' class='form-control' value='" + String(configStorage.getCycleInterval() / 1000) + "' min='10' max='3600'>";
-    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.25rem;margin-bottom:0'>";
-    html += "<i class='fas fa-clock' style='margin-right:4px;color:#22c55e'></i>";
-    html += "Time to display each image before switching (if >1 image)";
-    html += "</p></div>";
-    
-    // Refresh Interval (Update Interval)
-    html += "<div class='form-group'><label for='update_interval'>";
-    html += "<span style='color:#38bdf8'>Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
-    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
-    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.25rem;margin-bottom:0'>";
-    html += "<i class='fas fa-download' style='margin-right:4px;color:#0ea5e9'></i>";
-    html += "How often to re-download images from their URLs";
-    html += "</p></div>";
-    
-    html += "</div>"; // End Grid
-    
-    // Random Order Checkbox
-    html += "<div class='form-group' style='margin-bottom:0'><div style='display:flex;align-items:center'>";
-    html += "<input type='checkbox' id='random_order' name='random_order' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'" + String(configStorage.getRandomOrder() ? " checked" : "") + ">";
-    html += "<label for='random_order' style='margin-bottom:0;cursor:pointer'>Randomize display order</label>";
-    html += "<input type='hidden' name='random_order_present' value='1'></div></div>";
-    
-    html += "</div>"; // End Timing Section
-    
-    // 3. Image Sources List
+    // 2. Image Sources List header with controls
     int sourceCount = configStorage.getImageSourceCount();
-    html += "<div style='display:flex;justify-content:space-between;align-items:center;margin-top:0.75rem;margin-bottom:0.5rem'>";
-    html += "<h3 style='color:#38bdf8;margin:0'>Image Sources</h3>";
+    html += "<div style='display:flex;gap:0.75rem;align-items:center;justify-content:space-between;margin-bottom:0.75rem'>";
+    html += "<h2 style='margin:0'>🖼️ Image Sources</h2>";
+    html += "<div style='display:flex;gap:0.75rem;align-items:center'>";
+    html += "<button type='button' class='btn btn-success' onclick='addImageSource(this)' style='font-size:0.9rem;padding:0.6rem 0.8rem'><i class='fas fa-plus'></i></button>";
     if (sourceCount > 1) {
-        html += "<div style='display:flex;gap:0.75rem;align-items:center'>";
         html += "<label style='display:flex;align-items:center;color:#94a3b8;cursor:pointer'>";
         html += "<input type='checkbox' id='selectAllImages' style='width:18px;height:18px;accent-color:#0ea5e9;margin-right:6px' onchange='toggleSelectAll(this.checked)'>";
         html += "<span style='font-size:0.9rem'>Select All</span></label>";
         html += "<button type='button' class='btn btn-danger' id='bulkDeleteBtn' onclick='bulkDeleteSelected(this)' style='font-size:0.9rem;padding:0.6rem 1rem;display:none'>";
         html += "<i class='fas fa-trash' style='margin-right:6px'></i>Delete Selected (<span id='selectedCount'>0</span>)</button>";
-        html += "</div>";
     }
-    html += "</div>";
+    html += "</div></div>";
     html += "<div id='imageSourcesList'>";
     
     // Check if user is currently editing
@@ -335,6 +301,15 @@ String WebConfig::generateImagePage() {
         html += "<span style='font-weight:bold;color:#38bdf8;min-width:2rem'>" + String(i + 1) + ".</span>";
         html += "<input type='url' class='form-control' id='imageUrl_" + String(i) + "' style='flex:1' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this)'>";
         
+        // Duration field
+        unsigned long duration = configStorage.getImageDuration(i);
+        html += "<div style='display:flex;align-items:center;gap:0.25rem;min-width:90px'>";
+        html += "<input type='number' class='form-control' id='imageDuration_" + String(i) + "' value='" + String(duration) + "' min='5' max='3600' ";
+        html += "onchange='updateImageDuration(" + String(i) + ", this)' ";
+        html += "title='Display duration in seconds' style='width:65px;padding:0.4rem;font-size:0.85rem;text-align:center'>";
+        html += "<span style='color:#64748b;font-size:0.75rem'>s</span>";
+        html += "</div>";
+        
         // Select button to switch to this image for editing
         html += "<button type='button' class='btn " + String(isActive ? "btn-primary" : "btn-secondary") + "' id='editBtn_" + String(i) + "' ";
         html += "onclick='selectImageForEditing(" + String(i) + ", this)' ";
@@ -343,18 +318,9 @@ String WebConfig::generateImagePage() {
         html += String(isActive ? "<i class='fas fa-check' style='margin-right:4px'></i>Selected" : "<i class='fas fa-edit' style='margin-right:4px'></i>Edit");
         html += "</button>";
         
-        if (sourceCount > 1) {
-            html += "<button type='button' class='btn btn-danger' onclick='removeImageSource(" + String(i) + ", this)'><i class='fas fa-trash'></i></button>";
-        }
         html += "</div></div>";
     }
     
-    html += "</div>";
-    html += "<div style='display:flex;gap:0.5rem;margin-top:0.5rem'>";
-    html += "<button type='button' class='btn btn-success' onclick='addImageSource(this)'><i class='fas fa-plus' style='margin-right:6px'></i>Add Image Source</button>";
-    if (sourceCount > 0) {
-        html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources(this)'><i class='fas fa-broom' style='margin-right:6px'></i>Clear All</button>";
-    }
     html += "</div>";
     
     // Single Transform Controls for Selected Image
@@ -395,8 +361,45 @@ String WebConfig::generateImagePage() {
     
     html += "</div>"; // Close Image Config Card
     
-    // 4. Default Transformations Card (Global Defaults)
-    html += "<div class='card' style='margin-top:0.75rem'><h2>🎨 Default Transformations</h2>";
+    // 4. Default Settings Card (Global Defaults + Timing & Order) - Collapsible
+    html += "<div class='card' style='margin-top:0.75rem'>";
+    html += "<h2 onclick=\"document.getElementById('defaultSettings').style.display=document.getElementById('defaultSettings').style.display==='none'?'block':'none';this.querySelector('.toggle-icon').textContent=document.getElementById('defaultSettings').style.display==='none'?'▶':'▼'\" style='cursor:pointer;user-select:none'>";
+    html += "🎨 Default Settings <span class='toggle-icon' style='font-size:0.7em;color:#64748b'>▶</span></h2>";
+    html += "<div id='defaultSettings' style='display:none'>";
+    html += "<p style='color:#94a3b8;font-size:0.8rem;margin:0 0 0.5rem 0'>Global settings for timing, order, and transformations.</p>";
+    
+    // Timing & Order Section
+    html += "<h3 style='color:#38bdf8;margin:0 0 0.5rem 0;font-size:1rem'>⏱️ Timing & Order</h3>";
+    html += "<div class='grid' style='margin-bottom:0.5rem'>";
+    
+    // Default Image Duration (for newly added images)
+    html += "<div class='form-group'><label for='default_image_duration'>";
+    html += "<span style='color:#38bdf8'>Default Duration for New Images</span> <span style='color:#94a3b8'>(seconds)</span></label>";
+    html += "<input type='number' id='default_image_duration' name='default_image_duration' class='form-control' value='" + String(configStorage.getDefaultImageDuration()) + "' min='5' max='3600'>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.25rem;margin-bottom:0'>";
+    html += "<i class='fas fa-clock' style='margin-right:4px;color:#22c55e'></i>";
+    html += "Default display time for newly added images (can be customized per-image above)";
+    html += "</p></div>";
+    
+    // Refresh Interval (Update Interval)
+    html += "<div class='form-group'><label for='update_interval'>";
+    html += "<span style='color:#38bdf8'>Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
+    html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.25rem;margin-bottom:0'>";
+    html += "<i class='fas fa-download' style='margin-right:4px;color:#0ea5e9'></i>";
+    html += "How often to re-download images from their URLs";
+    html += "</p></div>";
+    
+    html += "</div>"; // End Grid
+    
+    // Random Order Checkbox
+    html += "<div class='form-group' style='margin-bottom:0.5rem'><div style='display:flex;align-items:center'>";
+    html += "<input type='checkbox' id='random_order' name='random_order' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'" + String(configStorage.getRandomOrder() ? " checked" : "") + ">";
+    html += "<label for='random_order' style='margin-bottom:0;cursor:pointer'>Randomize display order</label>";
+    html += "<input type='hidden' name='random_order_present' value='1'></div></div>";
+    
+    // Transformation Defaults Section
+    html += "<h3 style='color:#38bdf8;margin:0.5rem 0 0.5rem 0;font-size:1rem'>🔧 Transformation Defaults</h3>";
     html += "<p style='color:#94a3b8;font-size:0.8rem;margin:0 0 0.5rem 0'>These settings apply to all new images or those without overrides.</p>";
     html += "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.75rem'>";
     html += "<div class='form-group' style='margin-bottom:0'><label for='default_scale_x' style='font-size:0.8rem;margin-bottom:0.25rem'>Scale X</label>";
@@ -415,12 +418,10 @@ String WebConfig::generateImagePage() {
     html += String("<option value='180'") + (defRot == 180 ? " selected" : "") + ">180°</option>";
     html += String("<option value='270'") + (defRot == 270 ? " selected" : "") + ">270°</option>";
     html += "</select></div>";
-    html += "</div></div>";
+    html += "</div></div></div>"; // Close defaultSettings div, card
     
     // Save Button
-    html += "<div class='card' style='margin-top:0.75rem'>";
-    html += "<button type='submit' class='btn btn-primary'><i class='fas fa-save' style='margin-right:6px'></i>Save All Settings</button>";
-    html += "</div>";
+    html += "<button type='submit' class='btn btn-primary' style='margin-top:0.75rem'><i class='fas fa-save' style='margin-right:6px'></i>Save All Settings</button>";
     
     html += "</form></div></div>";
     
@@ -822,7 +823,7 @@ String WebConfig::generateAPIReferencePage() {
     html += "{\n  \"firmware\": {\n    \"sketch_size\": 2359600,\n    \"free_sketch_space\": 15073296\n  },\n";
     html += "  \"system\": {\n    \"uptime\": 31568,\n    \"free_heap\": 400828,\n    \"cpu_freq\": 360,\n    \"temperature_celsius\": 32.5,\n    \"temperature_fahrenheit\": 90.5,\n    \"chip_model\": \"ESP32-P4\"\n  },\n";
     html += "  \"network\": {\n    \"connected\": true,\n    \"ssid\": \"MyWiFi\",\n    \"ip\": \"192.168.1.100\",\n    \"rssi\": -45\n  },\n";
-    html += "  \"image\": {\n    \"cycling_enabled\": true,\n    \"current_url\": \"http://...\",\n    \"current_index\": 0,\n    \"sources\": [\n      {\n        \"index\": 0,\n        \"url\": \"http://...\",\n        \"active\": true,\n        \"scale_x\": 1.0\n      }\n    ]\n  }\n}</pre>";
+    html += "  \"image\": {\n    \"cycling_enabled\": true,\n    \"default_image_duration\": 30,\n    \"current_url\": \"http://...\",\n    \"current_index\": 0,\n    \"sources\": [\n      {\n        \"index\": 0,\n        \"url\": \"http://...\",\n        \"enabled\": true,\n        \"active\": true,\n        \"duration\": 30,\n        \"scale_x\": 1.0\n      }\n    ]\n  }\n}</pre>";
     html += "</div></div>";
     
     // GET /status
@@ -896,14 +897,14 @@ String WebConfig::generateAPIReferencePage() {
     html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>MQTT:</strong><br><code>mqtt_server</code>, <code>mqtt_port</code>, <code>mqtt_user</code>, <code>mqtt_password</code>, <code>mqtt_client_id</code></div>";
     html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>Display:</strong><br><code>default_brightness</code>, <code>brightness_auto_mode</code></div>";
     html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>Image:</strong><br><code>image_url</code>, <code>update_interval</code></div>";
-    html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>Cycling:</strong><br><code>cycling_enabled</code>, <code>cycle_interval</code>, <code>random_order</code></div>";
+    html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>Cycling:</strong><br><code>cycling_enabled</code>, <code>cycle_interval</code>, <code>default_image_duration</code>, <code>random_order</code></div>";
     html += "<div style='background:#1e293b;padding:0.75rem;border-radius:6px'><strong style='color:#38bdf8'>Transform:</strong><br><code>default_scale_x</code>, <code>default_scale_y</code>, <code>default_offset_x</code>, <code>default_offset_y</code>, <code>default_rotation</code></div>";
     html += "</div></div>";
     
     html += "<div style='margin-bottom:1rem'>";
     html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Request Example:</p>";
     html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
-    html += "curl -X POST " + deviceUrl + "/api/save \\\n  -d \"default_brightness=80\" \\\n  -d \"cycling_enabled=true\" \\\n  -d \"cycle_interval=30\"</pre></div>";
+    html += "curl -X POST " + deviceUrl + "/api/save \\\n  -d \"default_brightness=80\" \\\n  -d \"cycling_enabled=true\" \\\n  -d \"default_image_duration=30\"</pre></div>";
     
     html += "<div>";
     html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Example:</p>";
@@ -1004,6 +1005,30 @@ String WebConfig::generateAPIReferencePage() {
     html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>index</code> (required) - Image source index to update</li></ul></div>";
     html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
     html += "curl -X POST " + deviceUrl + "/api/copy-defaults -d \"index=0\"</pre></div>";
+    
+    // POST /api/toggle-image-enabled
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/toggle-image-enabled</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Enable or disable an image in the cycling order. Disabled images are skipped during auto-cycling.</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Parameters:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>index</code> (required) - Image source index to toggle</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>enabled</code> (required) - 'true' or 'false'</li></ul></div>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/toggle-image-enabled \\\n  -d \"index=0\" \\\n  -d \"enabled=false\"</pre></div>";
+    
+    // POST /api/update-image-duration
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/update-image-duration</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Set the display duration for a specific image (how long it shows before switching to next).</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Parameters:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:none;padding-left:0'>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>index</code> (required) - Image source index</li>";
+    html += "<li style='padding:0.5rem;background:#1e293b;border-radius:6px;margin-bottom:0.5rem'><code style='color:#10b981;font-weight:bold'>duration</code> (required) - Display duration in seconds (5-3600)</li></ul></div>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/update-image-duration \\\n  -d \"index=0\" \\\n  -d \"duration=60\"</pre></div>";
     
     // POST /api/apply-transform
     html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";

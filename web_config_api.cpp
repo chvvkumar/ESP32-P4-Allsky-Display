@@ -126,6 +126,10 @@ void WebConfig::handleSaveConfig() {
             unsigned long interval = value.toInt() * 1000UL;
             configStorage.setCycleInterval(interval);
         }
+        else if (name == "default_image_duration") {
+            unsigned long duration = value.toInt();
+            configStorage.setDefaultImageDuration(duration);
+        }
         
         // Advanced settings
         else if (name == "update_interval") {
@@ -699,6 +703,32 @@ void WebConfig::handleClearEditingState() {
     sendResponse(200, "application/json", "{\"status\":\"success\"}");
 }
 
+void WebConfig::handleUpdateImageDuration() {
+    if (!server->hasArg("index") || !server->hasArg("duration")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing parameters\"}");
+        return;
+    }
+    
+    int index = server->arg("index").toInt();
+    unsigned long duration = server->arg("duration").toInt();
+    
+    if (index < 0 || index >= configStorage.getImageSourceCount()) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+        return;
+    }
+    
+    if (duration < 5 || duration > 3600) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Duration must be between 5 and 3600 seconds\"}");
+        return;
+    }
+    
+    LOG_INFO_F("[WebAPI] Updating image #%d duration to %lu seconds\n", index + 1, duration);
+    configStorage.setImageDuration(index, duration);
+    configStorage.saveConfig();
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\"}");
+}
+
 void WebConfig::handleFactoryReset() {
     LOG_WARNING("[WebAPI] Factory reset requested via web interface");
     configStorage.resetToDefaults();
@@ -894,6 +924,7 @@ void WebConfig::handleGetAllInfo() {
     
     if (configStorage.getCyclingEnabled()) {
         json += "\"cycle_interval\":" + String(configStorage.getCycleInterval()) + ",";
+        json += "\"default_image_duration\":" + String(configStorage.getDefaultImageDuration()) + ",";
         json += "\"random_order\":" + String(configStorage.getRandomOrder() ? "true" : "false") + ",";
         json += "\"current_index\":" + String(configStorage.getCurrentImageIndex()) + ",";
         json += "\"source_count\":" + String(configStorage.getImageSourceCount()) + ",";

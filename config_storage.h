@@ -48,6 +48,7 @@ public:
     void setDefaultOffsetX(int offset);
     void setDefaultOffsetY(int offset);
     void setDefaultRotation(float rotation);
+    void setDefaultImageDuration(unsigned long duration);
     void setBacklightFreq(int freq);
     void setBacklightResolution(int resolution);
     void setWatchdogTimeout(unsigned long timeout);
@@ -66,6 +67,8 @@ public:
     void clearImageSources();
     void setImageEnabled(int index, bool enabled);
     bool isImageEnabled(int index);
+    void setImageDuration(int index, unsigned long duration);
+    unsigned long getImageDuration(int index);
     
     // Individual parameter getters
     String getWiFiSSID();
@@ -92,6 +95,7 @@ public:
     int getDefaultOffsetX();
     int getDefaultOffsetY();
     float getDefaultRotation();
+    unsigned long getDefaultImageDuration();
     int getBacklightFreq();
     int getBacklightResolution();
     unsigned long getWatchdogTimeout();
@@ -213,6 +217,7 @@ private:
         int imageSourceCount;
         String imageSources[10];  // Array of image source URLs (MAX_IMAGE_SOURCES)
         bool imageEnabled[10];  // Array of enabled/disabled states for each image source
+        unsigned long imageDurations[10];  // Display duration in seconds for each image source
         
         // Per-image transformation settings
         ImageTransform imageTransforms[10];  // Transformation settings for each image source
@@ -225,6 +230,7 @@ private:
         int defaultOffsetX;
         int defaultOffsetY;
         float defaultRotation;
+        unsigned long defaultImageDuration;
         int backlightFreq;
         int backlightResolution;
         
