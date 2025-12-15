@@ -832,8 +832,6 @@ jobs:
             const marker = '<!-- pr-commit-summary-bot -->';
             const summarySection = `${marker}
             
-            ## 🤖 AI-Generated Summary
-            
             ${summary}
             
             ---

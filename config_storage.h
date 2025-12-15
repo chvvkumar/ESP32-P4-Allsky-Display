@@ -67,6 +67,7 @@ public:
     void clearImageSources();
     void setImageEnabled(int index, bool enabled);
     bool isImageEnabled(int index);
+    int getEnabledImageCount();
     void setImageDuration(int index, unsigned long duration);
     unsigned long getImageDuration(int index);
     

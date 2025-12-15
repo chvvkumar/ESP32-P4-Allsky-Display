@@ -119,25 +119,25 @@ String WebConfig::generateMainPage() {
     // Image Status - Configured Sources List
     html += "<div class='card' style='margin-top:1.5rem'><h2>🖼️ Image Status</h2>";
     
-    if (configStorage.getCyclingEnabled()) {
-        int sourceCount = configStorage.getImageSourceCount();
-        int currentIndex = configStorage.getCurrentImageIndex();
-        
-        // Summary info
-        html += "<div id='imageStatusSummary' style='display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b;border-radius:8px;margin-bottom:1rem'>";
-        html += "<div id='imgMode'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Mode:</strong> Cycling</p></div>";
-        html += "<div id='imgActive'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Active:</strong> [" + String(currentIndex + 1) + "/" + String(sourceCount) + "]</p></div>";
-        html += "<div id='imgCycle'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Cycle:</strong> " + String(configStorage.getCycleInterval() / 1000) + "s</p></div>";
-        html += "<div id='imgUpdate'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Update:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + "m</p></div>";
-        html += "</div>";
-        
-        // Explanation
-        html += "<div style='background:rgba(14,165,233,0.1);border:1px solid #0ea5e9;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
-        html += "<p style='color:#38bdf8;margin:0;font-size:0.85rem;line-height:1.6'><i class='fas fa-info-circle' style='margin-right:8px'></i>";
-        html += "<strong>Cycling Mode:</strong> Display rotates through all configured sources every <strong>" + String(configStorage.getCycleInterval() / 1000) + " seconds</strong>. ";
-        html += "Each source is re-downloaded every <strong>" + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</strong> to fetch fresh content (e.g., updated sky photos). ";
-        html += "Sources appear in order or randomly based on your settings.</p>";
-        html += "</div>";
+    int sourceCount = configStorage.getImageSourceCount();
+    int enabledCount = configStorage.getEnabledImageCount();
+    int currentIndex = configStorage.getCurrentImageIndex();
+    
+    // Summary info
+    html += "<div id='imageStatusSummary' style='display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b;border-radius:8px;margin-bottom:1rem'>";
+    html += "<div id='imgTotal'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Total:</strong> " + String(sourceCount) + " source" + String(sourceCount != 1 ? "s" : "") + "</p></div>";
+    html += "<div id='imgEnabled'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Enabled:</strong> " + String(enabledCount) + "</p></div>";
+    html += "<div id='imgActive'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Active:</strong> #" + String(currentIndex + 1) + "</p></div>";
+    html += "<div id='imgUpdate'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Refresh:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + "m</p></div>";
+    html += "</div>";
+    
+    // Explanation
+    html += "<div style='background:rgba(14,165,233,0.1);border:1px solid #0ea5e9;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
+    html += "<p style='color:#38bdf8;margin:0;font-size:0.85rem;line-height:1.6'><i class='fas fa-info-circle' style='margin-right:8px'></i>";
+    html += "Display cycles through <strong>" + String(enabledCount) + " enabled image" + String(enabledCount != 1 ? "s" : "") + "</strong> with individual durations (5-3600s per image). ";
+    html += "Sources are refreshed every <strong>" + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</strong>. ";
+    html += String(configStorage.getRandomOrder() ? "Cycling in <strong>random order</strong>." : "Cycling in <strong>sequential order</strong>.") + "</p>";
+    html += "</div>";
         
         // List all configured sources
         if (sourceCount > 0) {
@@ -151,22 +151,6 @@ String WebConfig::generateMainPage() {
                 html += "</div>";
             }
         }
-    } else {
-        html += "<div id='imageStatusSummary' style='display:flex;justify-content:space-between;align-items:center;padding:1rem;background:#1e293b;border-radius:8px;margin-bottom:1rem'>";
-        html += "<div id='imgMode'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Mode:</strong> Single Image</p></div>";
-        html += "<div id='imgUpdate'><p style='margin:0;font-size:0.9rem;color:#94a3b8'><strong style='color:#e2e8f0'>Update:</strong> " + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</p></div>";
-        html += "</div>";
-        
-        // Explanation
-        html += "<div style='background:rgba(14,165,233,0.1);border:1px solid #0ea5e9;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
-        html += "<p style='color:#38bdf8;margin:0;font-size:0.85rem;line-height:1.6'><i class='fas fa-info-circle' style='margin-right:8px'></i>";
-        html += "<strong>Single Image Mode:</strong> Display shows only one image source. ";
-        html += "The image is re-downloaded every <strong>" + String(configStorage.getUpdateInterval() / 1000 / 60) + " minutes</strong> to fetch fresh content.</p>";
-        html += "</div>";
-        
-        html += "<h3 style='color:#94a3b8;font-size:1rem;margin-bottom:1rem'>Image Source:</h3>";
-        html += "<div style='padding:0.75rem;background:#1e293b;border-radius:8px;border-left:4px solid #0ea5e9;overflow-wrap:break-word;word-break:break-all;font-size:0.9rem;color:#cbd5e1;font-family:monospace'>" + escapeHtml(configStorage.getImageURL()) + "</div>";
-    }
     html += "</div></div></div>";
     
     return html;
