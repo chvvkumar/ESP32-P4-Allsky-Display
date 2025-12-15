@@ -474,6 +474,12 @@ void WebConfig::handleUpdateImageTransform() {
         String property = server->arg("property");
         String value = server->arg("value");
         
+        // Pause cycling when user is actively editing transforms
+        extern bool cyclingPausedForEditing;
+        extern unsigned long lastEditActivity;
+        cyclingPausedForEditing = true;
+        lastEditActivity = millis();
+        
         LOG_DEBUG_F("[WebAPI] Transform update: image %d, %s = %s\n", index, property.c_str(), value.c_str());
         
         bool success = true;
@@ -547,6 +553,12 @@ void WebConfig::handleCopyDefaultsToImage() {
 void WebConfig::handleApplyTransform() {
     if (server->hasArg("index")) {
         int index = server->arg("index").toInt();
+        
+        // Keep editing session active when applying transforms
+        extern bool cyclingPausedForEditing;
+        extern unsigned long lastEditActivity;
+        cyclingPausedForEditing = true;
+        lastEditActivity = millis();
         int currentIndex = configStorage.getCurrentImageIndex();
         
         if (index != currentIndex) {
@@ -636,6 +648,55 @@ void WebConfig::handleToggleImageEnabled() {
     String response = "{\"status\":\"success\",\"enabled\":" + String(newState ? "true" : "false") + 
                       ",\"switched\":" + String(shouldSwitchImage ? "true" : "false") + "}";
     sendResponse(200, "application/json", response);
+}
+
+void WebConfig::handleSelectImage() {
+    if (!server->hasArg("index")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
+        return;
+    }
+    
+    int index = server->arg("index").toInt();
+    
+    if (index < 0 || index >= configStorage.getImageSourceCount()) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+        return;
+    }
+    
+    LOG_INFO_F("[WebAPI] Selecting image #%d for editing\n", index + 1);
+    
+    // Pause automatic cycling when user selects an image for editing
+    extern bool cyclingPausedForEditing;
+    extern unsigned long lastEditActivity;
+    cyclingPausedForEditing = true;
+    lastEditActivity = millis();
+    LOG_INFO("[WebAPI] Cycling paused for editing (will resume after 30s of inactivity)");
+    
+    // Update both the global and config storage index
+    configStorage.setCurrentImageIndex(index);
+    configStorage.saveConfig();
+    
+    extern int currentImageIndex;
+    currentImageIndex = index;
+    
+    // Update transform settings and switch to this image
+    extern void updateCurrentImageTransformSettings();
+    updateCurrentImageTransformSettings();
+    
+    extern void downloadAndDisplayImage();
+    downloadAndDisplayImage();
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"index\":" + String(index) + "}");
+}
+
+void WebConfig::handleClearEditingState() {
+    LOG_INFO("[WebAPI] Clearing editing state - resuming auto-cycling");
+    
+    // Clear the editing pause flag
+    extern bool cyclingPausedForEditing;
+    cyclingPausedForEditing = false;
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\"}");
 }
 
 void WebConfig::handleFactoryReset() {

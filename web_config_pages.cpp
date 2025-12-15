@@ -307,11 +307,19 @@ String WebConfig::generateImagePage() {
     html += "</div>";
     html += "<div id='imageSourcesList'>";
     
+    // Check if user is currently editing
+    extern bool cyclingPausedForEditing;
+    bool isEditingActive = cyclingPausedForEditing;
+    
+    int currentIndex = configStorage.getCurrentImageIndex();
     for (int i = 0; i < sourceCount; i++) {
         String url = configStorage.getImageSource(i);
         bool isEnabled = configStorage.isImageEnabled(i);
-        html += "<div class='image-source-item' style='margin-bottom:0.5rem;padding:0.75rem;border:1px solid #334155;border-radius:6px;background:#1e293b" + String(isEnabled ? "" : ";opacity:0.6") + "'>";
-        html += "<div style='display:flex;align-items:center;gap:0.5rem;margin-bottom:0'>";
+        bool isActive = isEditingActive && (i == currentIndex);
+        
+        // Show image as active only if user is in editing mode
+        html += "<div class='image-source-item' id='imageItem_" + String(i) + "' style='margin-bottom:0.5rem;padding:0.75rem;border:1px solid " + String(isActive ? "#3b82f6" : "#334155") + ";border-radius:6px;background:" + String(isActive ? "#1e3a5f" : "#1e293b") + String(isEnabled ? "" : ";opacity:0.6") + "'>";
+        html += "<div style='display:flex;align-items:center;gap:0.5rem'>";
         if (sourceCount > 1) {
             html += "<input type='checkbox' class='image-select-checkbox' data-index='" + String(i) + "' style='width:18px;height:18px;accent-color:#0ea5e9;cursor:pointer' onchange='updateBulkDeleteButton()'>";
         }
@@ -326,45 +334,19 @@ String WebConfig::generateImagePage() {
         
         html += "<span style='font-weight:bold;color:#38bdf8;min-width:2rem'>" + String(i + 1) + ".</span>";
         html += "<input type='url' class='form-control' id='imageUrl_" + String(i) + "' style='flex:1' value='" + escapeHtml(url) + "' onchange='updateImageSource(" + String(i) + ", this)'>";
-        html += "<button type='button' class='btn btn-secondary' onclick='toggleTransformSection(" + String(i) + ")'><i class='fas fa-sliders-h'></i></button>";
+        
+        // Select button to switch to this image for editing
+        html += "<button type='button' class='btn " + String(isActive ? "btn-primary" : "btn-secondary") + "' id='editBtn_" + String(i) + "' ";
+        html += "onclick='selectImageForEditing(" + String(i) + ", this)' ";
+        html += "title='Select this image to edit transforms' ";
+        html += "style='min-width:80px;padding:0.4rem 0.6rem;font-size:0.85rem'>";
+        html += String(isActive ? "<i class='fas fa-check' style='margin-right:4px'></i>Selected" : "<i class='fas fa-edit' style='margin-right:4px'></i>Edit");
+        html += "</button>";
+        
         if (sourceCount > 1) {
             html += "<button type='button' class='btn btn-danger' onclick='removeImageSource(" + String(i) + ", this)'><i class='fas fa-trash'></i></button>";
         }
-        html += "</div>";
-        
-        // Collapsible transform section
-        html += "<div id='transformSection_" + String(i) + "' style='display:none;margin-top:0.5rem;padding:0.75rem;background:#0f172a;border-radius:4px;border-left:3px solid #3b82f6'>";
-        html += "<p style='color:#64748b;font-size:0.8rem;margin-bottom:0.5rem'><i class='fas fa-info-circle' style='margin-right:4px'></i>Override default transformations for this source</p>";
-        html += "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.5rem'>";
-        
-        html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale X</label>";
-        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleX(i)) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(" + String(i) + ", \"scaleX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
-        
-        html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale Y</label>";
-        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleY(i)) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(" + String(i) + ", \"scaleY\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
-        
-        html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Offset X</label>";
-        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageOffsetX(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
-        
-        html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Offset Y</label>";
-        html += "<input type='number' class='form-control' value='" + String(configStorage.getImageOffsetY(i)) + "' onchange='updateImageTransform(" + String(i) + ", \"offsetY\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
-        
-        html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Rotation</label>";
-        html += "<select class='form-control' onchange='updateImageTransform(" + String(i) + ", \"rotation\", this)' style='font-size:0.9rem;padding:0.5rem'>";
-        int rotation = (int)configStorage.getImageRotation(i);
-        html += String("<option value='0'") + (rotation == 0 ? " selected" : "") + ">0°</option>";
-        html += String("<option value='90'") + (rotation == 90 ? " selected" : "") + ">90°</option>";
-        html += String("<option value='180'") + (rotation == 180 ? " selected" : "") + ">180°</option>";
-        html += String("<option value='270'") + (rotation == 270 ? " selected" : "") + ">270°</option>";
-        html += "</select></div>";
-        
-        html += "</div>";
-        html += "<div style='margin-top:0.5rem;display:flex;gap:0.5rem'>";
-        html += "<button type='button' class='btn btn-secondary' onclick='copyDefaultsToImage(" + String(i) + ", this)' style='font-size:0.8rem;padding:0.4rem 0.6rem'>Reset to Defaults</button>";
-        html += "<button type='button' class='btn btn-secondary' onclick='applyTransformImmediately(" + String(i) + ", this)' style='font-size:0.8rem;padding:0.4rem 0.6rem'>Apply Now</button>";
         html += "</div></div>";
-        
-        html += "</div>";
     }
     
     html += "</div>";
@@ -374,6 +356,42 @@ String WebConfig::generateImagePage() {
         html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources(this)'><i class='fas fa-broom' style='margin-right:6px'></i>Clear All</button>";
     }
     html += "</div>";
+    
+    // Single Transform Controls for Selected Image
+    html += "<div id='transformSection' style='margin-top:0.75rem;padding:0.75rem;background:#0f172a;border-radius:8px;border:1px solid #3b82f6" + String(isEditingActive ? "" : ";display:none") + "'>";
+    html += "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem'>";
+    html += "<h3 style='color:#38bdf8;margin:0;font-size:1rem'><i class='fas fa-sliders-h' style='margin-right:6px'></i>Transform Settings for Image #<span id='selectedImageNumber'>" + String(currentIndex + 1) + "</span></h3>";
+    html += "<span id='cycleStatus' style='color:#f59e0b;font-size:0.75rem;padding:0.25rem 0.5rem;background:rgba(245,158,11,0.1);border-radius:4px;border:1px solid #f59e0b'>";
+    html += "<i class='fas fa-pause-circle' style='margin-right:4px'></i>Paused - resuming in <span id='resumeTimer'>30</span>s</span></div>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin:0 0 0.5rem 0'><i class='fas fa-info-circle' style='margin-right:4px'></i>Any change resets the timer. Auto-cycling resumes after 30s of inactivity.</p>";
+    html += "<script>let cycleResumeTime=Date.now()+30000;let timerInterval=setInterval(()=>{const remaining=Math.max(0,Math.ceil((cycleResumeTime-Date.now())/1000));const timerEl=document.getElementById('resumeTimer');const statusEl=document.getElementById('cycleStatus');if(timerEl)timerEl.textContent=remaining;if(remaining===0&&statusEl){statusEl.style.color='#10b981';statusEl.style.background='rgba(16,185,129,0.1)';statusEl.style.borderColor='#10b981';statusEl.innerHTML='<i class=\"fas fa-sync-alt\" style=\"margin-right:4px\"></i>Cycling active';clearInterval(timerInterval)}},1000);function resetCycleTimer(){cycleResumeTime=Date.now()+30000;const statusEl=document.getElementById('cycleStatus');if(statusEl){statusEl.style.color='#f59e0b';statusEl.style.background='rgba(245,158,11,0.1)';statusEl.style.borderColor='#f59e0b';statusEl.innerHTML='<i class=\"fas fa-pause-circle\" style=\"margin-right:4px\"></i>Paused - resuming in <span id=\"resumeTimer\">30</span>s'}}</script>";
+    
+    html += "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.5rem;margin-bottom:0.5rem'>";
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale X</label>";
+    html += "<input type='number' id='selectedScaleX' class='form-control' value='" + String(configStorage.getImageScaleX(currentIndex)) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateSelectedImageTransform(\"scaleX\", this.value)' style='font-size:0.9rem;padding:0.5rem'></div>";
+    
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale Y</label>";
+    html += "<input type='number' id='selectedScaleY' class='form-control' value='" + String(configStorage.getImageScaleY(currentIndex)) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateSelectedImageTransform(\"scaleY\", this.value)' style='font-size:0.9rem;padding:0.5rem'></div>";
+    
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Offset X</label>";
+    html += "<input type='number' id='selectedOffsetX' class='form-control' value='" + String(configStorage.getImageOffsetX(currentIndex)) + "' onchange='updateSelectedImageTransform(\"offsetX\", this.value)' style='font-size:0.9rem;padding:0.5rem'></div>";
+    
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Offset Y</label>";
+    html += "<input type='number' id='selectedOffsetY' class='form-control' value='" + String(configStorage.getImageOffsetY(currentIndex)) + "' onchange='updateSelectedImageTransform(\"offsetY\", this.value)' style='font-size:0.9rem;padding:0.5rem'></div>";
+    
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Rotation</label>";
+    html += "<select id='selectedRotation' class='form-control' onchange='updateSelectedImageTransform(\"rotation\", this.value)' style='font-size:0.9rem;padding:0.5rem'>";
+    int selectedRotation = (int)configStorage.getImageRotation(currentIndex);
+    html += String("<option value='0'") + (selectedRotation == 0 ? " selected" : "") + ">0°</option>";
+    html += String("<option value='90'") + (selectedRotation == 90 ? " selected" : "") + ">90°</option>";
+    html += String("<option value='180'") + (selectedRotation == 180 ? " selected" : "") + ">180°</option>";
+    html += String("<option value='270'") + (selectedRotation == 270 ? " selected" : "") + ">270°</option>";
+    html += "</select></div></div>";
+    
+    html += "<div style='display:flex;gap:0.5rem'>";
+    html += "<button type='button' class='btn btn-secondary' onclick='copyDefaultsToSelectedImage(this)' style='font-size:0.8rem;padding:0.4rem 0.6rem'><i class='fas fa-undo' style='margin-right:4px'></i>Reset to Defaults</button>";
+    html += "<button type='button' class='btn btn-primary' onclick='applySelectedTransformImmediately(this)' style='font-size:0.8rem;padding:0.4rem 0.6rem'><i class='fas fa-check' style='margin-right:4px'></i>Apply & Preview</button>";
+    html += "</div></div>";
     
     html += "</div>"; // Close Image Config Card
     

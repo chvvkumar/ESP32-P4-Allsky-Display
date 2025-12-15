@@ -50,6 +50,8 @@ bool randomOrderEnabled = false;
 int currentImageIndex = 0;
 int imageSourceCount = 1;
 String currentImageURL = "";
+bool cyclingPausedForEditing = false;  // Pause cycling when user is editing transforms
+unsigned long lastEditActivity = 0;     // Track last transform edit time
 
 // Full image buffer for smooth rendering
 uint16_t* fullImageBuffer = nullptr;
@@ -1967,8 +1969,14 @@ void loop() {
     unsigned long currentTime = millis();
     bool shouldCycle = false;
     
-    // Only auto-cycle if not in single image refresh mode
-    if (cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode) {
+    // Resume cycling if user hasn't edited transforms in 30 seconds
+    if (cyclingPausedForEditing && (currentTime - lastEditActivity > 30000)) {
+        cyclingPausedForEditing = false;
+        Serial.println("DEBUG: Resuming automatic cycling after 30s of inactivity");
+    }
+    
+    // Only auto-cycle if not in single image refresh mode and not paused for editing
+    if (cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode && !cyclingPausedForEditing) {
         if (currentTime - lastCycleTime >= currentCycleInterval || lastCycleTime == 0) {
             shouldCycle = true;
             lastCycleTime = currentTime;
