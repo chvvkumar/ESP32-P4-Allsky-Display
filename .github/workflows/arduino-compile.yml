@@ -766,7 +766,7 @@ jobs:
                 }
               }')")
           
-          # Debug: Show response status (without exposing full response)
+          # Debug: Show response status
           if [ -z "$RESPONSE" ]; then
             echo "❌ Error: Empty response from Google Gemini API"
             exit 1
@@ -775,14 +775,15 @@ jobs:
           # Check for errors
           if echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
             echo "❌ Error from Google Gemini API:"
-            echo "$RESPONSE" | jq '.error'
+            echo "$RESPONSE" | jq '.'
             exit 1
           fi
           
           # Check if response has content
           if ! echo "$RESPONSE" | jq -e '.candidates[0].content.parts[0].text' > /dev/null 2>&1; then
             echo "❌ Error: Invalid response structure from Google Gemini"
-            echo "Response keys: $(echo "$RESPONSE" | jq -r 'keys | @json')"
+            echo "Full response:"
+            echo "$RESPONSE" | jq '.'
             exit 1
           fi
           
