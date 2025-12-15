@@ -1054,6 +1054,71 @@ float getImageRotation(int index);
 void copyDefaultsToImageTransform(int index);
 ```
 
+#### Per-Image Duration Settings
+
+```cpp
+/**
+ * @brief Set display duration for specific image.
+ * @param index Image index (0-9)
+ * @param duration Display time in seconds (5-3600)
+ * 
+ * Sets how long this specific image will be displayed before switching
+ * to the next image in the cycle.
+ */
+void setImageDuration(int index, unsigned long duration);
+
+/**
+ * @brief Get display duration for specific image.
+ * @param index Image index (0-9)
+ * @return Duration in seconds, or default (30) if index invalid
+ */
+unsigned long getImageDuration(int index);
+
+/**
+ * @brief Set default duration for newly added images.
+ * @param duration Default display time in seconds (5-3600)
+ * 
+ * When new images are added via addImageSource(), they will use this
+ * default duration value.
+ */
+void setDefaultImageDuration(unsigned long duration);
+
+/**
+ * @brief Get default duration for newly added images.
+ * @return Default duration in seconds (default: 30)
+ */
+unsigned long getDefaultImageDuration();
+```
+
+#### Image Enable/Disable
+
+```cpp
+/**
+ * @brief Enable or disable specific image in cycling order.
+ * @param index Image index (0-9)
+ * @param enabled true to include in cycle, false to skip
+ * 
+ * Disabled images are not displayed during auto-cycling but remain
+ * in the configuration and can be re-enabled later.
+ */
+void setImageEnabled(int index, bool enabled);
+
+/**
+ * @brief Check if image is enabled in cycling order.
+ * @param index Image index (0-9)
+ * @return true if enabled, false if disabled or index invalid
+ */
+bool isImageEnabled(int index);
+
+/**
+ * @brief Get count of enabled images.
+ * @return Number of images with enabled=true
+ * 
+ * Useful for determining if cycling should occur (needs >1 enabled).
+ */
+int getEnabledImageCount();
+```
+
 ---
 
 ## SystemMonitor

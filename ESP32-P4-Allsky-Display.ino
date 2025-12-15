@@ -50,6 +50,8 @@ bool randomOrderEnabled = false;
 int currentImageIndex = 0;
 int imageSourceCount = 1;
 String currentImageURL = "";
+bool cyclingPausedForEditing = false;  // Pause cycling when user is editing transforms
+unsigned long lastEditActivity = 0;     // Track last transform edit time
 
 // Full image buffer for smooth rendering
 uint16_t* fullImageBuffer = nullptr;
@@ -1603,6 +1605,22 @@ void loadCyclingConfiguration() {
     currentImageIndex = configStorage.getCurrentImageIndex();
     imageSourceCount = configStorage.getImageSourceCount();
     
+    // Migration: Convert legacy single-image mode to unified list mode
+    if (!cyclingEnabled && imageSourceCount == 0) {
+        String legacyURL = configStorage.getImageURL();
+        if (legacyURL.length() > 0) {
+            Serial.println("Migrating legacy single-image configuration to unified list mode...");
+            configStorage.addImageSource(legacyURL);
+            configStorage.setCyclingEnabled(true);
+            configStorage.saveConfig();
+            
+            // Reload config after migration
+            cyclingEnabled = true;
+            imageSourceCount = 1;
+            Serial.printf("Migration complete: URL '%s' added to image source list\n", legacyURL.c_str());
+        }
+    }
+    
     Serial.printf("Cycling config loaded: enabled=%s, interval=%lu ms, random=%s, sources=%d\n",
                   cyclingEnabled ? "true" : "false", currentCycleInterval,
                   randomOrderEnabled ? "true" : "false", imageSourceCount);
@@ -1639,16 +1657,34 @@ void advanceToNextImage() {
         return;
     }
     
+    int attempts = 0;
+    int maxAttempts = imageSourceCount * 2;  // Prevent infinite loop
+    
     if (randomOrderEnabled) {
-        // Random order: pick a different random image
+        // Random order: pick a different random enabled image
         int newIndex;
         do {
             newIndex = random(0, imageSourceCount);
-        } while (newIndex == currentImageIndex && imageSourceCount > 1);
+            attempts++;
+            if (attempts >= maxAttempts) {
+                Serial.println("WARNING: Could not find enabled image after maximum attempts");
+                break;
+            }
+        } while ((newIndex == currentImageIndex || !configStorage.isImageEnabled(newIndex)) && imageSourceCount > 1);
+        
         currentImageIndex = newIndex;
     } else {
-        // Sequential order: advance to next image
-        currentImageIndex = (currentImageIndex + 1) % imageSourceCount;
+        // Sequential order: advance to next enabled image
+        int startIndex = currentImageIndex;
+        do {
+            currentImageIndex = (currentImageIndex + 1) % imageSourceCount;
+            attempts++;
+            if (attempts >= maxAttempts) {
+                Serial.println("WARNING: Could not find enabled image after maximum attempts");
+                currentImageIndex = startIndex;  // Revert to original
+                break;
+            }
+        } while (!configStorage.isImageEnabled(currentImageIndex));
     }
     
     // Save the new index to persistent storage
@@ -1658,8 +1694,10 @@ void advanceToNextImage() {
     // Update transform settings for the new image
     updateCurrentImageTransformSettings();
     
-    Serial.printf("Advanced to image %d/%d: %s\n", 
-                  currentImageIndex + 1, imageSourceCount, getCurrentImageURL().c_str());
+    Serial.printf("Advanced to image %d/%d (enabled=%s): %s\n", 
+                  currentImageIndex + 1, imageSourceCount, 
+                  configStorage.isImageEnabled(currentImageIndex) ? "yes" : "no",
+                  getCurrentImageURL().c_str());
 }
 
 // Get current image URL based on cycling configuration
@@ -1931,9 +1969,17 @@ void loop() {
     unsigned long currentTime = millis();
     bool shouldCycle = false;
     
-    // Only auto-cycle if not in single image refresh mode
-    if (cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode) {
-        if (currentTime - lastCycleTime >= currentCycleInterval || lastCycleTime == 0) {
+    // Resume cycling if user hasn't edited transforms in 30 seconds
+    if (cyclingPausedForEditing && (currentTime - lastEditActivity > 30000)) {
+        cyclingPausedForEditing = false;
+        Serial.println("DEBUG: Resuming automatic cycling after 30s of inactivity");
+    }
+    
+    // Only auto-cycle if not in single image refresh mode and not paused for editing
+    if (cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode && !cyclingPausedForEditing) {
+        // Use per-image duration instead of global cycle interval
+        unsigned long currentImageDuration = configStorage.getImageDuration(currentImageIndex) * 1000;  // Convert seconds to milliseconds
+        if (currentTime - lastCycleTime >= currentImageDuration || lastCycleTime == 0) {
             shouldCycle = true;
             lastCycleTime = currentTime;
             Serial.println("DEBUG: Time to cycle to next image source");
