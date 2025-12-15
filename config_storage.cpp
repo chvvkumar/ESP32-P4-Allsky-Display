@@ -1016,6 +1016,16 @@ bool ConfigStorage::isImageEnabled(int index) {
   return true;  // Default to enabled if index out of range
 }
 
+int ConfigStorage::getEnabledImageCount() {
+  int count = 0;
+  for (int i = 0; i < config.imageSourceCount; i++) {
+    if (config.imageEnabled[i]) {
+      count++;
+    }
+  }
+  return count;
+}
+
 void ConfigStorage::setImageDuration(int index, unsigned long duration) {
   if (index >= 0 && index < 10) {
     if (config.imageDurations[index] != duration) {
