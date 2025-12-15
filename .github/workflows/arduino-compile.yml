@@ -677,10 +677,10 @@ jobs:
           
           echo "Collected $COMMIT_COUNT commits"
 
-      - name: Generate summary with OpenAI
+      - name: Generate summary with Google Gemini
         id: summarize
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
           # Read collected data
           COMMITS=$(cat commits.txt)
@@ -745,50 +745,49 @@ jobs:
           PROMPT="${PROMPT//%COMMITS%/$(echo $COMMITS_ESCAPED | jq -r .)}"
           PROMPT="${PROMPT//%FILES%/$(echo $FILES_ESCAPED | jq -r .)}"
           
-          # Make API request
-          RESPONSE=$(curl -s -X POST https://api.openai.com/v1/chat/completions \
+          # Make API request to Google Gemini
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=$GOOGLE_API_KEY" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $OPENAI_API_KEY" \
             -d "$(jq -n \
               --arg prompt "$PROMPT" \
               '{
-                model: "gpt-4o",
-                messages: [
+                contents: [
                   {
-                    role: "system",
-                    content: "You are a helpful assistant that summarizes pull requests for code reviewers. Be concise but thorough. Use markdown formatting."
-                  },
-                  {
-                    role: "user",
-                    content: $prompt
+                    parts: [
+                      {
+                        text: $prompt
+                      }
+                    ]
                   }
                 ],
-                max_tokens: 1500,
-                temperature: 0.3
+                generationConfig: {
+                  temperature: 0.3,
+                  maxOutputTokens: 2048
+                }
               }')")
           
           # Debug: Show response status (without exposing full response)
           if [ -z "$RESPONSE" ]; then
-            echo "❌ Error: Empty response from OpenAI API"
+            echo "❌ Error: Empty response from Google Gemini API"
             exit 1
           fi
           
           # Check for errors
           if echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
-            echo "❌ Error from OpenAI API:"
+            echo "❌ Error from Google Gemini API:"
             echo "$RESPONSE" | jq '.error'
             exit 1
           fi
           
-          # Check if response has choices
-          if ! echo "$RESPONSE" | jq -e '.choices[0].message.content' > /dev/null 2>&1; then
-            echo "❌ Error: Invalid response structure from OpenAI"
+          # Check if response has content
+          if ! echo "$RESPONSE" | jq -e '.candidates[0].content.parts[0].text' > /dev/null 2>&1; then
+            echo "❌ Error: Invalid response structure from Google Gemini"
             echo "Response keys: $(echo "$RESPONSE" | jq -r 'keys | @json')"
             exit 1
           fi
           
           # Extract summary
-          echo "$RESPONSE" | jq -r '.choices[0].message.content' > summary.md
+          echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' > summary.md
           
           echo "✅ Summary generated successfully"
 
