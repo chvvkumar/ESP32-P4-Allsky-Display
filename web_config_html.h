@@ -57,9 +57,9 @@ body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .card:hover{transform:translateY(-2px);box-shadow:0 10px 15px -3px rgba(0,0,0,0.4);border-color:#475569}
 .card h2{margin-bottom:1.25rem;color:#f8fafc;display:flex;align-items:center;gap:0.75rem;font-weight:600;font-size:1.25rem;border-bottom:1px solid #334155;padding-bottom:0.75rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem}
-.form-group{margin-bottom:1.25rem}
-.form-group label{display:block;margin-bottom:0.5rem;font-weight:500;color:#cbd5e1;font-size:0.9rem}
-.form-control{width:100%;padding:0.75rem;border:1px solid #475569;border-radius:8px;font-size:1rem;background:#334155;color:#f8fafc;transition:border-color 0.2s ease,box-shadow 0.2s ease}
+.form-group{margin-bottom:0.5rem}
+.form-group label{display:block;margin-bottom:0.25rem;font-weight:500;color:#cbd5e1;font-size:0.85rem}
+.form-control{width:100%;padding:0.5rem 0.75rem;border:1px solid #475569;border-radius:8px;font-size:0.95rem;background:#334155;color:#f8fafc;transition:border-color 0.2s ease,box-shadow 0.2s ease}
 .form-control:focus{outline:none;border-color:#38bdf8;box-shadow:0 0 0 3px rgba(56,189,248,0.2);background:#1e293b}
 .form-control::placeholder{color:#64748b}
 .btn{display:inline-flex;align-items:center;justify-content:center;padding:0.75rem 1.5rem;border:none;border-radius:8px;text-decoration:none;font-weight:500;cursor:pointer;transition:all 0.2s ease;font-size:0.95rem;letter-spacing:0.3px}

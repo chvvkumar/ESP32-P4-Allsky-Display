@@ -259,16 +259,16 @@ String WebConfig::generateImagePage() {
     html += "<input type='hidden' name='cycling_enabled_present' value='1'>";
     
     // 2. Unified Timing & Order Section
-    html += "<div style='padding:1rem;background:#0f172a;border-radius:8px;border:1px solid #334155;margin-bottom:1.5rem'>";
-    html += "<h3 style='color:#38bdf8;margin:0 0 1rem 0;font-size:1rem'>⏱️ Timing & Order</h3>";
+    html += "<div style='padding:0.75rem;background:#0f172a;border-radius:8px;border:1px solid #334155;margin-bottom:0.75rem'>";
+    html += "<h3 style='color:#38bdf8;margin:0 0 0.5rem 0;font-size:1rem'>⏱️ Timing & Order</h3>";
     html += "<div class='grid'>";
     
     // Display Duration (Cycle Interval)
     html += "<div class='form-group'><label for='cycle_interval'>";
     html += "<span style='color:#38bdf8'>Display Duration</span> <span style='color:#94a3b8'>(seconds)</span></label>";
     html += "<input type='number' id='cycle_interval' name='cycle_interval' class='form-control' value='" + String(configStorage.getCycleInterval() / 1000) + "' min='10' max='3600'>";
-    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
-    html += "<i class='fas fa-clock' style='margin-right:6px;color:#22c55e'></i>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.25rem;margin-bottom:0'>";
+    html += "<i class='fas fa-clock' style='margin-right:4px;color:#22c55e'></i>";
     html += "Time to display each image before switching (if >1 image)";
     html += "</p></div>";
     
@@ -276,8 +276,8 @@ String WebConfig::generateImagePage() {
     html += "<div class='form-group'><label for='update_interval'>";
     html += "<span style='color:#38bdf8'>Refresh Interval</span> <span style='color:#94a3b8'>(minutes)</span></label>";
     html += "<input type='number' id='update_interval' name='update_interval' class='form-control' value='" + String(configStorage.getUpdateInterval() / 1000 / 60) + "' min='1' max='1440'>";
-    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>";
-    html += "<i class='fas fa-download' style='margin-right:6px;color:#0ea5e9'></i>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.25rem;margin-bottom:0'>";
+    html += "<i class='fas fa-download' style='margin-right:4px;color:#0ea5e9'></i>";
     html += "How often to re-download images from their URLs";
     html += "</p></div>";
     
@@ -293,7 +293,7 @@ String WebConfig::generateImagePage() {
     
     // 3. Image Sources List
     int sourceCount = configStorage.getImageSourceCount();
-    html += "<div style='display:flex;justify-content:space-between;align-items:center;margin-top:1.5rem;margin-bottom:1rem'>";
+    html += "<div style='display:flex;justify-content:space-between;align-items:center;margin-top:0.75rem;margin-bottom:0.5rem'>";
     html += "<h3 style='color:#38bdf8;margin:0'>Image Sources</h3>";
     if (sourceCount > 1) {
         html += "<div style='display:flex;gap:0.75rem;align-items:center'>";
@@ -310,8 +310,8 @@ String WebConfig::generateImagePage() {
     for (int i = 0; i < sourceCount; i++) {
         String url = configStorage.getImageSource(i);
         bool isEnabled = configStorage.isImageEnabled(i);
-        html += "<div class='image-source-item' style='margin-bottom:1rem;padding:1rem;border:1px solid #334155;border-radius:6px;background:#1e293b" + String(isEnabled ? "" : ";opacity:0.6") + "'>";
-        html += "<div style='display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem'>";
+        html += "<div class='image-source-item' style='margin-bottom:0.5rem;padding:0.75rem;border:1px solid #334155;border-radius:6px;background:#1e293b" + String(isEnabled ? "" : ";opacity:0.6") + "'>";
+        html += "<div style='display:flex;align-items:center;gap:0.5rem;margin-bottom:0'>";
         if (sourceCount > 1) {
             html += "<input type='checkbox' class='image-select-checkbox' data-index='" + String(i) + "' style='width:18px;height:18px;accent-color:#0ea5e9;cursor:pointer' onchange='updateBulkDeleteButton()'>";
         }
@@ -333,9 +333,9 @@ String WebConfig::generateImagePage() {
         html += "</div>";
         
         // Collapsible transform section
-        html += "<div id='transformSection_" + String(i) + "' style='display:none;margin-top:0.75rem;padding:1rem;background:#0f172a;border-radius:4px;border-left:3px solid #3b82f6'>";
-        html += "<p style='color:#64748b;font-size:0.85rem;margin-bottom:0.75rem'><i class='fas fa-info-circle' style='margin-right:6px'></i>Override default transformations for this source</p>";
-        html += "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.75rem'>";
+        html += "<div id='transformSection_" + String(i) + "' style='display:none;margin-top:0.5rem;padding:0.75rem;background:#0f172a;border-radius:4px;border-left:3px solid #3b82f6'>";
+        html += "<p style='color:#64748b;font-size:0.8rem;margin-bottom:0.5rem'><i class='fas fa-info-circle' style='margin-right:4px'></i>Override default transformations for this source</p>";
+        html += "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.5rem'>";
         
         html += "<div><label style='font-size:0.85rem;color:#94a3b8'>Scale X</label>";
         html += "<input type='number' class='form-control' value='" + String(configStorage.getImageScaleX(i)) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "' onchange='updateImageTransform(" + String(i) + ", \"scaleX\", this)' style='font-size:0.9rem;padding:0.5rem'></div>";
@@ -359,16 +359,16 @@ String WebConfig::generateImagePage() {
         html += "</select></div>";
         
         html += "</div>";
-        html += "<div style='margin-top:0.75rem;display:flex;gap:0.5rem'>";
-        html += "<button type='button' class='btn btn-secondary' onclick='copyDefaultsToImage(" + String(i) + ", this)' style='font-size:0.85rem;padding:0.5rem 0.75rem'>Reset to Defaults</button>";
-        html += "<button type='button' class='btn btn-secondary' onclick='applyTransformImmediately(" + String(i) + ", this)' style='font-size:0.85rem;padding:0.5rem 0.75rem'>Apply Now</button>";
+        html += "<div style='margin-top:0.5rem;display:flex;gap:0.5rem'>";
+        html += "<button type='button' class='btn btn-secondary' onclick='copyDefaultsToImage(" + String(i) + ", this)' style='font-size:0.8rem;padding:0.4rem 0.6rem'>Reset to Defaults</button>";
+        html += "<button type='button' class='btn btn-secondary' onclick='applyTransformImmediately(" + String(i) + ", this)' style='font-size:0.8rem;padding:0.4rem 0.6rem'>Apply Now</button>";
         html += "</div></div>";
         
         html += "</div>";
     }
     
     html += "</div>";
-    html += "<div style='display:flex;gap:0.75rem;margin-top:1rem'>";
+    html += "<div style='display:flex;gap:0.5rem;margin-top:0.5rem'>";
     html += "<button type='button' class='btn btn-success' onclick='addImageSource(this)'><i class='fas fa-plus' style='margin-right:6px'></i>Add Image Source</button>";
     if (sourceCount > 0) {
         html += "<button type='button' class='btn btn-secondary' onclick='clearAllSources(this)'><i class='fas fa-broom' style='margin-right:6px'></i>Clear All</button>";
@@ -378,19 +378,19 @@ String WebConfig::generateImagePage() {
     html += "</div>"; // Close Image Config Card
     
     // 4. Default Transformations Card (Global Defaults)
-    html += "<div class='card' style='margin-top:1.5rem'><h2>🎨 Default Transformations</h2>";
-    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1rem'>These settings apply to all new images or those without overrides.</p>";
-    html += "<div class='grid'>";
-    html += "<div class='form-group'><label for='default_scale_x'>Scale X</label>";
-    html += "<input type='number' id='default_scale_x' name='default_scale_x' class='form-control' value='" + String(configStorage.getDefaultScaleX()) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "'></div>";
-    html += "<div class='form-group'><label for='default_scale_y'>Scale Y</label>";
-    html += "<input type='number' id='default_scale_y' name='default_scale_y' class='form-control' value='" + String(configStorage.getDefaultScaleY()) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "'></div>";
-    html += "<div class='form-group'><label for='default_offset_x'>Offset X</label>";
-    html += "<input type='number' id='default_offset_x' name='default_offset_x' class='form-control' value='" + String(configStorage.getDefaultOffsetX()) + "'></div>";
-    html += "<div class='form-group'><label for='default_offset_y'>Offset Y</label>";
-    html += "<input type='number' id='default_offset_y' name='default_offset_y' class='form-control' value='" + String(configStorage.getDefaultOffsetY()) + "'></div>";
-    html += "<div class='form-group'><label for='default_rotation'>Rotation</label>";
-    html += "<select id='default_rotation' name='default_rotation' class='form-control'>";
+    html += "<div class='card' style='margin-top:0.75rem'><h2>🎨 Default Transformations</h2>";
+    html += "<p style='color:#94a3b8;font-size:0.8rem;margin:0 0 0.5rem 0'>These settings apply to all new images or those without overrides.</p>";
+    html += "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.75rem'>";
+    html += "<div class='form-group' style='margin-bottom:0'><label for='default_scale_x' style='font-size:0.8rem;margin-bottom:0.25rem'>Scale X</label>";
+    html += "<input type='number' id='default_scale_x' name='default_scale_x' class='form-control' style='padding:0.4rem 0.5rem;font-size:0.9rem' value='" + String(configStorage.getDefaultScaleX()) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "'></div>";
+    html += "<div class='form-group' style='margin-bottom:0'><label for='default_scale_y' style='font-size:0.8rem;margin-bottom:0.25rem'>Scale Y</label>";
+    html += "<input type='number' id='default_scale_y' name='default_scale_y' class='form-control' style='padding:0.4rem 0.5rem;font-size:0.9rem' value='" + String(configStorage.getDefaultScaleY()) + "' step='0.01' min='0.1' max='" + String(MAX_SCALE, 1) + "'></div>";
+    html += "<div class='form-group' style='margin-bottom:0'><label for='default_offset_x' style='font-size:0.8rem;margin-bottom:0.25rem'>Offset X</label>";
+    html += "<input type='number' id='default_offset_x' name='default_offset_x' class='form-control' style='padding:0.4rem 0.5rem;font-size:0.9rem' value='" + String(configStorage.getDefaultOffsetX()) + "'></div>";
+    html += "<div class='form-group' style='margin-bottom:0'><label for='default_offset_y' style='font-size:0.8rem;margin-bottom:0.25rem'>Offset Y</label>";
+    html += "<input type='number' id='default_offset_y' name='default_offset_y' class='form-control' style='padding:0.4rem 0.5rem;font-size:0.9rem' value='" + String(configStorage.getDefaultOffsetY()) + "'></div>";
+    html += "<div class='form-group' style='margin-bottom:0'><label for='default_rotation' style='font-size:0.8rem;margin-bottom:0.25rem'>Rotation</label>";
+    html += "<select id='default_rotation' name='default_rotation' class='form-control' style='padding:0.4rem 0.5rem;font-size:0.9rem'>";
     int defRot = (int)configStorage.getDefaultRotation();
     html += String("<option value='0'") + (defRot == 0 ? " selected" : "") + ">0°</option>";
     html += String("<option value='90'") + (defRot == 90 ? " selected" : "") + ">90°</option>";
@@ -400,7 +400,7 @@ String WebConfig::generateImagePage() {
     html += "</div></div>";
     
     // Save Button
-    html += "<div class='card' style='margin-top:1.5rem'>";
+    html += "<div class='card' style='margin-top:0.75rem'>";
     html += "<button type='submit' class='btn btn-primary'><i class='fas fa-save' style='margin-right:6px'></i>Save All Settings</button>";
     html += "</div>";
     
