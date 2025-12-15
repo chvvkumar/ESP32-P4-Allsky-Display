@@ -682,6 +682,8 @@ jobs:
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
+          set +e  # Don't exit immediately on error
+          
           # Read collected data
           COMMITS=$(cat commits.txt)
           FILES=$(cat files.txt)
@@ -746,6 +748,7 @@ jobs:
           PROMPT="${PROMPT//%FILES%/$(echo $FILES_ESCAPED | jq -r .)}"
           
           # Make API request to Google Gemini
+          echo "🔍 Making API request to Google Gemini..."
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=$GOOGLE_API_KEY" \
             -H "Content-Type: application/json" \
             -d "$(jq -n \
@@ -765,6 +768,9 @@ jobs:
                   maxOutputTokens: 2048
                 }
               }')")
+          
+          echo "📡 API request completed"
+          echo "Response length: ${#RESPONSE}"
           
           # Debug: Show response status
           if [ -z "$RESPONSE" ]; then
