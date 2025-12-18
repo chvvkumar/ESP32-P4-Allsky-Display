@@ -67,9 +67,11 @@ Complete user and developer documentation organized by user journey:
 ### 1. Hardware Required
 
 - [Waveshare 3.4" ESP32-P4 Touch LCD](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.4c.htm) (800×800) ✅ **Tested & Working**
-- [Waveshare 4.0" ESP32-P4 Touch LCD](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-4C) (720×720) ⚠️ **Untested**
+- [Waveshare 4.0" ESP32-P4 Touch LCD](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-4C) (720×720) ✨ **Supported via Web UI** (untested on hardware)
 
 **Requirements:** ESP32-P4 with WiFi 6, DSI display, GT911 touch, PSRAM required
+
+💡 **Both displays supported!** Select display type in Web UI System settings after flashing (v-snd-0.61+)
 
 📖 **Full Details:** [Hardware Requirements Guide](docs/01_hardware.md)
 
