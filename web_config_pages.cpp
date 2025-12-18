@@ -1021,6 +1021,27 @@ String WebConfig::generateAPIReferencePage() {
     html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
     html += "curl -X POST " + deviceUrl + "/api/next-image</pre></div>";
     
+    // POST /api/force-refresh
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/force-refresh</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Force immediate re-download of the current image. Useful for API-triggered update mode or manual refresh.</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Use Cases:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:disc;padding-left:1.5rem'>";
+    html += "<li>Refresh image on external trigger (motion detection, satellite image availability)</li>";
+    html += "<li>Manual refresh via automation script</li>";
+    html += "<li>Synchronized updates with external systems</li>";
+    html += "<li>Testing image updates without waiting for cycle interval</li></ul></div>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Request Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/force-refresh</pre></div>";
+    html += "<div>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0'>";
+    html += "{\"status\":\"success\",\"message\":\"Current image refreshed\"}</pre>";
+    html += "</div></div>";
+    
     // POST /api/update-transform
     html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
     html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/update-transform</h3>";

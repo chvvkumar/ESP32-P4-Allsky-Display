@@ -61,25 +61,29 @@ scaledBuffer (5.12MB)          - PPA transformation output
 
 ### Overview
 
-Display up to **10 different image sources** with automatic cycling between them.
+Display up to **10 different image sources** with automatic cycling or API-triggered refresh.
 
 **Features:**
+- Two update modes: Automatic Cycling or API-Triggered Refresh (v-snd-0.62+)
 - Configurable cycle interval (10 seconds - 1 hour)
 - Random or sequential order
 - Per-image transform settings (scale, offset, rotation)
 - Individual enable/disable for each source
-- Manual advance via touch or serial command
+- Manual advance via touch, serial command, or API call
 
 ### Configuration
 
 **Via Web UI:**
 1. Navigate to `http://allskyesp32.lan:8080/image`
-2. Enable "Multi-Image Cycling"
-3. Click "Add Image Source" for each URL
-4. Set cycle interval slider
-5. Enable "Random Order" if desired
-6. Configure per-image transforms
-7. Click "Save Configuration"
+2. Select "Update Mode":
+   - **⏺ Automatic Cycling**: Auto-cycles at configured intervals
+   - **🔗 API-Triggered Refresh**: Manual control via `/api/force-refresh`
+3. Enable "Multi-Image Cycling" (for automatic mode)
+4. Click "Add Image Source" for each URL
+5. Set cycle interval slider (automatic mode)
+6. Enable "Random Order" if desired (automatic mode)
+7. Configure per-image transforms
+8. Click "Save Configuration"
 
 **Per-Image Settings:**
 ```
@@ -117,10 +121,15 @@ Image 3:
 - More variety, prevents pattern blindness
 - Good for diverse camera feeds
 
-**Single Image Refresh Mode:**
-- Cycling disabled, single URL refreshes at interval
-- Touch gestures cycle through static presets
-- Good for single camera with transform presets
+**API-Triggered Refresh Mode:** (v-snd-0.62+)
+- Cycling disabled, image only updates when `/api/force-refresh` is called
+- Use REST API or MQTT to control when image refreshes
+- Touch gestures still work for manual cycling
+- Ideal for external automation systems or manual control
+- Example use cases:
+  - Refresh only when new satellite image available
+  - Update on motion detection events
+  - Synchronized with external triggers
 
 ---
 
@@ -804,6 +813,178 @@ Access `http://allskyesp32.lan:8080/` for:
 - Monitor debug output remotely
 - Troubleshoot network issues
 - Verify system behavior
+
+### REST API Endpoints
+
+All endpoints return JSON responses and use standard HTTP methods.
+
+#### GET /api/info
+
+**Description:** Retrieve complete system status information
+
+**Example Request:**
+```bash
+curl http://allskyesp32.lan:8080/api/info
+```
+
+**Response:**
+```json
+{
+  "uptime": 31568000,
+  "wifi": {
+    "connected": true,
+    "rssi": -65,
+    "ssid": "MyNetwork"
+  },
+  "mqtt": {
+    "connected": true,
+    "server": "192.168.1.100"
+  },
+  "memory": {
+    "free_heap": 400000,
+    "free_psram": 15000000
+  },
+  "image": {
+    "current_index": 0,
+    "total_sources": 5,
+    "cycling_enabled": true,
+    "update_mode": 0
+  }
+}
+```
+
+#### GET /api/health
+
+**Description:** Get device health diagnostics with status indicators
+
+**Example Request:**
+```bash
+curl http://allskyesp32.lan:8080/api/health
+```
+
+See [Health Diagnostics](#health-diagnostics) section for full response format.
+
+#### GET /api/current_image
+
+**Description:** Get current image URL and index
+
+**Example Request:**
+```bash
+curl http://allskyesp32.lan:8080/api/current_image
+```
+
+**Response:**
+```json
+{
+  "index": 0,
+  "url": "https://camera1.example.com/allsky.jpg",
+  "total_sources": 5
+}
+```
+
+#### POST /api/next_image
+
+**Description:** Manually advance to next image in cycling sequence
+
+**Example Request:**
+```bash
+curl -X POST http://allskyesp32.lan:8080/api/next_image
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Switched to next image and refreshed display"
+}
+```
+
+#### POST /api/force-refresh
+
+**Description:** Force immediate re-download of current image (v-snd-0.62+)
+
+**Example Request:**
+```bash
+curl -X POST http://allskyesp32.lan:8080/api/force-refresh
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Current image refreshed"
+}
+```
+
+**Use Cases:**
+- Refresh image on external trigger (motion detection, satellite image availability)
+- Manual refresh via automation script
+- Synchronized updates with external systems
+- Testing image updates without waiting for cycle interval
+
+**Example Automation (Home Assistant):**
+```yaml
+automation:
+  - alias: "Refresh AllSky Display on New Image"
+    trigger:
+      platform: state
+      entity_id: sensor.allsky_camera_last_update
+    action:
+      - service: rest_command.refresh_allsky_display
+```
+
+#### POST /api/save
+
+**Description:** Save configuration to NVS storage
+
+**Example Request:**
+```bash
+curl -X POST http://allskyesp32.lan:8080/api/save
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Configuration saved"
+}
+```
+
+#### POST /api/restart
+
+**Description:** Reboot device
+
+**Example Request:**
+```bash
+curl -X POST http://allskyesp32.lan:8080/api/restart
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Device rebooting..."
+}
+```
+
+#### POST /api/factory_reset
+
+**Description:** Clear all NVS settings and reboot to captive portal
+
+**Example Request:**
+```bash
+curl -X POST http://allskyesp32.lan:8080/api/factory_reset
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Factory reset complete, rebooting..."
+}
+```
+
+**Warning:** This clears all configuration including WiFi credentials. Device will reboot to captive portal mode.
 
 ---
 
