@@ -1999,21 +1999,32 @@ void loop() {
         Serial.println("DEBUG: Resuming automatic cycling after 30s of inactivity");
     }
     
-    // Only auto-cycle if not in single image refresh mode and not paused for editing
-    if (cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode && !cyclingPausedForEditing) {
+    // Only auto-cycle if in automatic mode, not paused, and multiple images available
+    int imageUpdateMode = configStorage.getImageUpdateMode();
+    if (imageUpdateMode == 0 && cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode && !cyclingPausedForEditing) {
         // Use per-image duration instead of global cycle interval
         unsigned long currentImageDuration = configStorage.getImageDuration(currentImageIndex) * 1000;  // Convert seconds to milliseconds
         if (currentTime - lastCycleTime >= currentImageDuration || lastCycleTime == 0) {
             shouldCycle = true;
             lastCycleTime = currentTime;
-            Serial.println("DEBUG: Time to cycle to next image source");
+            Serial.println("DEBUG: Time to cycle to next image source (Automatic Mode)");
             advanceToNextImage();
         }
     }
     
     // Check if it's time to update the image (either scheduled update or cycling)
+    // In API mode, only update on force refresh (lastUpdate = 0) or scheduled refresh interval
     // Skip image processing during OTA to prevent interference
-    if (!imageProcessing && !imageDownloadPending && !webConfig.isOTAInProgress() && (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0)) {
+    bool shouldUpdate = false;
+    if (imageUpdateMode == 0) {
+        // Automatic cycling mode: normal behavior
+        shouldUpdate = (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0);
+    } else {
+        // API-triggered mode: only update when explicitly triggered (lastUpdate = 0)
+        shouldUpdate = (lastUpdate == 0);
+    }
+    
+    if (!imageProcessing && !imageDownloadPending && !webConfig.isOTAInProgress() && shouldUpdate) {
         // Pre-download system health check
         if (!wifiManager.isConnected()) {
             Serial.println("WARNING: WiFi disconnected, skipping image download");

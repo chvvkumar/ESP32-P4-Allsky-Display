@@ -40,6 +40,7 @@ void ConfigStorage::setDefaults() {
 
   // Multi-image cycling defaults using external config arrays
   config.cyclingEnabled = DEFAULT_CYCLING_ENABLED;
+  config.imageUpdateMode = 0;  // Default to automatic cycling mode
   config.cycleInterval = DEFAULT_CYCLE_INTERVAL;
   config.randomOrder = DEFAULT_RANDOM_ORDER;
   config.currentImageIndex = 0;
@@ -149,6 +150,8 @@ void ConfigStorage::loadConfig() {
     // Load multi-image cycling settings
     config.cyclingEnabled =
         preferences.getBool("cycling_en", config.cyclingEnabled);
+    config.imageUpdateMode =
+        preferences.getInt("img_upd_mode", config.imageUpdateMode);
     config.cycleInterval =
         preferences.getULong("cycle_intv", config.cycleInterval);
     config.randomOrder = preferences.getBool("random_ord", config.randomOrder);
@@ -275,6 +278,7 @@ void ConfigStorage::saveConfig() {
 
   // Save multi-image cycling settings
   preferences.putBool("cycling_en", config.cyclingEnabled);
+  preferences.putInt("img_upd_mode", config.imageUpdateMode);
   preferences.putULong("cycle_intv", config.cycleInterval);
   preferences.putBool("random_ord", config.randomOrder);
   preferences.putInt("curr_img_idx", config.currentImageIndex);
@@ -607,6 +611,13 @@ void ConfigStorage::setCyclingEnabled(bool enabled) {
   }
 }
 
+void ConfigStorage::setImageUpdateMode(int mode) {
+  if (config.imageUpdateMode != mode) {
+    config.imageUpdateMode = mode;
+    _dirty = true;
+  }
+}
+
 void ConfigStorage::setCycleInterval(unsigned long interval) {
   unsigned long newInterval =
       constrain(interval, MIN_CYCLE_INTERVAL, MAX_CYCLE_INTERVAL);
@@ -720,6 +731,8 @@ void ConfigStorage::clearImageSources() {
 
 // Multi-image cycling getters
 bool ConfigStorage::getCyclingEnabled() { return config.cyclingEnabled; }
+
+int ConfigStorage::getImageUpdateMode() { return config.imageUpdateMode; }
 
 unsigned long ConfigStorage::getCycleInterval() { return config.cycleInterval; }
 

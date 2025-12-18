@@ -23,9 +23,11 @@ String WebConfig::generateMainPage() {
     html += "<div class='stat-value'>" + String(configStorage.getCurrentImageIndex() + 1) + "/" + String(configStorage.getImageSourceCount()) + "</div>";
     html += "<div class='stat-label'>Active Source</div></div>";
     
-    html += "<div class='stat-card'><i class='fas fa-sync-alt stat-icon'></i>";
-    html += "<div class='stat-value'>" + String(configStorage.getCycleInterval() / 1000) + "s</div>";
-    html += "<div class='stat-label'>Display Time</div></div>";
+    html += "<div class='stat-card'><i class='fas fa-";
+    html += String(configStorage.getImageUpdateMode() == 0 ? "sync-alt" : "wifi");
+    html += " stat-icon'></i>";
+    html += "<div class='stat-value'>" + String(configStorage.getImageUpdateMode() == 0 ? "Auto" : "API") + "</div>";
+    html += "<div class='stat-label'>Update Mode</div></div>";
     
     html += "<div class='stat-card'><i class='fas fa-download stat-icon'></i>";
     html += "<div class='stat-value'>" + String(configStorage.getUpdateInterval() / 1000 / 60) + "m</div>";
@@ -366,6 +368,18 @@ String WebConfig::generateImagePage() {
     // Timing & Order Section
     html += "<h3 style='color:#38bdf8;margin:0 0 0.5rem 0;font-size:1rem'>⏱️ Timing & Order</h3>";
     html += "<div class='grid' style='margin-bottom:0.5rem'>";
+    
+    // Image Update Mode Selection
+    html += "<div class='form-group'><label for='image_update_mode'>";
+    html += "<span style='color:#38bdf8'>Update Mode</span></label>";
+    html += "<select id='image_update_mode' name='image_update_mode' class='form-control'>";
+    html += "<option value='0'" + String(configStorage.getImageUpdateMode() == 0 ? " selected" : "") + ">⏺ Automatic Cycling</option>";
+    html += "<option value='1'" + String(configStorage.getImageUpdateMode() == 1 ? " selected" : "") + ">🔗 API-Triggered Refresh</option>";
+    html += "</select>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.25rem;margin-bottom:0'>";
+    html += "<i class='fas fa-info-circle' style='margin-right:4px;color:#0ea5e9'></i>";
+    html += "Automatic: cycles through images automatically. API: refreshes only when /api/force-refresh is called";
+    html += "</p></div>";
     
     // Default Image Duration (for newly added images)
     html += "<div class='form-group'><label for='default_image_duration'>";

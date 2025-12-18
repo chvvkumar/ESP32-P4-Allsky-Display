@@ -135,6 +135,11 @@ void WebConfig::handleSaveConfig() {
             unsigned long interval = value.toInt() * 1000UL;
             configStorage.setCycleInterval(interval);
         }
+        else if (name == "image_update_mode") {
+            int mode = value.toInt();
+            configStorage.setImageUpdateMode(mode);
+            LOG_INFO_F("[WebAPI] Image update mode changed to: %s\n", mode == 0 ? "Automatic Cycling" : "API-Triggered Refresh");
+        }
         else if (name == "default_image_duration") {
             unsigned long duration = value.toInt();
             configStorage.setDefaultImageDuration(duration);
@@ -501,6 +506,18 @@ void WebConfig::handleNextImage() {
     LOG_DEBUG("[WebAPI] Image advance completed");
     
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Switched to next image and refreshed display\"}");
+}
+
+void WebConfig::handleForceRefresh() {
+    extern void downloadAndDisplayImage();
+    extern unsigned long lastUpdate;
+    
+    LOG_INFO("[WebAPI] Force refresh requested via web interface - redownloading current image");
+    lastUpdate = 0; // Force immediate image download
+    downloadAndDisplayImage();
+    LOG_DEBUG("[WebAPI] Image refresh completed");
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Current image refreshed\"}");
 }
 
 void WebConfig::handleUpdateImageTransform() {

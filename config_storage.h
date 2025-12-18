@@ -57,6 +57,7 @@ public:
     
     // Multi-image cycling setters
     void setCyclingEnabled(bool enabled);
+    void setImageUpdateMode(int mode);
     void setCycleInterval(unsigned long interval);
     void setRandomOrder(bool random);
     void setCurrentImageIndex(int index);
@@ -105,6 +106,7 @@ public:
     
     // Multi-image cycling getters
     bool getCyclingEnabled();
+    int getImageUpdateMode();
     unsigned long getCycleInterval();
     bool getRandomOrder();
     int getCurrentImageIndex();
@@ -222,6 +224,7 @@ private:
         
         // Multi-image cycling settings
         bool cyclingEnabled;
+        int imageUpdateMode;  // 0=automatic cycling, 1=API-triggered refresh
         unsigned long cycleInterval;
         bool randomOrder;
         int currentImageIndex;
