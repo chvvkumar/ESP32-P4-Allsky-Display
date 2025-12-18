@@ -8,6 +8,8 @@
 #include "display_manager.h"
 #include "ota_manager.h"
 #include "device_health.h"
+#include "ha_rest_client.h"
+#include "ha_discovery.h"
 #include "logging.h"
 #include <Update.h>
 
@@ -25,6 +27,7 @@ void WebConfig::handleSaveConfig() {
     bool needsRestart = false;
     bool brightnessChanged = false;
     bool imageSettingsChanged = false;
+    bool displayTypeChanged = false;
     int newBrightness = -1;
     
     // Parse form data and save configuration
@@ -120,6 +123,12 @@ void WebConfig::handleSaveConfig() {
         }
         else if (name == "backlight_freq") configStorage.setBacklightFreq(value.toInt());
         else if (name == "backlight_resolution") configStorage.setBacklightResolution(value.toInt());
+        else if (name == "color_temp") {
+            int temp = value.toInt();
+            configStorage.setColorTemp(temp);
+            LOG_INFO_F("[WebAPI] Color temperature set to %dK\n", temp);
+            imageSettingsChanged = true;  // Trigger image refresh to apply new color temp
+        }
         
         // Cycling settings
         else if (name == "cycle_interval") {
@@ -141,6 +150,16 @@ void WebConfig::handleSaveConfig() {
         else if (name == "critical_heap_threshold") configStorage.setCriticalHeapThreshold(value.toInt());
         else if (name == "critical_psram_threshold") configStorage.setCriticalPSRAMThreshold(value.toInt());
         
+        // Display hardware settings
+        else if (name == "display_type") {
+            int newDisplayType = value.toInt();
+            int currentDisplayType = configStorage.getDisplayType();
+            if (newDisplayType != currentDisplayType) {
+                LOG_INFO_F("[WebAPI] Display type changed: %d -> %d (restart required)\n", currentDisplayType, newDisplayType);
+                configStorage.setDisplayType(newDisplayType);
+                displayTypeChanged = true;  // Flag for restart prompt
+            }
+        }
         
         // Home Assistant REST Control settings
         else if (name == "ha_base_url") configStorage.setHABaseUrl(value);
@@ -175,6 +194,17 @@ void WebConfig::handleSaveConfig() {
     bool hasNTPEnabled = server->hasArg("ntp_enabled") || server->hasArg("ntp_enabled_present");
     bool hasUseHARestControl = server->hasArg("use_ha_rest_control") || server->hasArg("use_ha_rest_control_present");
     
+    // Process brightness mode changes first to handle mutual exclusion properly
+    if (hasBrightnessAutoMode) {
+        bool enableMQTTBrightness = server->hasArg("brightness_auto_mode");
+        configStorage.setBrightnessAutoMode(enableMQTTBrightness);
+        
+        if (enableMQTTBrightness) {
+            LOG_INFO("[WebAPI] MQTT brightness control enabled - auto-disabling HA REST Control");
+            configStorage.setUseHARestControl(false);
+        }
+    }
+    
     // Logic: If enabling HA REST control, automatically disable MQTT auto mode to prevent conflicts
     if (hasUseHARestControl) {
         bool enableHARestControl = server->hasArg("use_ha_rest_control");
@@ -207,16 +237,6 @@ void WebConfig::handleSaveConfig() {
         configStorage.setRandomOrder(server->hasArg("random_order"));
     }
     
-    if (hasBrightnessAutoMode) {
-        bool enableMQTTBrightness = server->hasArg("brightness_auto_mode");
-        configStorage.setBrightnessAutoMode(enableMQTTBrightness);
-        
-        if (enableMQTTBrightness) {
-            LOG_INFO("[WebAPI] MQTT brightness control enabled - auto-disabling HA REST Control");
-            configStorage.setUseHARestControl(false);
-        }
-    }
-    
     if (hasHADiscovery) {
         configStorage.setHADiscoveryEnabled(server->hasArg("ha_discovery_enabled"));
     }
@@ -244,6 +264,12 @@ void WebConfig::handleSaveConfig() {
     
     if (imageSettingsChanged) {
         applyImageSettings();
+    }
+    
+    // Handle display type change - requires restart
+    if (displayTypeChanged) {
+        LOG_WARNING("[WebAPI] Display type changed - restart required for display hardware reinitialization");
+        needsRestart = true;
     }
     
     // Switch images immediately when mode changes
@@ -277,15 +303,20 @@ void WebConfig::handleSaveConfig() {
         downloadAndDisplayImage();
     }
     
+    // Consolidate restart requirement
+    if (displayTypeChanged) {
+        needsRestart = true;
+    }
+    
     // Prepare response message
     String message = "Configuration saved successfully";
-    if (needsRestart) message += " (restart required for network/MQTT changes)";
+    if (needsRestart) message += " (restart required for changes to take effect)";
     if (brightnessChanged) message += " - brightness applied immediately";
     if (imageSettingsChanged) message += " - image settings applied immediately";
     
     LOG_INFO_F("[WebAPI] Configuration save completed: %s\n", message.c_str());
     
-    String response = "{\"status\":\"success\",\"message\":\"" + message + "\"}";
+    String response = "{\"status\":\"success\",\"message\":\"" + message + "\",\"needsRestart\":" + (needsRestart ? "true" : "false") + "}";
     sendResponse(200, "application/json", response);
 }
 
@@ -912,6 +943,7 @@ void WebConfig::handleGetAllInfo() {
     json += "\"height\":" + String(displayManager.getHeight()) + ",";
     json += "\"brightness\":" + String(displayManager.getBrightness()) + ",";
     json += "\"brightness_auto_mode\":" + String(configStorage.getBrightnessAutoMode() ? "true" : "false") + ",";
+    json += "\"use_ha_rest_control\":" + String(configStorage.getUseHARestControl() ? "true" : "false") + ",";
     json += "\"backlight_freq\":" + String(configStorage.getBacklightFreq()) + ",";
     json += "\"backlight_resolution\":" + String(configStorage.getBacklightResolution());
     json += "},";
@@ -965,7 +997,8 @@ void WebConfig::handleGetAllInfo() {
     json += "\"mqtt_reconnect_interval\":" + String(configStorage.getMQTTReconnectInterval()) + ",";
     json += "\"watchdog_timeout\":" + String(configStorage.getWatchdogTimeout()) + ",";
     json += "\"critical_heap_threshold\":" + String(configStorage.getCriticalHeapThreshold()) + ",";
-    json += "\"critical_psram_threshold\":" + String(configStorage.getCriticalPSRAMThreshold());
+    json += "\"critical_psram_threshold\":" + String(configStorage.getCriticalPSRAMThreshold()) + ",";
+    json += "\"display_type\":" + String(configStorage.getDisplayType());
     json += "},";
     
     // Time settings
@@ -1009,6 +1042,36 @@ void WebConfig::handleCurrentImage() {
     sendResponse(200, "application/json", json);
 }
 
+void WebConfig::handleForceBrightnessUpdate() {
+    LOG_INFO("[WebAPI] Force brightness update requested");
+    
+    // Check current brightness mode and trigger appropriate update
+    extern MQTTManager mqttManager;
+    extern HARestClient haRestClient;
+    extern HADiscovery haDiscovery;
+    
+    if (configStorage.getUseHARestControl() && haRestClient.isRunning()) {
+        // Trigger immediate HA REST update
+        LOG_INFO("[WebAPI] Forcing HA REST brightness update");
+        int brightness = haRestClient.getLastBrightness();
+        if (brightness >= 0) {
+            displayManager.setBrightness(brightness);
+            LOG_INFO_F("[WebAPI] Applied HA brightness: %d%%\n", brightness);
+        }
+    } else if (configStorage.getBrightnessAutoMode()) {
+        // For MQTT mode, just publish current state since MQTT is command-driven
+        LOG_INFO("[WebAPI] MQTT auto mode active - publishing current brightness state");
+        haDiscovery.publishState();
+    } else {
+        // Manual mode - use default brightness
+        int brightness = configStorage.getDefaultBrightness();
+        displayManager.setBrightness(brightness);
+        LOG_INFO_F("[WebAPI] Applied manual brightness: %d%%\n", brightness);
+    }
+    
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Brightness updated\"}");
+}
+
 void WebConfig::handleGetHealth() {
     LOG_INFO("[WebAPI] Health diagnostics requested via API");
     
@@ -1026,4 +1089,3 @@ void WebConfig::handleGetHealth() {
     
     sendResponse(200, "application/json", json);
 }
-

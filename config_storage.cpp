@@ -77,6 +77,12 @@ void ConfigStorage::setDefaults() {
   config.defaultImageDuration = 30; // Default 30 seconds for new images
   config.backlightFreq = BACKLIGHT_FREQ;
   config.backlightResolution = BACKLIGHT_RESOLUTION;
+  
+  // Display hardware defaults (1 = 3.4" DSI, 2 = 4.0" DSI)
+  config.displayType = 1;  // Default to 3.4" display
+  
+  // Color temperature default
+  config.colorTemp = DEFAULT_COLOR_TEMP;  // 6500K neutral white
 
   config.updateInterval = UPDATE_INTERVAL;
   config.mqttReconnectInterval = MQTT_RECONNECT_INTERVAL;
@@ -198,6 +204,10 @@ void ConfigStorage::loadConfig() {
     config.backlightFreq = preferences.getInt("bl_freq", config.backlightFreq);
     config.backlightResolution =
         preferences.getInt("bl_res", config.backlightResolution);
+    
+    config.displayType = preferences.getInt("disp_type", config.displayType);
+    
+    config.colorTemp = preferences.getInt("color_temp", config.colorTemp);
 
     config.updateInterval =
         preferences.getULong("upd_interval", config.updateInterval);
@@ -305,6 +315,10 @@ void ConfigStorage::saveConfig() {
   preferences.putULong("def_img_dur", config.defaultImageDuration);
   preferences.putInt("bl_freq", config.backlightFreq);
   preferences.putInt("bl_res", config.backlightResolution);
+  
+  preferences.putInt("disp_type", config.displayType);
+  
+  preferences.putInt("color_temp", config.colorTemp);
 
   preferences.putULong("upd_interval", config.updateInterval);
   preferences.putULong("mqtt_recon", config.mqttReconnectInterval);
@@ -1053,3 +1067,21 @@ int ConfigStorage::getDisplayMaxBrightness() { return config.displayMaxBrightnes
 bool ConfigStorage::getUseHARestControl() { return config.useHaRestControl; }
 unsigned long ConfigStorage::getHAPollInterval() { return config.haPollInterval; }
 int ConfigStorage::getLightSensorMappingMode() { return config.lightSensorMappingMode; }
+
+// Display hardware getters/setters
+int ConfigStorage::getDisplayType() { return config.displayType; }
+
+void ConfigStorage::setColorTemp(int temp) {
+  config.colorTemp = constrain(temp, MIN_COLOR_TEMP, MAX_COLOR_TEMP);
+  _dirty = true;
+}
+
+int ConfigStorage::getColorTemp() {
+  return config.colorTemp;
+}
+void ConfigStorage::setDisplayType(int type) {
+  if (config.displayType != type && (type == 1 || type == 2)) {
+    config.displayType = type;
+    _dirty = true;
+  }
+}

@@ -63,6 +63,7 @@ private:
     void handleFactoryReset();
     void handleSetLogSeverity();
     void handleClearCrashLogs();
+    void handleForceBrightnessUpdate();
     void handleGetHealth();
     
 public:

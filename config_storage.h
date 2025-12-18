@@ -172,6 +172,16 @@ public:
     bool getUseHARestControl();
     unsigned long getHAPollInterval();
     int getLightSensorMappingMode();
+    
+    // Display hardware setters
+    void setDisplayType(int type);
+    
+    // Display hardware getters
+    int getDisplayType();
+    
+    // Color temperature setters/getters
+    void setColorTemp(int temp);
+    int getColorTemp();
 
 private:
     Preferences preferences;
@@ -234,6 +244,12 @@ private:
         unsigned long defaultImageDuration;
         int backlightFreq;
         int backlightResolution;
+        
+        // Display hardware
+        int displayType;  // 1=3.4" DSI, 2=4.0" DSI
+        
+        // Color temperature
+        int colorTemp;  // Display color temperature in Kelvin (2000-10000)
         
         // Advanced settings
         unsigned long updateInterval;

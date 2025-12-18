@@ -38,7 +38,7 @@ bool WebConfig::begin(int port) {
         server->on("/config/mqtt", [this]() { handleMQTTConfig(); });
         server->on("/config/images", [this]() { handleImageConfig(); });
         server->on("/config/display", [this]() { handleDisplayConfig(); });
-        server->on("/config/advanced", [this]() { handleAdvancedConfig(); });
+        server->on("/config/system", [this]() { handleAdvancedConfig(); });
         server->on("/config/commands", [this]() { handleSerialCommands(); });
         server->on("/status", [this]() { handleStatus(); });
         server->on("/api/save", HTTP_POST, [this]() { handleSaveConfig(); });
@@ -59,6 +59,7 @@ bool WebConfig::begin(int port) {
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
         server->on("/api/set-log-severity", HTTP_POST, [this]() { handleSetLogSeverity(); });
         server->on("/api/clear-crash-logs", HTTP_POST, [this]() { handleClearCrashLogs(); });
+        server->on("/api/force-brightness-update", HTTP_POST, [this]() { handleForceBrightnessUpdate(); });
         server->on("/api/info", HTTP_GET, [this]() { handleGetAllInfo(); });
         server->on("/api/current-image", HTTP_GET, [this]() { handleCurrentImage(); });
         server->on("/api/health", HTTP_GET, [this]() { handleGetHealth(); });
@@ -240,8 +241,8 @@ void WebConfig::handleDisplayConfig() {
 }
 
 void WebConfig::handleAdvancedConfig() {
-    String html = generateHeader("Advanced Configuration");
-    html += generateNavigation("advanced");
+    String html = generateHeader("System Configuration");
+    html += generateNavigation("system");
     html += generateAdvancedPage();
     html += generateFooter();
     sendResponse(200, "text/html", html);
@@ -314,9 +315,9 @@ String WebConfig::generateNavigation(const String& currentPage) {
     html += "<button class='nav-toggle' onclick='toggleNav()' aria-label='Toggle navigation'><i class='fas fa-bars'></i></button>";
     html += "<div class='nav-content'>";
     
-    String pages[] = {"dashboard", "images", "display", "network", "mqtt", "console", "commands", "advanced", "api"};
-    String labels[] = {"🏠 Dashboard", "🖼️ Images", "💡 Display", "📡 Network", "🔗 MQTT", "🖥️ Console", "📟 Commands", "⚙️ Advanced", "📚 API"};
-    String urls[] = {"/", "/config/images", "/config/display", "/config/network", "/config/mqtt", "/console", "/config/commands", "/config/advanced", "/api-reference"};
+    String pages[] = {"dashboard", "images", "display", "network", "mqtt", "console", "system", "commands", "api"};
+    String labels[] = {"🏠 Dashboard", "🖼️ Images", "💡 Display", "📡 Network", "🔗 MQTT", "🖥️ Console", "⚙️ System", "📟 Commands", "📚 API"};
+    String urls[] = {"/", "/config/images", "/config/display", "/config/network", "/config/mqtt", "/console", "/config/system", "/config/commands", "/api-reference"};
     
     for (int i = 0; i < 9; i++) {
         String activeClass = (currentPage == pages[i]) ? " active" : "";

@@ -95,6 +95,11 @@ extern const bool DEFAULT_RANDOM_ORDER;
 #define DEFAULT_OFFSET_Y 0
 #define DEFAULT_ROTATION 0.0f
 
+// Color temperature defaults (Kelvin)
+#define DEFAULT_COLOR_TEMP 6500          // Neutral white (6500K)
+#define MIN_COLOR_TEMP 2000              // Warm (candle light)
+#define MAX_COLOR_TEMP 15000             // Cool (deep blue)
+
 // Image control constants
 #define SCALE_STEP 0.1f                  // Scale increment/decrement
 #define MOVE_STEP 10                     // Movement step in pixels

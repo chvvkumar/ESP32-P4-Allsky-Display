@@ -867,7 +867,12 @@ void renderFullImage() {
     systemMonitor.forceResetWatchdog();
     
     if (scaleX == 1.0 && scaleY == 1.0 && rotationAngle == 0.0) {
-        // No scaling or rotation needed, direct copy
+        // No scaling or rotation needed, apply color temp directly to full image buffer
+        int currentTemp = configStorage.getColorTemp();
+        if (currentTemp != 6500) {
+            ImageUtils::adjustColorTemperature(fullImageBuffer, fullImageWidth, fullImageHeight, currentTemp);
+        }
+        
         displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
         
         // Flush to display
@@ -913,6 +918,12 @@ void renderFullImage() {
                 unsigned long hwTime = millis() - hwStart;
                 Serial.printf("[PPA] ✓ Hardware acceleration successful in %lu ms\n", hwTime);
                 debugPrintf(COLOR_GREEN, "PPA hardware render: %lu ms", hwTime);
+                
+                // Apply color temperature adjustment to scaled buffer
+                int currentTemp = configStorage.getColorTemp();
+                if (currentTemp != 6500) {
+                    ImageUtils::adjustColorTemperature(scaledBuffer, scaledWidth, scaledHeight, currentTemp);
+                }
                 
                 // Draw the hardware-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
@@ -961,6 +972,12 @@ void renderFullImage() {
                 Serial.printf("[Render] ✓ Software scaling complete in %lu ms\n", swTime);
                 debugPrintf(COLOR_GREEN, "SW render: %lu ms", swTime);
                 
+                // Apply color temperature adjustment to scaled buffer
+                int currentTemp = configStorage.getColorTemp();
+                if (currentTemp != 6500) {
+                    ImageUtils::adjustColorTemperature(scaledBuffer, scaledWidth, scaledHeight, currentTemp);
+                }
+                
                 // Draw the software-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
                 
@@ -985,6 +1002,13 @@ void renderFullImage() {
         // Ultimate fallback: draw original unscaled image
         Serial.println("[Render] Drawing original unscaled image");
         debugPrint("WARNING: Showing unscaled image", COLOR_YELLOW);
+        
+        // Apply color temperature adjustment
+        int currentTemp = configStorage.getColorTemp();
+        if (currentTemp != 6500) {
+            ImageUtils::adjustColorTemperature(fullImageBuffer, fullImageWidth, fullImageHeight, currentTemp);
+        }
+        
         displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
         
         // Flush to display
