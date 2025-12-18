@@ -709,8 +709,8 @@ jobs:
           # Escape special characters for JSON
           COMMITS_ESCAPED=$(echo "$COMMITS" | jq -Rs .)
           FILES_ESCAPED=$(echo "$FILES" | jq -Rs .)
-          PR_TITLE=$(echo "${{ github.event.pull_request.title }}" | jq -Rs .)
-          PR_BODY=$(echo "${{ github.event.pull_request.body }}" | jq -Rs .)
+          PR_TITLE=$(echo '${{ github.event.pull_request.title }}' | jq -Rs .)
+          PR_BODY=$(echo '${{ github.event.pull_request.body }}' | jq -Rs .)
           
           # Build the prompt
           read -r -d '' PROMPT << 'EOF'
