@@ -17,6 +17,9 @@ bool ConfigStorage::begin() {
 
 void ConfigStorage::setDefaults() {
   // Set hardcoded defaults from original config.cpp
+  // Device name default
+  config.deviceName = "ESP32 AllSky Display";
+  
   // WiFi credentials are intentionally empty - device will start captive portal
   // on first boot
   config.wifiProvisioned = false;
@@ -119,6 +122,7 @@ void ConfigStorage::loadConfig() {
   preferences.begin(NAMESPACE, true); // Read-only mode
 
   if (preferences.isKey("wifi_ssid")) {
+    config.deviceName = preferences.getString("device_name", config.deviceName);
     config.wifiProvisioned =
         preferences.getBool("wifi_prov", config.wifiProvisioned);
     config.wifiSSID = preferences.getString("wifi_ssid", config.wifiSSID);
@@ -257,6 +261,7 @@ void ConfigStorage::saveConfig() {
 
   preferences.begin(NAMESPACE, false); // Read-write mode
 
+  preferences.putString("device_name", config.deviceName);
   preferences.putBool("wifi_prov", config.wifiProvisioned);
   preferences.putString("wifi_ssid", config.wifiSSID);
   preferences.putString("wifi_pwd", config.wifiPassword);
@@ -377,6 +382,13 @@ void ConfigStorage::setWiFiProvisioned(bool provisioned) {
     _dirty = true;
   }
 }
+void ConfigStorage::setDeviceName(const String &name) {
+  if (config.deviceName != name) {
+    config.deviceName = name;
+    _dirty = true;
+  }
+}
+
 void ConfigStorage::setWiFiSSID(const String &ssid) {
   if (config.wifiSSID != ssid) {
     config.wifiSSID = ssid;
@@ -389,6 +401,7 @@ void ConfigStorage::setWiFiPassword(const String &password) {
     _dirty = true;
   }
 }
+
 void ConfigStorage::setMQTTServer(const String &server) {
   if (config.mqttServer != server) {
     config.mqttServer = server;
@@ -552,6 +565,7 @@ void ConfigStorage::setCriticalPSRAMThreshold(size_t threshold) {
 }
 
 // Getters
+String ConfigStorage::getDeviceName() { return config.deviceName; }
 String ConfigStorage::getWiFiSSID() { return config.wifiSSID; }
 String ConfigStorage::getWiFiPassword() { return config.wifiPassword; }
 String ConfigStorage::getMQTTServer() { return config.mqttServer; }

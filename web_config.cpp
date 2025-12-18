@@ -295,7 +295,7 @@ String WebConfig::generateHeader(const String& title) {
     // Header
     html += "<div class='header'><div class='container'>";
     html += "<div class='header-content'>";
-    html += "<div class='logo'><i class='fas fa-satellite'></i> ESP32 AllSky Display</div>";
+    html += "<div class='logo'><i class='fas fa-satellite'></i> " + configStorage.getDeviceName() + "</div>";
     html += "<div class='status-badges'>";
     html += "<a href='https://github.com/chvvkumar/ESP32-P4-Allsky-Display' target='_blank' class='github-link'><i class='github-icon fa-github'></i> GitHub</a>";
     html += getConnectionStatus();
@@ -336,7 +336,7 @@ String WebConfig::generateFooter() {
     html += String(FPSTR(HTML_MODALS));
     
     html += "<div class='footer'><div class='container'>";
-    html += "<p style='margin-bottom:0.5rem'>ESP32 AllSky Display Configuration Portal</p>";
+    html += "<p style='margin-bottom:0.5rem'>" + configStorage.getDeviceName() + " Configuration Portal</p>";
     html += "<p style='font-size:0.8rem;color:#64748b;margin:0.25rem 0'>";
     html += "MD5: " + String(ESP.getSketchMD5().substring(0, 8)) + " | ";
     html += "Build: " + formatBytes(ESP.getSketchSize()) + " | ";

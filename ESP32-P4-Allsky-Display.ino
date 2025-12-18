@@ -648,7 +648,7 @@ void setup() {
         // Set starting position lower to avoid cutoff at top
         displayManager.setDebugY(150);  // Start at 150px from top (centered vertically)
         
-        debugPrint("ESP32 AllSky Display", COLOR_CYAN);
+        debugPrint(configStorage.getDeviceName().c_str(), COLOR_CYAN);
         debugPrint(" ", COLOR_WHITE);  // Spacing
         
         debugPrint("Initializing hardware...", COLOR_YELLOW);

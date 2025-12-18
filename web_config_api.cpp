@@ -35,8 +35,12 @@ void WebConfig::handleSaveConfig() {
         String name = server->argName(i);
         String value = server->arg(i);
         
+        // Device settings
+        if (name == "device_name") {
+            configStorage.setDeviceName(value);
+        }
         // Network settings
-        if (name == "wifi_ssid") {
+        else if (name == "wifi_ssid") {
             if (configStorage.getWiFiSSID() != value) {
                 LOG_INFO_F("[WebAPI] WiFi SSID updated: %s (restart required)\n", value.c_str());
                 needsRestart = true;
@@ -894,6 +898,7 @@ void WebConfig::handleGetAllInfo() {
     
     // System information
     json += "\"system\":{";
+    json += "\"device_name\":\"" + escapeJson(configStorage.getDeviceName()) + "\",";
     json += "\"uptime\":" + String(millis()) + ",";
     json += "\"uptime_seconds\":" + String(millis() / 1000) + ",";
     json += "\"free_heap\":" + String(systemMonitor.getCurrentFreeHeap()) + ",";

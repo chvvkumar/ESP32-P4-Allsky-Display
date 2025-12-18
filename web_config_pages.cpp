@@ -585,6 +585,10 @@ String WebConfig::generateAdvancedPage() {
     String html;
     html.reserve(6000);  // Pre-allocate ~6KB for system settings page
     html = "<div class='main'><div class='container'><form id='advancedForm'><div class='grid'>";
+    html += "<div class='card'><h2>🏷️ Device Settings</h2>";
+    html += "<div class='form-group'><label for='device_name'>Device Name</label>";
+    html += "<input type='text' id='device_name' name='device_name' class='form-control' value='" + escapeHtml(configStorage.getDeviceName()) + "' placeholder='ESP32 AllSky Display'>";
+    html += "<small style='color:#94a3b8;display:block;margin-top:0.5rem'>Used in web UI title, MQTT device name, and Home Assistant discovery.</small></div></div>";
     html += "<div class='card'><h2>⏱️ Timing Settings</h2>";
     html += "<div class='form-group'><label for='mqtt_reconnect_interval'>MQTT Reconnect Interval (seconds)</label>";
     html += "<input type='number' id='mqtt_reconnect_interval' name='mqtt_reconnect_interval' class='form-control' value='" + String(configStorage.getMQTTReconnectInterval() / 1000) + "' min='1' max='300'></div>";

@@ -24,6 +24,7 @@ public:
     void resetToDefaults();
     
     // Individual parameter setters
+    void setDeviceName(const String& name);
     void setWiFiSSID(const String& ssid);
     void setWiFiPassword(const String& password);
     void setMQTTServer(const String& server);
@@ -73,6 +74,7 @@ public:
     unsigned long getImageDuration(int index);
     
     // Individual parameter getters
+    String getDeviceName();
     String getWiFiSSID();
     String getWiFiPassword();
     String getMQTTServer();
@@ -200,6 +202,9 @@ private:
     
     // Configuration structure
     struct Config {
+        // Device settings
+        String deviceName;
+        
         // Network settings
         bool wifiProvisioned;
         String wifiSSID;
