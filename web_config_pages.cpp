@@ -8,6 +8,16 @@
 // Page generation functions for the web configuration interface
 // These functions generate the HTML content for each configuration page
 
+// Helper function to generate GitHub documentation help link
+// Uses /blob/HEAD/ to work regardless of branch (always points to default branch)
+String generateDocLink(const String& docPath, const String& anchor = "") {
+    String url = "https://github.com/chvvkumar/ESP32-P4-Allsky-Display/blob/HEAD/" + docPath;
+    if (anchor.length() > 0) {
+        url += "#" + anchor;
+    }
+    return "<a href='" + url + "' target='_blank' class='help-icon' title='View documentation'><i class='fas fa-question-circle'></i></a>";
+}
+
 String WebConfig::generateMainPage() {
     String html;
     html.reserve(12000);  // Pre-allocate ~12KB to prevent fragmentation during HTML generation
@@ -174,7 +184,7 @@ String WebConfig::generateNetworkPage() {
     html.reserve(2000);  // Pre-allocate ~2KB for network config page
     html = "<div class='main'><div class='container'>";
     html += "<form id='networkForm'><div class='card'>";
-    html += "<h2>📡 WiFi Configuration</h2>";
+    html += "<h2>📡 WiFi Configuration " + generateDocLink("docs/03_configuration.md", "wifi-configuration") + "</h2>";
     
     // Info box
     html += "<div style='background:rgba(56,189,248,0.1);border:1px solid #38bdf8;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
@@ -195,7 +205,7 @@ String WebConfig::generateMQTTPage() {
     String html;
     html.reserve(5000);  // Pre-allocate ~5KB for MQTT config page
     html = "<div class='main'><div class='container'><form id='mqttForm'><div class='grid'>";
-    html += "<div class='card'><h2>🔗 MQTT Broker</h2>";
+    html += "<div class='card'><h2>🔗 MQTT Broker " + generateDocLink("docs/03_configuration.md", "mqtt-configuration") + "</h2>";
     html += "<div class='form-group'><label for='mqtt_server'>Broker Address</label>";
     html += "<input type='text' id='mqtt_server' name='mqtt_server' class='form-control' value='" + escapeHtml(configStorage.getMQTTServer()) + "' required></div>";
     html += "<div class='form-group'><label for='mqtt_port'>Port</label>";
@@ -207,7 +217,7 @@ String WebConfig::generateMQTTPage() {
     html += "<div class='form-group'><label for='mqtt_password'>Password (optional)</label>";
     html += "<input type='password' id='mqtt_password' name='mqtt_password' class='form-control' value='" + escapeHtml(configStorage.getMQTTPassword()) + "'></div></div>";
     
-    html += "<div class='card'><h2>🏠 Home Assistant Discovery</h2>";
+    html += "<div class='card'><h2>🏠 Home Assistant Discovery " + generateDocLink("docs/03_configuration.md", "mqtt-configuration") + "</h2>";
     html += "<div class='form-group'><div style='display:flex;align-items:center;margin-bottom:1rem'>";
     html += "<input type='checkbox' id='ha_discovery_enabled' name='ha_discovery_enabled' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'";
     if (configStorage.getHADiscoveryEnabled()) html += " checked";
@@ -257,7 +267,7 @@ String WebConfig::generateImagePage() {
     // 2. Image Sources List header with controls
     int sourceCount = configStorage.getImageSourceCount();
     html += "<div style='display:flex;gap:0.75rem;align-items:center;justify-content:space-between;margin-bottom:0.75rem'>";
-    html += "<h2 style='margin:0'>🖼️ Image Sources</h2>";
+    html += "<h2 style='margin:0'>🖼️ Image Sources " + generateDocLink("docs/03_configuration.md", "image-sources") + "</h2>";
     html += "<div style='display:flex;gap:0.75rem;align-items:center'>";
     html += "<button type='button' class='btn btn-success' onclick='addImageSource(this)' style='font-size:0.9rem;padding:0.6rem 0.8rem'><i class='fas fa-plus'></i></button>";
     if (sourceCount > 1) {
@@ -443,7 +453,7 @@ String WebConfig::generateDisplayPage() {
     html = "<div class='main'><div class='container'>";
     
     // Live Brightness Control (not saved)
-    html += "<div class='card'><h2>💡 Live Brightness</h2>";
+    html += "<div class='card'><h2>💡 Live Brightness " + generateDocLink("docs/03_configuration.md", "display-settings") + "</h2>";
     
     // Brightness Mode Selection
     html += "<div class='form-group' style='margin-bottom:1rem'><label>Brightness Mode</label>";
@@ -493,7 +503,7 @@ String WebConfig::generateDisplayPage() {
     // Basic Settings - Collapsible
     html += "<div class='card'>";
     html += "<h2 onclick=\"document.getElementById('basicSettings').style.display=document.getElementById('basicSettings').style.display==='none'?'block':'none';this.querySelector('.toggle-icon').textContent=document.getElementById('basicSettings').style.display==='none'?'▶':'▼'\" style='cursor:pointer;user-select:none'>";
-    html += "⚙️ Basic Settings <span class='toggle-icon' style='font-size:0.7em;color:#64748b'>▶</span></h2>";
+    html += "⚙️ Basic Settings " + generateDocLink("docs/03_configuration.md", "display-settings") + " <span class='toggle-icon' style='font-size:0.7em;color:#64748b'>▶</span></h2>";
     html += "<div id='basicSettings' style='display:none'>";
     html += "<div class='grid' style='grid-template-columns:1fr 1fr'>";
     
@@ -524,7 +534,7 @@ String WebConfig::generateDisplayPage() {
     // Home Assistant Auto-Brightness - Collapsible
     html += "<div class='card' id='haCard' style='border-left:4px solid #38bdf8'>";
     html += "<h2 onclick=\"document.getElementById('haSettings').style.display=document.getElementById('haSettings').style.display==='none'?'block':'none';this.querySelector('.toggle-icon').textContent=document.getElementById('haSettings').style.display==='none'?'▶':'▼'\" style='cursor:pointer;user-select:none'>";
-    html += "🏠 Home Assistant Auto-Brightness <span class='toggle-icon' style='font-size:0.7em;color:#64748b'>▶</span></h2>";
+    html += "🏠 Home Assistant Auto-Brightness " + generateDocLink("docs/03_configuration.md", "display-settings") + " <span class='toggle-icon' style='font-size:0.7em;color:#64748b'>▶</span></h2>";
     html += "<div id='haSettings' style='display:none'>";
     html += "<input type='hidden' id='use_ha_rest_control' name='use_ha_rest_control' value=''>";
     html += "<input type='hidden' name='use_ha_rest_control_present' value='1'";
@@ -585,17 +595,17 @@ String WebConfig::generateAdvancedPage() {
     String html;
     html.reserve(6000);  // Pre-allocate ~6KB for system settings page
     html = "<div class='main'><div class='container'><form id='advancedForm'><div class='grid'>";
-    html += "<div class='card'><h2>🏷️ Device Settings</h2>";
+    html += "<div class='card'><h2>🏷️ Device Settings " + generateDocLink("docs/03_configuration.md", "advanced-settings") + "</h2>";
     html += "<div class='form-group'><label for='device_name'>Device Name</label>";
     html += "<input type='text' id='device_name' name='device_name' class='form-control' value='" + escapeHtml(configStorage.getDeviceName()) + "' placeholder='ESP32 AllSky Display'>";
     html += "<small style='color:#94a3b8;display:block;margin-top:0.5rem'>Used in web UI title, MQTT device name, and Home Assistant discovery.</small></div></div>";
-    html += "<div class='card'><h2>⏱️ Timing Settings</h2>";
+    html += "<div class='card'><h2>⏱️ Timing Settings " + generateDocLink("docs/03_configuration.md", "advanced-settings") + "</h2>";
     html += "<div class='form-group'><label for='mqtt_reconnect_interval'>MQTT Reconnect Interval (seconds)</label>";
     html += "<input type='number' id='mqtt_reconnect_interval' name='mqtt_reconnect_interval' class='form-control' value='" + String(configStorage.getMQTTReconnectInterval() / 1000) + "' min='1' max='300'></div>";
     html += "<div class='form-group'><label for='watchdog_timeout'>Watchdog Timeout (seconds)</label>";
     html += "<input type='number' id='watchdog_timeout' name='watchdog_timeout' class='form-control' value='" + String(configStorage.getWatchdogTimeout() / 1000) + "' min='10' max='120'></div></div>";
     
-    html += "<div class='card'><h2>🕐 Time Settings</h2>";
+    html += "<div class='card'><h2>🕐 Time Settings " + generateDocLink("docs/03_configuration.md", "advanced-settings") + "</h2>";
     html += "<div class='form-group'><label><input type='checkbox' id='ntp_enabled' name='ntp_enabled' " + String(configStorage.getNTPEnabled() ? "checked" : "") + "> Enable NTP Time Sync</label>";
     html += "<input type='hidden' name='ntp_enabled_present' value='1'></div>";
     html += "<div class='form-group'><label for='ntp_server'>NTP Server</label>";
@@ -648,7 +658,7 @@ String WebConfig::generateAdvancedPage() {
     html += "</select>";
     html += "<small style='color:#94a3b8;display:block;margin-top:0.5rem'>Select your timezone from the list. Time will be displayed in local time after NTP sync.</small></div></div>";
     
-    html += "<div class='card'><h2>&#x1F5A5;&#xFE0F; Display Hardware</h2>";
+    html += "<div class='card'><h2>&#x1F5A5;&#xFE0F; Display Hardware " + generateDocLink("docs/03_configuration.md", "advanced-settings") + "</h2>";
     html += "<div class='form-group'><label for='display_type'>Display Type</label>";
     html += "<select id='display_type' name='display_type' class='form-control'>";
     
@@ -659,7 +669,7 @@ String WebConfig::generateAdvancedPage() {
     html += "</select>";
     html += "<small style='color:#94a3b8;display:block;margin-top:0.5rem'>⚠️ <strong>Requires restart:</strong> Changing display type will restart the device to reinitialize the display hardware.</small></div></div>";
     
-    html += "<div class='card'><h2>&#x1F4BE; Memory Thresholds</h2>";
+    html += "<div class='card'><h2>&#x1F4BE; Memory Thresholds " + generateDocLink("docs/03_configuration.md", "advanced-settings") + "</h2>";
     html += "<div class='form-group'><label for='critical_heap_threshold'>Critical Heap Threshold (bytes)</label>";
     html += "<input type='number' id='critical_heap_threshold' name='critical_heap_threshold' class='form-control' value='" + String(configStorage.getCriticalHeapThreshold()) + "' min='10000' max='1000000'></div>";
     html += "<div class='form-group'><label for='critical_psram_threshold'>Critical PSRAM Threshold (bytes)</label>";

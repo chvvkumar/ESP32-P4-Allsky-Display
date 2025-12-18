@@ -56,6 +56,9 @@ body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 4px 6px -1px rgba(0,0,0,0.3);transition:transform 0.2s ease,box-shadow 0.2s ease;display:flex;flex-direction:column;height:100%}
 .card:hover{transform:translateY(-2px);box-shadow:0 10px 15px -3px rgba(0,0,0,0.4);border-color:#475569}
 .card h2{margin-bottom:1.25rem;color:#f8fafc;display:flex;align-items:center;gap:0.75rem;font-weight:600;font-size:1.25rem;border-bottom:1px solid #334155;padding-bottom:0.75rem}
+.help-icon{display:inline-flex;align-items:center;justify-content:center;color:#64748b;font-size:0.85rem;text-decoration:none;transition:color 0.2s ease,transform 0.2s ease;margin-left:0.25rem;opacity:0.6}
+.help-icon:hover{color:#38bdf8;opacity:1;transform:scale(1.15)}
+.help-icon i{font-size:0.95rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem}
 .form-group{margin-bottom:0.5rem}
 .form-group label{display:block;margin-bottom:0.25rem;font-weight:500;color:#cbd5e1;font-size:0.85rem}
