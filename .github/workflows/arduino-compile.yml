@@ -387,20 +387,23 @@ jobs:
     
     - name: Install esptool
       run: |
-        # Try pip3 first, fallback to pip, then python3 -m pip
-        if command -v pip3 &> /dev/null; then
-          pip3 install esptool
-        elif command -v pip &> /dev/null; then
-          pip install esptool
-        elif command -v python3 &> /dev/null; then
-          python3 -m pip install esptool
-        elif command -v python &> /dev/null; then
-          python -m pip install esptool
-        else
-          echo "❌ Error: No Python package manager found"
+        # Use esptool.py that comes bundled with ESP32 Arduino core
+        # It's located in ~/.arduino15/packages/esp32/tools/esptool_py/
+        ESPTOOL_PATH=$(find ~/.arduino15/packages/esp32/tools/esptool_py -name "esptool.py" -type f | head -n 1)
+        
+        if [ -z "$ESPTOOL_PATH" ]; then
+          echo "❌ Error: esptool.py not found in ESP32 Arduino core"
           exit 1
         fi
-        echo "✅ esptool installed"
+        
+        echo "Found esptool at: $ESPTOOL_PATH"
+        
+        # Create a symlink or wrapper script for easy access
+        sudo ln -sf "$ESPTOOL_PATH" /usr/local/bin/esptool.py || ln -sf "$ESPTOOL_PATH" ~/esptool.py
+        
+        # Test it works
+        python3 "$ESPTOOL_PATH" version
+        echo "✅ esptool ready"
     
     - name: Create memory usage badge data
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -520,9 +523,12 @@ jobs:
           echo "Found Bootloader: $BOOTLOADER_BIN"
           echo "Found Partitions: $PARTITIONS_BIN"
           
+          # Find esptool.py from ESP32 core installation
+          ESPTOOL_PATH=$(find ~/.arduino15/packages/esp32/tools/esptool_py -name "esptool.py" -type f | head -n 1)
+          
           # Merge binaries using standard ESP32-P4 offsets
           # Bootloader @ 0x2000, Partitions @ 0x8000, App @ 0x10000
-          esptool.py --chip esp32p4 merge_bin \
+          python3 "$ESPTOOL_PATH" --chip esp32p4 merge_bin \
             -o "release/$FACTORY_BIN" \
             --flash_mode dio \
             --flash_freq 40m \
