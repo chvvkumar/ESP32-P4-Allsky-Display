@@ -79,16 +79,16 @@ Complete user and developer documentation organized by user journey:
 
 **Download Latest Release:**
 - Go to [Releases](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
-- Download `ESP32-P4-Allsky-Display.bin`
+- Download **`ESP32-P4-Allsky-Display-Factory.bin`** (for initial USB installation)
+
+⚠️ **Important:** Use the **`-Factory.bin`** file for USB flashing. The **`-OTA.bin`** file is for wireless updates only.
 
 **Flash using esptool:**
 ```powershell
-esptool.py --chip esp32p4 --port COM3 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display.bin
+esptool.py --chip esp32p4 --port COM3 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display-Factory.bin
 ```
 
-⚠️ **Pre-compiled binaries are for 3.4" display only.** 
-
-💡 **NEW (v-snd-0.61+):** Display type can now be changed via Web UI without recompilation! Flash the 3.4" binary, then select 4.0" display in System settings if needed.
+✅ **Universal Display Support:** Pre-compiled firmware works with both 3.4" (800×800) and 4.0" (720×720) displays. Select display type in Web UI System settings after flashing.
 
 📖 **Full Instructions:** [Installation Guide](docs/02_installation.md)
 

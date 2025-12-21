@@ -622,54 +622,26 @@ jobs:
           
           ${{ needs.build.outputs.release_type == 'test' && format('⚠️ **This is a pre-release test build from the `{0}` branch.**', needs.build.outputs.branch) || '' }}
           ${{ needs.build.outputs.release_type == 'test' && '**Use for testing purposes only. For stable releases, use builds from the main branch.**' || '' }}
-          ${{ needs.build.outputs.release_type == 'test' && '' || '' }}
           
-          ### ⚠️ Display Compatibility
+          ### 📦 Binary Files
           
-          **Pre-compiled firmware is configured for the 3.4" display (800×800) only.**
+          **Two binary files are included in this release:**
           
-          - ✅ **3.4" Waveshare Display**: Use the `.bin` file below
-          - ❌ **4.0" Waveshare Display**: Must compile from source (see README.md)
-          - Display configuration is set at compile time and cannot be changed after flashing
+          - **`*-Factory.bin`** - For initial USB installation (includes bootloader + partitions + app)
+            - Use this file for fresh installs via esptool or Flash Download Tool
+            - Flash to address `0x0`
           
-          ### 🚀 Installation Methods
+          - **`*-OTA.bin`** - For wireless OTA updates only (app only)
+            - Use this file for web-based updates via ElegantOTA at `http://[device-ip]:8080/update`
+            - ⚠️ **DO NOT flash this to address 0x0** - will cause boot loop
           
-          #### Initial Installation (USB)
-          1. Download the `.bin` file below (for 3.4" display only)
-          2. Flash using esptool or Arduino IDE
-          3. Configure WiFi via captive portal (device creates `AllSky-Display-Setup` network)
+          ### 🖥️ Display Compatibility
           
-          #### OTA Update (Wireless) ✨
-          **Already have a previous version installed? Update wirelessly!**
+          **Universal Support:** Pre-compiled firmware works with both display sizes:
+          - ✅ **3.4" Waveshare Display** (800×800) - Default on first boot
+          - ✅ **4.0" Waveshare Display** (720×720) - Select in Web UI System settings after flashing
           
-          **Method 1: ElegantOTA (Recommended)**
-          1. Navigate to `http://[device-ip]:8080/update`
-          2. Upload the `.bin` file from this release
-          3. Device reboots automatically with new firmware
-          
-          **Method 2: ArduinoOTA (For Developers)**
-          1. Select network port in Arduino IDE: `Tools → Port → esp32-allsky-display at [IP]`
-          2. Click Upload button
-          
-          ### Key Features
-          - **Over-the-Air Updates**: Wireless firmware updates via web interface or Arduino IDE with automatic rollback protection
-          - **Dual Partition System**: Safe A/B partition scheme ensures system stability during updates
-          - **Persistent Configuration**: Network credentials, MQTT settings, and display preferences are preserved across firmware updates
-          - **Multi-Source Image Display**: Support for up to 10 configurable image sources with automatic cycling
-          - **Home Assistant Integration**: Native MQTT auto-discovery for seamless smart home integration
-          - **Touch Interface**: Responsive single and double-tap gesture controls
-          - **Hardware-Accelerated Processing**: Leverages ESP32-P4 PPA engine for optimized image transformation
-          
-          ### Documentation
-          - [README.md](README.md) - Complete setup and features
-          - [OTA_GUIDE.md](OTA_GUIDE.md) - Detailed OTA update instructions
-          
-          ### 🔧 Technical Details
-          - **Partition Scheme**: 13MB app / 7MB data with A/B OTA support
-          - **Flash Size**: 32MB
-          - **PSRAM**: Required (OPI mode)
-          - **Supported Displays**: Waveshare ESP32-P4 3.4" & 4.0" DSI touch displays
-          ${{ needs.build.outputs.release_type == 'test' && format('- **Branch**: {0}', needs.build.outputs.branch) || '' }}
+          Display type can be changed at runtime without recompilation.
           
           ### Changes in This Release
           ${{ steps.changelog.outputs.changelog || '_No commits found_' }}

@@ -23,7 +23,9 @@
 
 **Download Latest Release:**
 1. Go to [Releases](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
-2. Download `ESP32-P4-Allsky-Display.bin` (universal for both displays)
+2. Download **`ESP32-P4-Allsky-Display-Factory.bin`** (universal for both displays)
+
+⚠️ **Important:** For initial USB installation, use the **`-Factory.bin`** file. The **`-OTA.bin`** file is for wireless updates only and should NOT be flashed to address 0x0.
 
 ### Step 2: Flash Firmware
 
@@ -31,12 +33,12 @@
 
 **Windows:**
 ```powershell
-esptool.py --chip esp32p4 --port COM3 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display.bin
+esptool.py --chip esp32p4 --port COM3 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display-Factory.bin
 ```
 
 **macOS/Linux:**
 ```bash
-esptool.py --chip esp32p4 --port /dev/ttyUSB0 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display.bin
+esptool.py --chip esp32p4 --port /dev/ttyUSB0 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display-Factory.bin
 ```
 
 **Find your port:**
