@@ -385,6 +385,11 @@ jobs:
         fi
         echo "✅ No memory warnings"
     
+    - name: Install esptool
+      run: |
+        pip install esptool
+        echo "✅ esptool installed"
+    
     - name: Create memory usage badge data
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
@@ -474,33 +479,54 @@ jobs:
         # Ensure release directory exists
         mkdir -p ./release
         
-        # List build directory contents
-        echo "Build directory contents:"
-        ls -lh ./build/
-        
-        # Find and copy bin file with branch identifier
+        # Determine branch naming for filenames
         BRANCH_NAME="${GITHUB_REF#refs/heads/}"
         if [ "$BRANCH_NAME" = "main" ]; then
-          BIN_NAME="ESP32-P4-Allsky-Display-OTA.bin"
+          BASE_NAME="ESP32-P4-Allsky-Display"
         else
-          BIN_NAME="ESP32-P4-Allsky-Display-OTA-${BRANCH_NAME}.bin"
+          BASE_NAME="ESP32-P4-Allsky-Display-${BRANCH_NAME}"
         fi
         
-        # Find the main firmware .bin file (exclude bootloader and partitions)
-        BIN_FILE=$(find ./build -name "ESP32-P4-Allsky-Display.ino.bin" -type f)
-        if [ -z "$BIN_FILE" ]; then
-          echo "❌ Error: ESP32-P4-Allsky-Display.ino.bin not found in build directory"
-          echo "Available .bin files:"
-          find ./build -name "*.bin" -type f
+        OTA_BIN="${BASE_NAME}-OTA.bin"
+        FACTORY_BIN="${BASE_NAME}-Factory.bin"
+        
+        # 1. Handle OTA Binary (Application Only)
+        APP_BIN=$(find ./build -name "ESP32-P4-Allsky-Display.ino.bin" -type f)
+        if [ -z "$APP_BIN" ]; then
+          echo "❌ Error: App binary not found"
           exit 1
         fi
+        cp "$APP_BIN" "release/$OTA_BIN"
+        echo "✅ OTA Binary prepared: $OTA_BIN"
+
+        # 2. Handle Factory Binary (Merged)
+        # Find necessary parts in build directory
+        BOOTLOADER_BIN=$(find ./build -name "*.bootloader.bin" -type f | head -n 1)
+        PARTITIONS_BIN=$(find ./build -name "*.partitions.bin" -type f | head -n 1)
         
-        echo "Found bin file: $BIN_FILE ($(du -h "$BIN_FILE" | cut -f1))"
-        cp "$BIN_FILE" "release/$BIN_NAME"
+        if [ -n "$BOOTLOADER_BIN" ] && [ -n "$PARTITIONS_BIN" ]; then
+          echo "Found Bootloader: $BOOTLOADER_BIN"
+          echo "Found Partitions: $PARTITIONS_BIN"
+          
+          # Merge binaries using standard ESP32-P4 offsets
+          # Bootloader @ 0x2000, Partitions @ 0x8000, App @ 0x10000
+          esptool.py --chip esp32p4 merge_bin \
+            -o "release/$FACTORY_BIN" \
+            --flash_mode dio \
+            --flash_freq 40m \
+            --flash_size 32MB \
+            0x2000 "$BOOTLOADER_BIN" \
+            0x8000 "$PARTITIONS_BIN" \
+            0x10000 "$APP_BIN"
+            
+          echo "✅ Factory Binary generated: $FACTORY_BIN"
+        else
+          echo "⚠️ Could not find bootloader or partitions binary. Skipping Factory bin generation."
+          ls -R ./build
+        fi
         
-        # Display build info
+        # List contents to verify
         ls -lh release/
-        echo "✅ OTA-ready firmware prepared: $BIN_NAME"
     
     - name: Upload build artifacts
       if: steps.check_release.outputs.should_release == 'true'
