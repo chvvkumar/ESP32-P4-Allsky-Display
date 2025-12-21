@@ -8,6 +8,16 @@
 // Page generation functions for the web configuration interface
 // These functions generate the HTML content for each configuration page
 
+// Helper function to generate GitHub documentation help link
+// Uses /blob/HEAD/ to work regardless of branch (always points to default branch)
+String generateDocLink(const String& docPath, const String& anchor = "") {
+    String url = "https://github.com/chvvkumar/ESP32-P4-Allsky-Display/blob/HEAD/" + docPath;
+    if (anchor.length() > 0) {
+        url += "#" + anchor;
+    }
+    return "<a href='" + url + "' target='_blank' class='help-icon' title='View documentation'><i class='fas fa-question-circle'></i></a>";
+}
+
 String WebConfig::generateMainPage() {
     String html;
     html.reserve(12000);  // Pre-allocate ~12KB to prevent fragmentation during HTML generation
@@ -23,9 +33,11 @@ String WebConfig::generateMainPage() {
     html += "<div class='stat-value'>" + String(configStorage.getCurrentImageIndex() + 1) + "/" + String(configStorage.getImageSourceCount()) + "</div>";
     html += "<div class='stat-label'>Active Source</div></div>";
     
-    html += "<div class='stat-card'><i class='fas fa-sync-alt stat-icon'></i>";
-    html += "<div class='stat-value'>" + String(configStorage.getCycleInterval() / 1000) + "s</div>";
-    html += "<div class='stat-label'>Display Time</div></div>";
+    html += "<div class='stat-card'><i class='fas fa-";
+    html += String(configStorage.getImageUpdateMode() == 0 ? "sync-alt" : "wifi");
+    html += " stat-icon'></i>";
+    html += "<div class='stat-value'>" + String(configStorage.getImageUpdateMode() == 0 ? "Auto" : "API") + "</div>";
+    html += "<div class='stat-label'>Update Mode</div></div>";
     
     html += "<div class='stat-card'><i class='fas fa-download stat-icon'></i>";
     html += "<div class='stat-value'>" + String(configStorage.getUpdateInterval() / 1000 / 60) + "m</div>";
@@ -84,7 +96,18 @@ String WebConfig::generateMainPage() {
     html += "<div class='card'><h2>🖥️ Display Information</h2>";
     html += "<div style='display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.9rem;color:#94a3b8'>";
     html += "<div><strong style='color:#64748b'>Resolution:</strong><br>" + String(displayManager.getWidth()) + " × " + String(displayManager.getHeight()) + "</div>";
-    html += "<div><strong style='color:#64748b'>Brightness:</strong><br>" + String(displayManager.getBrightness()) + "% " + String(configStorage.getBrightnessAutoMode() ? "(Auto)" : "(Manual)") + "</div>";
+    
+    // Brightness mode display
+    String brightnessMode;
+    if (configStorage.getUseHARestControl()) {
+        brightnessMode = "(Home Assistant)";
+    } else if (configStorage.getBrightnessAutoMode()) {
+        brightnessMode = "(MQTT Auto)";
+    } else {
+        brightnessMode = "(Manual)";
+    }
+    html += "<div><strong style='color:#64748b'>Brightness:</strong><br>" + String(displayManager.getBrightness()) + "% " + brightnessMode + "</div>";
+    
     html += "<div><strong style='color:#64748b'>Backlight Freq:</strong><br>" + String(configStorage.getBacklightFreq()) + " Hz</div>";
     html += "<div><strong style='color:#64748b'>Resolution:</strong><br>" + String(configStorage.getBacklightResolution()) + "-bit</div>";
     html += "</div></div>";
@@ -161,7 +184,7 @@ String WebConfig::generateNetworkPage() {
     html.reserve(2000);  // Pre-allocate ~2KB for network config page
     html = "<div class='main'><div class='container'>";
     html += "<form id='networkForm'><div class='card'>";
-    html += "<h2>📡 WiFi Configuration</h2>";
+    html += "<h2>📡 WiFi Configuration " + generateDocLink("docs/03_configuration.md", "wifi-configuration") + "</h2>";
     
     // Info box
     html += "<div style='background:rgba(56,189,248,0.1);border:1px solid #38bdf8;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
@@ -182,7 +205,7 @@ String WebConfig::generateMQTTPage() {
     String html;
     html.reserve(5000);  // Pre-allocate ~5KB for MQTT config page
     html = "<div class='main'><div class='container'><form id='mqttForm'><div class='grid'>";
-    html += "<div class='card'><h2>🔗 MQTT Broker</h2>";
+    html += "<div class='card'><h2>🔗 MQTT Broker " + generateDocLink("docs/03_configuration.md", "mqtt-configuration") + "</h2>";
     html += "<div class='form-group'><label for='mqtt_server'>Broker Address</label>";
     html += "<input type='text' id='mqtt_server' name='mqtt_server' class='form-control' value='" + escapeHtml(configStorage.getMQTTServer()) + "' required></div>";
     html += "<div class='form-group'><label for='mqtt_port'>Port</label>";
@@ -194,7 +217,7 @@ String WebConfig::generateMQTTPage() {
     html += "<div class='form-group'><label for='mqtt_password'>Password (optional)</label>";
     html += "<input type='password' id='mqtt_password' name='mqtt_password' class='form-control' value='" + escapeHtml(configStorage.getMQTTPassword()) + "'></div></div>";
     
-    html += "<div class='card'><h2>🏠 Home Assistant Discovery</h2>";
+    html += "<div class='card'><h2>🏠 Home Assistant Discovery " + generateDocLink("docs/03_configuration.md", "mqtt-configuration") + "</h2>";
     html += "<div class='form-group'><div style='display:flex;align-items:center;margin-bottom:1rem'>";
     html += "<input type='checkbox' id='ha_discovery_enabled' name='ha_discovery_enabled' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'";
     if (configStorage.getHADiscoveryEnabled()) html += " checked";
@@ -244,7 +267,7 @@ String WebConfig::generateImagePage() {
     // 2. Image Sources List header with controls
     int sourceCount = configStorage.getImageSourceCount();
     html += "<div style='display:flex;gap:0.75rem;align-items:center;justify-content:space-between;margin-bottom:0.75rem'>";
-    html += "<h2 style='margin:0'>🖼️ Image Sources</h2>";
+    html += "<h2 style='margin:0'>🖼️ Image Sources " + generateDocLink("docs/03_configuration.md", "image-sources") + "</h2>";
     html += "<div style='display:flex;gap:0.75rem;align-items:center'>";
     html += "<button type='button' class='btn btn-success' onclick='addImageSource(this)' style='font-size:0.9rem;padding:0.6rem 0.8rem'><i class='fas fa-plus'></i></button>";
     if (sourceCount > 1) {
@@ -356,6 +379,18 @@ String WebConfig::generateImagePage() {
     html += "<h3 style='color:#38bdf8;margin:0 0 0.5rem 0;font-size:1rem'>⏱️ Timing & Order</h3>";
     html += "<div class='grid' style='margin-bottom:0.5rem'>";
     
+    // Image Update Mode Selection
+    html += "<div class='form-group'><label for='image_update_mode'>";
+    html += "<span style='color:#38bdf8'>Update Mode</span></label>";
+    html += "<select id='image_update_mode' name='image_update_mode' class='form-control'>";
+    html += "<option value='0'" + String(configStorage.getImageUpdateMode() == 0 ? " selected" : "") + ">⏺ Automatic Cycling</option>";
+    html += "<option value='1'" + String(configStorage.getImageUpdateMode() == 1 ? " selected" : "") + ">🔗 API-Triggered Refresh</option>";
+    html += "</select>";
+    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.25rem;margin-bottom:0'>";
+    html += "<i class='fas fa-info-circle' style='margin-right:4px;color:#0ea5e9'></i>";
+    html += "Automatic: cycles through images automatically. API: refreshes only when /api/force-refresh is called";
+    html += "</p></div>";
+    
     // Default Image Duration (for newly added images)
     html += "<div class='form-group'><label for='default_image_duration'>";
     html += "<span style='color:#38bdf8'>Default Duration for New Images</span> <span style='color:#94a3b8'>(seconds)</span></label>";
@@ -417,133 +452,160 @@ String WebConfig::generateDisplayPage() {
     html.reserve(4000);  // Pre-allocate ~4KB for display config page
     html = "<div class='main'><div class='container'>";
     
-    // Current brightness control - Live adjustment (not saved)
-    html += "<div class='card'><h2>💡 Current Brightness Control</h2>";
-    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1rem'>Adjust screen brightness in real-time. Changes take effect immediately but are not saved.</p>";
+    // Live Brightness Control (not saved)
+    html += "<div class='card'><h2>💡 Live Brightness " + generateDocLink("docs/03_configuration.md", "display-settings") + "</h2>";
     
-    html += "<div class='form-group'><label>Control Mode</label>";
-    html += "<div style='margin-top:0.5rem;display:flex;align-items:center'>";
-    html += "<input type='checkbox' id='brightness_auto_mode' name='brightness_auto_mode' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px'";
-    if (configStorage.getBrightnessAutoMode()) html += " checked";
-    html += " onchange='updateBrightnessMode(this.checked)'> ";
-    html += "<label for='brightness_auto_mode' style='margin-bottom:0;cursor:pointer'>Auto (MQTT controlled)</label>";
+    // Brightness Mode Selection
+    html += "<div class='form-group' style='margin-bottom:1rem'><label>Brightness Mode</label>";
+    html += "<div style='display:flex;gap:1rem;margin-top:0.5rem;flex-wrap:wrap'>";
+    
+    // Manual mode radio
+    bool manualMode = !configStorage.getBrightnessAutoMode() && !configStorage.getUseHARestControl();
+    bool mqttMode = configStorage.getBrightnessAutoMode();
+    bool haMode = configStorage.getUseHARestControl();
+    
+    html += "<label style='display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem'>";
+    html += "<input type='radio' name='brightness_mode' value='manual' style='width:16px;height:16px;accent-color:#0ea5e9'";
+    if (manualMode) html += " checked";
+    html += " onchange='updateBrightnessModeRadio(\"manual\")'>";
+    html += "Manual</label>";
+    
+    // MQTT Auto mode radio
+    html += "<label style='display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem'>";
+    html += "<input type='radio' name='brightness_mode' value='mqtt' style='width:16px;height:16px;accent-color:#0ea5e9'";
+    if (mqttMode) html += " checked";
+    html += " onchange='updateBrightnessModeRadio(\"mqtt\")'>";
+    html += "MQTT Auto</label>";
+    
+    // HA Auto mode radio
+    html += "<label style='display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem'>";
+    html += "<input type='radio' name='brightness_mode' value='ha' style='width:16px;height:16px;accent-color:#0ea5e9'";
+    if (haMode) html += " checked";
+    html += " onchange='updateBrightnessModeRadio(\"ha\")'>";
+    html += "Home Assistant Auto</label>";
+    
     html += "</div></div>";
     
-    html += "<div class='form-group' id='brightness_slider_container' style='";
-    if (configStorage.getBrightnessAutoMode()) html += "opacity:0.5;";
-    html += "'><label for='main_brightness'>Current Brightness (%)</label>";
+    // Brightness Slider
+    html += "<div class='form-group' id='brightness_slider_container' style='margin:0;";
+    if (!manualMode) html += "opacity:0.5;";
+    html += "'><label for='main_brightness'>Current: <span id='mainBrightnessValue' style='color:#38bdf8;font-weight:bold'>" + 
+            String(displayManager.getBrightness()) + "</span>%</label>";
     html += "<input type='range' id='main_brightness' name='default_brightness' class='form-control' style='height:6px;padding:0' value='" + 
-            String(displayManager.getBrightness()) + "' min='0' max='100' oninput='updateMainBrightnessValue(this.value)'";
-    if (configStorage.getBrightnessAutoMode()) html += " disabled";
-    html += "><div style='text-align:center;margin-top:0.5rem;color:#38bdf8;font-weight:bold'><span id='mainBrightnessValue'>" + 
-            String(displayManager.getBrightness()) + "</span>%</div></div>";
+            String(displayManager.getBrightness()) + "' min='0' max='100' oninput='updateMainBrightnessValue(this.value)' onchange='autoSaveDisplaySetting(this.name,this.value)'";
+    if (!manualMode) html += " disabled";
+    html += "></div>";
     
-    html += "<button type='button' class='btn btn-primary' onclick='saveMainBrightness(this)'";
-    if (configStorage.getBrightnessAutoMode()) html += " disabled";
-    html += " id='save_brightness_btn'>Apply Brightness</button></div>";
-    
-    // Display settings form - Saved configuration
-    html += "<form id='displayForm'>";
-    
-    // Brightness Settings Card
-    html += "<div class='card'><h2>⚙️ Brightness Settings</h2>";
-    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1rem'>Configure default brightness and backlight hardware settings. These are saved permanently.</p>";
-    
-    html += "<div class='form-group'><label for='default_brightness'>Default Brightness at Startup (%)</label>";
-    html += "<input type='range' id='default_brightness' name='default_brightness' class='form-control' value='" + String(configStorage.getDefaultBrightness()) + "' min='0' max='100' oninput='updateBrightnessValue(this.value)'>";
-    html += "<div style='text-align:center;margin-top:0.5rem;color:#38bdf8;font-weight:bold'><span id='brightnessValue'>" + String(configStorage.getDefaultBrightness()) + "</span>%</div>";
-    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>This brightness will be applied when the device boots up.</p></div>";
-    
-    html += "<div class='form-group'><label for='backlight_freq'>PWM Frequency (Hz)</label>";
-    html += "<input type='number' id='backlight_freq' name='backlight_freq' class='form-control' value='" + String(configStorage.getBacklightFreq()) + "' min='1000' max='20000'>";
-    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>Higher frequency reduces flicker. Typical: 5000 Hz</p></div>";
-    
-    html += "<div class='form-group'><label for='backlight_resolution'>PWM Resolution (bits)</label>";
-    html += "<input type='number' id='backlight_resolution' name='backlight_resolution' class='form-control' value='" + String(configStorage.getBacklightResolution()) + "' min='8' max='16'>";
-    html += "<p style='color:#64748b;font-size:0.85rem;margin-top:0.5rem'>Higher resolution provides smoother brightness control. Typical: 10-12 bits</p></div>";
     html += "</div>";
     
-    // Home Assistant REST Control Card
-    html += "<div class='card' style='border-left:4px solid #38bdf8'><h2> Home Assistant Light Control</h2>";
-    html += "<p style='color:#94a3b8;font-size:0.9rem;margin-bottom:1.5rem'>Automatically adjust screen brightness using a Home Assistant light sensor entity. Runs on Core 0 (non-blocking).</p>";
+    // Display Settings (Auto-save)
     
-    // Enable Switch
-    html += "<div class='form-group'>";
-    html += "<div style='display:flex;align-items:center;margin-bottom:1rem'>";
-    html += "<input type='checkbox' id='use_ha_rest_control' name='use_ha_rest_control' style='width:20px;height:20px;accent-color:#0ea5e9;margin-right:10px' " + String(configStorage.getUseHARestControl() ? "checked" : "") + ">";
-    html += "<label for='use_ha_rest_control' style='margin-bottom:0;cursor:pointer;font-size:1rem'>Enable Ambient Light Sensor</label>";
+    // Basic Settings - Collapsible
+    html += "<div class='card'>";
+    html += "<h2 onclick=\"document.getElementById('basicSettings').style.display=document.getElementById('basicSettings').style.display==='none'?'block':'none';this.querySelector('.toggle-icon').textContent=document.getElementById('basicSettings').style.display==='none'?'▶':'▼'\" style='cursor:pointer;user-select:none'>";
+    html += "⚙️ Basic Settings " + generateDocLink("docs/03_configuration.md", "display-settings") + " <span class='toggle-icon' style='font-size:0.7em;color:#64748b'>▶</span></h2>";
+    html += "<div id='basicSettings' style='display:none'>";
+    html += "<div class='grid' style='grid-template-columns:1fr 1fr'>";
+    
+    // Default Brightness
+    html += "<div class='form-group' style='margin:0'><label for='default_brightness'>Startup Brightness: <span id='brightnessValue' style='color:#38bdf8;font-weight:bold'>" + 
+            String(configStorage.getDefaultBrightness()) + "</span>%</label>";
+    html += "<input type='range' id='default_brightness' name='default_brightness' class='form-control' style='height:6px;padding:0' value='" + 
+            String(configStorage.getDefaultBrightness()) + "' min='0' max='100' oninput='updateBrightnessValue(this.value)' onchange='autoSaveDisplaySetting(\"default_brightness\",this.value)'></div>";
+    
+    // Color Temperature
+    html += "<div class='form-group' style='margin:0'><label for='color_temp'>Color Temp: <span id='tempVal' style='color:#38bdf8;font-weight:bold'>" + 
+            String(configStorage.getColorTemp()) + "K</span></label>";
+    html += "<input type='range' id='color_temp' name='color_temp' class='form-control' style='height:6px;padding:0' value='" + 
+            String(configStorage.getColorTemp()) + "' min='2000' max='15000' step='100' oninput='document.getElementById(\"tempVal\").innerText=this.value+\"K\"' onchange='autoSaveDisplaySetting(\"color_temp\",this.value)'></div>";
+    
     html += "</div>";
-    html += "<input type='hidden' name='use_ha_rest_control_present' value='1'>";
-    html += "<p style='color:#64748b;font-size:0.85rem;background:rgba(245,158,11,0.1);padding:0.5rem;border-radius:6px;border-left:3px solid #f59e0b'><i class='fas fa-info-circle' style='margin-right:0.5rem'></i>Enabling this will automatically disable MQTT Auto Mode to prevent conflicts.</p>";
-    html += "</div>";
     
-    // Connection Details Section
-    html += "<div style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155;margin-bottom:1rem'>";
-    html += "<h3 style='color:#38bdf8;font-size:1rem;margin-bottom:1rem;display:flex;align-items:center'><i class='fas fa-plug' style='margin-right:8px'></i>Connection Details</h3>";
-    
-    html += "<div class='form-group'><label for='ha_base_url'>Home Assistant URL</label>";
-    html += "<input type='text' id='ha_base_url' name='ha_base_url' class='form-control' value='" + configStorage.getHABaseUrl() + "' placeholder='http://homeassistant.local:8123'></div>";
-    
-    html += "<div class='form-group'><label for='ha_access_token'>Long-Lived Access Token</label>";
-    html += "<input type='password' id='ha_access_token' name='ha_access_token' class='form-control' placeholder='Leave blank to keep existing token'>";
-    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.5rem'>Create at <strong>Profile  Long-Lived Access Tokens</strong></p></div>";
-    
-    html += "<div class='grid' style='grid-template-columns:2fr 1fr'>";
-    html += "<div class='form-group'><label for='ha_light_sensor_entity'>Sensor Entity ID</label>";
-    html += "<input type='text' id='ha_light_sensor_entity' name='ha_light_sensor_entity' class='form-control' value='" + configStorage.getHALightSensorEntity() + "' placeholder='sensor.living_room_illuminance'></div>";
-    html += "<div class='form-group'><label for='ha_poll_interval'>Poll Interval (s)</label>";
-    html += "<input type='number' id='ha_poll_interval' name='ha_poll_interval' class='form-control' value='" + String(configStorage.getHAPollInterval()) + "' min='10' max='3600'></div>";
-    html += "</div></div>";
-    
-    // Brightness Mapping Section
-    html += "<div style='background:#0f172a;padding:1rem;border-radius:8px;border:1px solid #334155'>";
-    html += "<h3 style='color:#38bdf8;font-size:1rem;margin-bottom:1rem;display:flex;align-items:center'><i class='fas fa-sliders-h' style='margin-right:8px'></i>Brightness Mapping</h3>";
-    
-    html += "<div class='form-group'><label for='light_sensor_mapping_mode'>Response Curve</label>";
-    html += "<select id='light_sensor_mapping_mode' name='light_sensor_mapping_mode' class='form-control'>";
-    html += "<option value='0'" + String(configStorage.getLightSensorMappingMode() == 0 ? " selected" : "") + ">Linear (Indoor / Low Range)</option>";
-    html += "<option value='1'" + String(configStorage.getLightSensorMappingMode() == 1 ? " selected" : "") + ">Logarithmic (Outdoor / High Range)</option>";
-    html += "<option value='2'" + String(configStorage.getLightSensorMappingMode() == 2 ? " selected" : "") + ">Threshold Switch (Day/Night)</option>";
-    html += "</select>";
-    html += "<p style='color:#64748b;font-size:0.8rem;margin-top:0.5rem'>Use <strong>Logarithmic</strong> for sensors that go from 0 to 100,000+ lux (outdoors). Use <strong>Linear</strong> for dark rooms (0-500 lux).</p></div>";
-    
-    html += "<div class='grid'>";
-    // Sensor Range
-    html += "<div><label style='color:#94a3b8;font-size:0.9rem'>Sensor Range (Lux)</label>";
-    html += "<div style='display:flex;gap:0.5rem;align-items:center'>";
-    html += "<input type='number' id='light_sensor_min_lux' name='light_sensor_min_lux' class='form-control' value='" + String(configStorage.getLightSensorMinLux(), 1) + "' min='0' max='10000' step='0.1' placeholder='Min'>";
-    html += "<span style='color:#64748b'>to</span>";
-    html += "<input type='number' id='light_sensor_max_lux' name='light_sensor_max_lux' class='form-control' value='" + String(configStorage.getLightSensorMaxLux(), 1) + "' min='0' max='100000' step='0.1' placeholder='Max'>";
-    html += "</div></div>";
-    // Display Range
-    html += "<div><label style='color:#94a3b8;font-size:0.9rem'>Display Brightness (%)</label>";
-    html += "<div style='display:flex;gap:0.5rem;align-items:center'>";
-    html += "<input type='number' id='display_min_brightness' name='display_min_brightness' class='form-control' value='" + String(configStorage.getDisplayMinBrightness()) + "' min='0' max='100' placeholder='Min'>";
-    html += "<span style='color:#64748b'>to</span>";
-    html += "<input type='number' id='display_max_brightness' name='display_max_brightness' class='form-control' value='" + String(configStorage.getDisplayMaxBrightness()) + "' min='0' max='100' placeholder='Max'>";
-    html += "</div></div>";
+    // PWM Settings in compact grid
+    html += "<div class='grid' style='grid-template-columns:1fr 1fr;margin-top:1rem'>";
+    html += "<div class='form-group' style='margin:0'><label for='backlight_freq'>PWM Freq (Hz)</label>";
+    html += "<input type='number' id='backlight_freq' name='backlight_freq' class='form-control' value='" + 
+            String(configStorage.getBacklightFreq()) + "' min='1000' max='20000' onchange='autoSaveDisplaySetting(\"backlight_freq\",this.value)'></div>";
+    html += "<div class='form-group' style='margin:0'><label for='backlight_resolution'>PWM Res (bits)</label>";
+    html += "<input type='number' id='backlight_resolution' name='backlight_resolution' class='form-control' value='" + 
+            String(configStorage.getBacklightResolution()) + "' min='8' max='16' onchange='autoSaveDisplaySetting(\"backlight_resolution\",this.value)'></div>";
     html += "</div></div></div>";
     
-    // Save button card
-    html += "<div class='card'>";
-    html += "<button type='submit' class='btn btn-primary'>💾 Save Display Settings</button>";
+    // Home Assistant Auto-Brightness - Collapsible
+    html += "<div class='card' id='haCard' style='border-left:4px solid #38bdf8'>";
+    html += "<h2 onclick=\"document.getElementById('haSettings').style.display=document.getElementById('haSettings').style.display==='none'?'block':'none';this.querySelector('.toggle-icon').textContent=document.getElementById('haSettings').style.display==='none'?'▶':'▼'\" style='cursor:pointer;user-select:none'>";
+    html += "🏠 Home Assistant Auto-Brightness " + generateDocLink("docs/03_configuration.md", "display-settings") + " <span class='toggle-icon' style='font-size:0.7em;color:#64748b'>▶</span></h2>";
+    html += "<div id='haSettings' style='display:none'>";
+    html += "<input type='hidden' id='use_ha_rest_control' name='use_ha_rest_control' value=''>";
+    html += "<input type='hidden' name='use_ha_rest_control_present' value='1'";
+    
+    // Connection Grid
+    html += "<div style='background:#0f172a;padding:1rem;border-radius:6px;border:1px solid #334155;margin-bottom:1rem'>";
+    html += "<div class='grid' style='grid-template-columns:2fr 1fr'>";
+    html += "<div class='form-group' style='margin:0'><label for='ha_base_url'>HA URL</label>";
+    html += "<input type='text' id='ha_base_url' name='ha_base_url' class='form-control' value='" + 
+            configStorage.getHABaseUrl() + "' placeholder='http://homeassistant.local:8123' onchange='autoSaveDisplaySetting(\"ha_base_url\",this.value)'></div>";
+    html += "<div class='form-group' style='margin:0'><label for='ha_poll_interval'>Poll (s)</label>";
+    html += "<input type='number' id='ha_poll_interval' name='ha_poll_interval' class='form-control' value='" + 
+            String(configStorage.getHAPollInterval()) + "' min='10' max='3600' onchange='autoSaveDisplaySetting(\"ha_poll_interval\",this.value)'></div>";
     html += "</div>";
     
-    html += "</form></div></div>";
+    html += "<div class='form-group' style='margin:1rem 0 0 0'><label for='ha_access_token'>Access Token</label>";
+    html += "<input type='password' id='ha_access_token' name='ha_access_token' class='form-control' placeholder='Leave blank to keep current' onchange='autoSaveDisplaySetting(\"ha_access_token\",this.value)'>";
+    html += "<p style='color:#64748b;font-size:0.75rem;margin:0.3rem 0 0 0'>Profile → Long-Lived Access Tokens</p></div>";
+    
+    html += "<div class='form-group' style='margin:1rem 0 0 0'><label for='ha_light_sensor_entity'>Sensor Entity</label>";
+    html += "<input type='text' id='ha_light_sensor_entity' name='ha_light_sensor_entity' class='form-control' value='" + 
+            configStorage.getHALightSensorEntity() + "' placeholder='sensor.living_room_illuminance' onchange='autoSaveDisplaySetting(\"ha_light_sensor_entity\",this.value)'></div>";
+    html += "</div>";
+    
+    // Mapping Section
+    html += "<div style='background:#0f172a;padding:1rem;border-radius:6px;border:1px solid #334155'>";
+    html += "<div class='form-group' style='margin:0 0 1rem 0'><label for='light_sensor_mapping_mode'>Response Curve</label>";
+    html += "<select id='light_sensor_mapping_mode' name='light_sensor_mapping_mode' class='form-control' onchange='autoSaveDisplaySetting(\"light_sensor_mapping_mode\",this.value)'>";
+    html += "<option value='0'" + String(configStorage.getLightSensorMappingMode() == 0 ? " selected" : "") + ">Linear (Indoor)</option>";
+    html += "<option value='1'" + String(configStorage.getLightSensorMappingMode() == 1 ? " selected" : "") + ">Logarithmic (Outdoor)</option>";
+    html += "<option value='2'" + String(configStorage.getLightSensorMappingMode() == 2 ? " selected" : "") + ">Threshold (Day/Night)</option>";
+    html += "</select></div>";
+    
+    html += "<div class='grid' style='grid-template-columns:1fr 1fr'>";
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8;margin-bottom:0.3rem'>Sensor (Lux)</label>";
+    html += "<div style='display:flex;gap:0.5rem;align-items:center'>";
+    html += "<input type='number' id='light_sensor_min_lux' name='light_sensor_min_lux' class='form-control' value='" + 
+            String(configStorage.getLightSensorMinLux(), 1) + "' min='0' max='10000' step='0.1' placeholder='Min' onchange='autoSaveDisplaySetting(\"light_sensor_min_lux\",this.value)'>";
+    html += "<span style='color:#64748b'>→</span>";
+    html += "<input type='number' id='light_sensor_max_lux' name='light_sensor_max_lux' class='form-control' value='" + 
+            String(configStorage.getLightSensorMaxLux(), 1) + "' min='0' max='100000' step='0.1' placeholder='Max' onchange='autoSaveDisplaySetting(\"light_sensor_max_lux\",this.value)'>";
+    html += "</div></div>";
+    html += "<div><label style='font-size:0.85rem;color:#94a3b8;margin-bottom:0.3rem'>Display (%)</label>";
+    html += "<div style='display:flex;gap:0.5rem;align-items:center'>";
+    html += "<input type='number' id='display_min_brightness' name='display_min_brightness' class='form-control' value='" + 
+            String(configStorage.getDisplayMinBrightness()) + "' min='0' max='100' placeholder='Min' onchange='autoSaveDisplaySetting(\"display_min_brightness\",this.value)'>";
+    html += "<span style='color:#64748b'>→</span>";
+    html += "<input type='number' id='display_max_brightness' name='display_max_brightness' class='form-control' value='" + 
+            String(configStorage.getDisplayMaxBrightness()) + "' min='0' max='100' placeholder='Max' onchange='autoSaveDisplaySetting(\"display_max_brightness\",this.value)'>";
+    html += "</div></div>";
+    html += "</div></div></div></div>";  // Close mapping section, haSettings div, and card
+    
+    html += "</div></div>";
     return html;
 }
 
 String WebConfig::generateAdvancedPage() {
     String html;
-    html.reserve(6000);  // Pre-allocate ~6KB for advanced settings page
+    html.reserve(6000);  // Pre-allocate ~6KB for system settings page
     html = "<div class='main'><div class='container'><form id='advancedForm'><div class='grid'>";
-    html += "<div class='card'><h2>⏱️ Timing Settings</h2>";
+    html += "<div class='card'><h2>🏷️ Device Settings " + generateDocLink("docs/03_configuration.md", "advanced-settings") + "</h2>";
+    html += "<div class='form-group'><label for='device_name'>Device Name</label>";
+    html += "<input type='text' id='device_name' name='device_name' class='form-control' value='" + escapeHtml(configStorage.getDeviceName()) + "' placeholder='ESP32 AllSky Display'>";
+    html += "<small style='color:#94a3b8;display:block;margin-top:0.5rem'>Used in web UI title, MQTT device name, and Home Assistant discovery.</small></div></div>";
+    html += "<div class='card'><h2>⏱️ Timing Settings " + generateDocLink("docs/03_configuration.md", "advanced-settings") + "</h2>";
     html += "<div class='form-group'><label for='mqtt_reconnect_interval'>MQTT Reconnect Interval (seconds)</label>";
     html += "<input type='number' id='mqtt_reconnect_interval' name='mqtt_reconnect_interval' class='form-control' value='" + String(configStorage.getMQTTReconnectInterval() / 1000) + "' min='1' max='300'></div>";
     html += "<div class='form-group'><label for='watchdog_timeout'>Watchdog Timeout (seconds)</label>";
     html += "<input type='number' id='watchdog_timeout' name='watchdog_timeout' class='form-control' value='" + String(configStorage.getWatchdogTimeout() / 1000) + "' min='10' max='120'></div></div>";
     
-    html += "<div class='card'><h2>🕐 Time Settings</h2>";
+    html += "<div class='card'><h2>🕐 Time Settings " + generateDocLink("docs/03_configuration.md", "advanced-settings") + "</h2>";
     html += "<div class='form-group'><label><input type='checkbox' id='ntp_enabled' name='ntp_enabled' " + String(configStorage.getNTPEnabled() ? "checked" : "") + "> Enable NTP Time Sync</label>";
     html += "<input type='hidden' name='ntp_enabled_present' value='1'></div>";
     html += "<div class='form-group'><label for='ntp_server'>NTP Server</label>";
@@ -596,13 +658,24 @@ String WebConfig::generateAdvancedPage() {
     html += "</select>";
     html += "<small style='color:#94a3b8;display:block;margin-top:0.5rem'>Select your timezone from the list. Time will be displayed in local time after NTP sync.</small></div></div>";
     
-    html += "<div class='card'><h2>💾 Memory Thresholds</h2>";
+    html += "<div class='card'><h2>&#x1F5A5;&#xFE0F; Display Hardware " + generateDocLink("docs/03_configuration.md", "advanced-settings") + "</h2>";
+    html += "<div class='form-group'><label for='display_type'>Display Type</label>";
+    html += "<select id='display_type' name='display_type' class='form-control'>";
+    
+    int currentDisplayType = configStorage.getDisplayType();
+    html += "<option value='1'" + String(currentDisplayType == 1 ? " selected" : "") + ">3.4\" DSI (800×800)</option>";
+    html += "<option value='2'" + String(currentDisplayType == 2 ? " selected" : "") + ">4.0\" DSI (720×720)</option>";
+    
+    html += "</select>";
+    html += "<small style='color:#94a3b8;display:block;margin-top:0.5rem'>⚠️ <strong>Requires restart:</strong> Changing display type will restart the device to reinitialize the display hardware.</small></div></div>";
+    
+    html += "<div class='card'><h2>&#x1F4BE; Memory Thresholds " + generateDocLink("docs/03_configuration.md", "advanced-settings") + "</h2>";
     html += "<div class='form-group'><label for='critical_heap_threshold'>Critical Heap Threshold (bytes)</label>";
     html += "<input type='number' id='critical_heap_threshold' name='critical_heap_threshold' class='form-control' value='" + String(configStorage.getCriticalHeapThreshold()) + "' min='10000' max='1000000'></div>";
     html += "<div class='form-group'><label for='critical_psram_threshold'>Critical PSRAM Threshold (bytes)</label>";
     html += "<input type='number' id='critical_psram_threshold' name='critical_psram_threshold' class='form-control' value='" + String(configStorage.getCriticalPSRAMThreshold()) + "' min='10000' max='10000000'></div></div>";
     html += "</div><div class='card' style='margin-top:1.5rem'>";
-    html += "<button type='submit' class='btn btn-primary'>💾 Save Advanced Settings</button></div></form>";
+    html += "<button type='submit' class='btn btn-primary'>💾 Save System Settings</button></div></form>";
     
     // OTA Firmware Update Section
     html += "<div class='card' style='margin-top:1.5rem'><h2>📦 Firmware Update (OTA)</h2>";
@@ -961,6 +1034,27 @@ String WebConfig::generateAPIReferencePage() {
     html += "<p style='color:#94a3b8;margin-bottom:1rem'>Manually trigger switching to the next image in cycling mode.</p>";
     html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
     html += "curl -X POST " + deviceUrl + "/api/next-image</pre></div>";
+    
+    // POST /api/force-refresh
+    html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";
+    html += "<h3 style='color:#38bdf8;margin-bottom:0.5rem'><span style='background:#f59e0b;color:#000;padding:0.25rem 0.5rem;border-radius:4px;font-size:0.8rem;margin-right:0.5rem'>POST</span>/api/force-refresh</h3>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Force immediate re-download of the current image. Useful for API-triggered update mode or manual refresh.</p>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Use Cases:</p>";
+    html += "<ul style='color:#94a3b8;line-height:1.8;list-style-type:disc;padding-left:1.5rem'>";
+    html += "<li>Refresh image on external trigger (motion detection, satellite image availability)</li>";
+    html += "<li>Manual refresh via automation script</li>";
+    html += "<li>Synchronized updates with external systems</li>";
+    html += "<li>Testing image updates without waiting for cycle interval</li></ul></div>";
+    html += "<div style='margin-bottom:1rem'>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Request Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0;font-size:0.85rem'>";
+    html += "curl -X POST " + deviceUrl + "/api/force-refresh</pre></div>";
+    html += "<div>";
+    html += "<p style='color:#64748b;font-weight:bold;margin-bottom:0.5rem'>Response Example:</p>";
+    html += "<pre style='background:#1e293b;padding:1rem;border-radius:6px;overflow-x:auto;color:#cbd5e1;margin:0'>";
+    html += "{\"status\":\"success\",\"message\":\"Current image refreshed\"}</pre>";
+    html += "</div></div>";
     
     // POST /api/update-transform
     html += "<div style='margin-top:1.5rem;padding:1rem;background:#0f172a;border-left:4px solid #f59e0b;border-radius:8px'>";

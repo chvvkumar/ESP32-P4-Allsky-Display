@@ -5,6 +5,10 @@
 #include <Arduino_GFX_Library.h>
 #include "i2c.h"
 
+// Forward declaration for runtime display type selection
+class ConfigStorage;
+extern ConfigStorage configStorage;
+
 struct DisplayConfig
 {
     const char *name;
@@ -41,9 +45,8 @@ struct DisplayConfig
 #define CURRENT_SCREEN SCREEN_3INCH_4_DSI
 #endif
 
-#if CURRENT_SCREEN == SCREEN_3INCH_4_DSI
-
-static const lcd_init_cmd_t vendor_specific_init_default[] = {
+// Define 3.4" display init commands
+static const lcd_init_cmd_t vendor_specific_init_3_4[] = {
 {0xE0, (uint8_t[]){0x00}, 1, 0},
 
     {0xE1, (uint8_t[]){0x93}, 1, 0},
@@ -263,7 +266,7 @@ static const lcd_init_cmd_t vendor_specific_init_default[] = {
     {0x35, (uint8_t[]){0x00}, 1, 0},
 };
 
-const DisplayConfig SCREEN_DEFAULT = {
+const DisplayConfig SCREEN_3_4_INCH_CONFIG = {
     .name = "3.4INCH-DSI",
     .hsync_pulse_width = 20,
     .hsync_back_porch = 20,
@@ -278,17 +281,16 @@ const DisplayConfig SCREEN_DEFAULT = {
     .rotation = 2,
     .auto_flush = false,
     .rst_pin = -1,
-    .init_cmds = vendor_specific_init_default,
-    .init_cmds_size = sizeof(vendor_specific_init_default) / sizeof(lcd_init_cmd_t),
+    .init_cmds = vendor_specific_init_3_4,
+    .init_cmds_size = sizeof(vendor_specific_init_3_4) / sizeof(lcd_init_cmd_t),
     .i2c_sda_pin = 7,
     .i2c_scl_pin = 8,
     .i2c_clock_speed = 100000,
     .lcd_rst = 27,
 };
 
-#elif CURRENT_SCREEN == SCREEN_4INCH_DSI
-
-static const lcd_init_cmd_t vendor_specific_init_default[] = {
+// Define 4.0" display init commands
+static const lcd_init_cmd_t vendor_specific_init_4_0[] = {
     {0xE0, (uint8_t[]){0x00}, 1, 0},
 
     {0xE1, (uint8_t[]){0x93}, 1, 0},
@@ -507,7 +509,7 @@ static const lcd_init_cmd_t vendor_specific_init_default[] = {
     {0x35, (uint8_t[]){0x00}, 1, 0},
 };
 
-const DisplayConfig SCREEN_DEFAULT = {
+const DisplayConfig SCREEN_4_INCH_CONFIG = {
     .name = "4INCH-DSI",
     .hsync_pulse_width = 20,
     .hsync_back_porch = 20,
@@ -519,20 +521,22 @@ const DisplayConfig SCREEN_DEFAULT = {
     .lane_bit_rate = 1500,
     .width = 720,
     .height = 720,
-    .rotation = 0,
+    .rotation = 2,
     .auto_flush = true,
     .rst_pin = -1,
-    .init_cmds = vendor_specific_init_default,
-    .init_cmds_size = sizeof(vendor_specific_init_default) / sizeof(lcd_init_cmd_t),
+    .init_cmds = vendor_specific_init_4_0,
+    .init_cmds_size = sizeof(vendor_specific_init_4_0) / sizeof(lcd_init_cmd_t),
     .i2c_sda_pin = 7,
     .i2c_scl_pin = 8,
     .i2c_clock_speed = 100000,
     .lcd_rst = 27,
 };
 
+// Compile-time default selection (actual runtime selection happens in display_manager.cpp setup())
+#if CURRENT_SCREEN == SCREEN_4INCH_DSI
+inline const DisplayConfig& display_cfg = SCREEN_4_INCH_CONFIG;
 #else
-#error "A valid screen size is not defined, please set the CURRENT_SCREEN macro"
+inline const DisplayConfig& display_cfg = SCREEN_3_4_INCH_CONFIG;
 #endif
 
-inline const DisplayConfig& display_cfg = SCREEN_DEFAULT;
 #endif

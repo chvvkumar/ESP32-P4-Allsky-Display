@@ -38,7 +38,7 @@ bool WebConfig::begin(int port) {
         server->on("/config/mqtt", [this]() { handleMQTTConfig(); });
         server->on("/config/images", [this]() { handleImageConfig(); });
         server->on("/config/display", [this]() { handleDisplayConfig(); });
-        server->on("/config/advanced", [this]() { handleAdvancedConfig(); });
+        server->on("/config/system", [this]() { handleAdvancedConfig(); });
         server->on("/config/commands", [this]() { handleSerialCommands(); });
         server->on("/status", [this]() { handleStatus(); });
         server->on("/api/save", HTTP_POST, [this]() { handleSaveConfig(); });
@@ -48,6 +48,7 @@ bool WebConfig::begin(int port) {
     server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
     server->on("/api/bulk-delete-sources", HTTP_POST, [this]() { handleBulkDeleteImageSources(); });
     server->on("/api/next-image", HTTP_POST, [this]() { handleNextImage(); });
+    server->on("/api/force-refresh", HTTP_POST, [this]() { handleForceRefresh(); });
         server->on("/api/update-transform", HTTP_POST, [this]() { handleUpdateImageTransform(); });
         server->on("/api/copy-defaults", HTTP_POST, [this]() { handleCopyDefaultsToImage(); });
         server->on("/api/apply-transform", HTTP_POST, [this]() { handleApplyTransform(); });
@@ -59,6 +60,7 @@ bool WebConfig::begin(int port) {
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
         server->on("/api/set-log-severity", HTTP_POST, [this]() { handleSetLogSeverity(); });
         server->on("/api/clear-crash-logs", HTTP_POST, [this]() { handleClearCrashLogs(); });
+        server->on("/api/force-brightness-update", HTTP_POST, [this]() { handleForceBrightnessUpdate(); });
         server->on("/api/info", HTTP_GET, [this]() { handleGetAllInfo(); });
         server->on("/api/current-image", HTTP_GET, [this]() { handleCurrentImage(); });
         server->on("/api/health", HTTP_GET, [this]() { handleGetHealth(); });
@@ -240,8 +242,8 @@ void WebConfig::handleDisplayConfig() {
 }
 
 void WebConfig::handleAdvancedConfig() {
-    String html = generateHeader("Advanced Configuration");
-    html += generateNavigation("advanced");
+    String html = generateHeader("System Configuration");
+    html += generateNavigation("system");
     html += generateAdvancedPage();
     html += generateFooter();
     sendResponse(200, "text/html", html);
@@ -293,7 +295,7 @@ String WebConfig::generateHeader(const String& title) {
     // Header
     html += "<div class='header'><div class='container'>";
     html += "<div class='header-content'>";
-    html += "<div class='logo'><i class='fas fa-satellite'></i> ESP32 AllSky Display</div>";
+    html += "<div class='logo'><i class='fas fa-satellite'></i> " + configStorage.getDeviceName() + "</div>";
     html += "<div class='status-badges'>";
     html += "<a href='https://github.com/chvvkumar/ESP32-P4-Allsky-Display' target='_blank' class='github-link'><i class='github-icon fa-github'></i> GitHub</a>";
     html += getConnectionStatus();
@@ -314,9 +316,9 @@ String WebConfig::generateNavigation(const String& currentPage) {
     html += "<button class='nav-toggle' onclick='toggleNav()' aria-label='Toggle navigation'><i class='fas fa-bars'></i></button>";
     html += "<div class='nav-content'>";
     
-    String pages[] = {"dashboard", "images", "display", "network", "mqtt", "console", "commands", "advanced", "api"};
-    String labels[] = {"🏠 Dashboard", "🖼️ Images", "💡 Display", "📡 Network", "🔗 MQTT", "🖥️ Console", "📟 Commands", "⚙️ Advanced", "📚 API"};
-    String urls[] = {"/", "/config/images", "/config/display", "/config/network", "/config/mqtt", "/console", "/config/commands", "/config/advanced", "/api-reference"};
+    String pages[] = {"dashboard", "images", "display", "network", "mqtt", "console", "system", "commands", "api"};
+    String labels[] = {"🏠 Dashboard", "🖼️ Images", "💡 Display", "📡 Network", "🔗 MQTT", "🖥️ Console", "⚙️ System", "📟 Commands", "📚 API"};
+    String urls[] = {"/", "/config/images", "/config/display", "/config/network", "/config/mqtt", "/console", "/config/system", "/config/commands", "/api-reference"};
     
     for (int i = 0; i < 9; i++) {
         String activeClass = (currentPage == pages[i]) ? " active" : "";
@@ -334,7 +336,7 @@ String WebConfig::generateFooter() {
     html += String(FPSTR(HTML_MODALS));
     
     html += "<div class='footer'><div class='container'>";
-    html += "<p style='margin-bottom:0.5rem'>ESP32 AllSky Display Configuration Portal</p>";
+    html += "<p style='margin-bottom:0.5rem'>" + configStorage.getDeviceName() + " Configuration Portal</p>";
     html += "<p style='font-size:0.8rem;color:#64748b;margin:0.25rem 0'>";
     html += "MD5: " + String(ESP.getSketchMD5().substring(0, 8)) + " | ";
     html += "Build: " + formatBytes(ESP.getSketchSize()) + " | ";

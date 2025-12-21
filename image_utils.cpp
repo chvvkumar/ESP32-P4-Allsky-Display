@@ -3,6 +3,65 @@
 
 extern SystemMonitor systemMonitor;  // Defined in main .ino file
 
+void ImageUtils::getKelvinScales(int temp, float& rScale, float& gScale, float& bScale) {
+    // 6500K is neutral (1.0, 1.0, 1.0)
+    // Simplified approximation for performance (Tanner Helland's method)
+    temp = constrain(temp, 1000, 40000) / 100;
+    
+    // Calculate Red
+    if (temp <= 66) {
+        rScale = 1.0f;
+    } else {
+        rScale = constrain(pow(temp - 60, -0.1332047592) * 329.698727446 / 255.0, 0.0, 1.0);
+    }
+    
+    // Calculate Green
+    if (temp <= 66) {
+        gScale = constrain(log(temp) * 99.4708025861 - 161.1195681661, 0.0, 255.0) / 255.0;
+    } else {
+        gScale = constrain(pow(temp - 60, -0.0755148492) * 288.1221695283 / 255.0, 0.0, 1.0);
+    }
+    
+    // Calculate Blue
+    if (temp >= 66) {
+        bScale = 1.0f;
+    } else if (temp <= 19) {
+        bScale = 0.0f;
+    } else {
+        bScale = constrain(log(temp - 10) * 138.5177312231 - 305.0447927307, 0.0, 255.0) / 255.0;
+    }
+}
+
+void ImageUtils::adjustColorTemperature(uint16_t* buffer, int width, int height, int tempKelvin) {
+    if (tempKelvin == 6500) return; // Neutral, no-op
+
+    float rS, gS, bS;
+    getKelvinScales(tempKelvin, rS, gS, bS);
+
+    // Use fixed-point math for speed (scale by 256)
+    int rFix = rS * 256;
+    int gFix = gS * 256;
+    int bFix = bS * 256;
+
+    int len = width * height;
+    for (int i = 0; i < len; i++) {
+        uint16_t p = buffer[i];
+        
+        // Unpack RGB565
+        int r = (p >> 11) & 0x1F;
+        int g = (p >> 5) & 0x3F;
+        int b = p & 0x1F;
+
+        // Apply scaling
+        r = constrain((r * rFix) >> 8, 0, 31);
+        g = constrain((g * gFix) >> 8, 0, 63);
+        b = constrain((b * bFix) >> 8, 0, 31);
+
+        // Repack
+        buffer[i] = (r << 11) | (g << 5) | b;
+    }
+}
+
 bool ImageUtils::softwareTransform(
     const uint16_t* srcBuffer, int srcWidth, int srcHeight,
     uint16_t* dstBuffer, int dstWidth, int dstHeight,

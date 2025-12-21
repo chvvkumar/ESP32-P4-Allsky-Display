@@ -24,6 +24,7 @@ public:
     void resetToDefaults();
     
     // Individual parameter setters
+    void setDeviceName(const String& name);
     void setWiFiSSID(const String& ssid);
     void setWiFiPassword(const String& password);
     void setMQTTServer(const String& server);
@@ -57,6 +58,7 @@ public:
     
     // Multi-image cycling setters
     void setCyclingEnabled(bool enabled);
+    void setImageUpdateMode(int mode);
     void setCycleInterval(unsigned long interval);
     void setRandomOrder(bool random);
     void setCurrentImageIndex(int index);
@@ -72,6 +74,7 @@ public:
     unsigned long getImageDuration(int index);
     
     // Individual parameter getters
+    String getDeviceName();
     String getWiFiSSID();
     String getWiFiPassword();
     String getMQTTServer();
@@ -105,6 +108,7 @@ public:
     
     // Multi-image cycling getters
     bool getCyclingEnabled();
+    int getImageUpdateMode();
     unsigned long getCycleInterval();
     bool getRandomOrder();
     int getCurrentImageIndex();
@@ -172,6 +176,16 @@ public:
     bool getUseHARestControl();
     unsigned long getHAPollInterval();
     int getLightSensorMappingMode();
+    
+    // Display hardware setters
+    void setDisplayType(int type);
+    
+    // Display hardware getters
+    int getDisplayType();
+    
+    // Color temperature setters/getters
+    void setColorTemp(int temp);
+    int getColorTemp();
 
 private:
     Preferences preferences;
@@ -188,6 +202,9 @@ private:
     
     // Configuration structure
     struct Config {
+        // Device settings
+        String deviceName;
+        
         // Network settings
         bool wifiProvisioned;
         String wifiSSID;
@@ -212,6 +229,7 @@ private:
         
         // Multi-image cycling settings
         bool cyclingEnabled;
+        int imageUpdateMode;  // 0=automatic cycling, 1=API-triggered refresh
         unsigned long cycleInterval;
         bool randomOrder;
         int currentImageIndex;
@@ -234,6 +252,12 @@ private:
         unsigned long defaultImageDuration;
         int backlightFreq;
         int backlightResolution;
+        
+        // Display hardware
+        int displayType;  // 1=3.4" DSI, 2=4.0" DSI
+        
+        // Color temperature
+        int colorTemp;  // Display color temperature in Kelvin (2000-10000)
         
         // Advanced settings
         unsigned long updateInterval;

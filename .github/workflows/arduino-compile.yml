@@ -385,6 +385,14 @@ jobs:
         fi
         echo "✅ No memory warnings"
     
+    - name: Install esptool
+      run: |
+        pip install --break-system-packages esptool
+        # Ensure esptool is in PATH
+        export PATH="$HOME/.local/bin:$PATH"
+        esptool.py version
+        echo "✅ esptool installed"
+    
     - name: Create memory usage badge data
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       run: |
@@ -471,36 +479,60 @@ jobs:
     - name: Prepare release binary
       if: steps.check_release.outputs.should_release == 'true'
       run: |
+        # Ensure esptool is in PATH
+        export PATH="$HOME/.local/bin:$PATH"
+        
         # Ensure release directory exists
         mkdir -p ./release
         
-        # List build directory contents
-        echo "Build directory contents:"
-        ls -lh ./build/
-        
-        # Find and copy bin file with branch identifier
+        # Determine branch naming for filenames
         BRANCH_NAME="${GITHUB_REF#refs/heads/}"
         if [ "$BRANCH_NAME" = "main" ]; then
-          BIN_NAME="ESP32-P4-Allsky-Display-OTA.bin"
+          BASE_NAME="ESP32-P4-Allsky-Display"
         else
-          BIN_NAME="ESP32-P4-Allsky-Display-OTA-${BRANCH_NAME}.bin"
+          BASE_NAME="ESP32-P4-Allsky-Display-${BRANCH_NAME}"
         fi
         
-        # Find the main firmware .bin file (exclude bootloader and partitions)
-        BIN_FILE=$(find ./build -name "ESP32-P4-Allsky-Display.ino.bin" -type f)
-        if [ -z "$BIN_FILE" ]; then
-          echo "❌ Error: ESP32-P4-Allsky-Display.ino.bin not found in build directory"
-          echo "Available .bin files:"
-          find ./build -name "*.bin" -type f
+        OTA_BIN="${BASE_NAME}-OTA.bin"
+        FACTORY_BIN="${BASE_NAME}-Factory.bin"
+        
+        # 1. Handle OTA Binary (Application Only)
+        APP_BIN=$(find ./build -name "ESP32-P4-Allsky-Display.ino.bin" -type f)
+        if [ -z "$APP_BIN" ]; then
+          echo "❌ Error: App binary not found"
           exit 1
         fi
+        cp "$APP_BIN" "release/$OTA_BIN"
+        echo "✅ OTA Binary prepared: $OTA_BIN"
+
+        # 2. Handle Factory Binary (Merged)
+        # Find necessary parts in build directory
+        BOOTLOADER_BIN=$(find ./build -name "*.bootloader.bin" -type f | head -n 1)
+        PARTITIONS_BIN=$(find ./build -name "*.partitions.bin" -type f | head -n 1)
         
-        echo "Found bin file: $BIN_FILE ($(du -h "$BIN_FILE" | cut -f1))"
-        cp "$BIN_FILE" "release/$BIN_NAME"
+        if [ -n "$BOOTLOADER_BIN" ] && [ -n "$PARTITIONS_BIN" ]; then
+          echo "Found Bootloader: $BOOTLOADER_BIN"
+          echo "Found Partitions: $PARTITIONS_BIN"
+          
+          # Merge binaries using standard ESP32-P4 offsets
+          # Bootloader @ 0x2000, Partitions @ 0x8000, App @ 0x10000
+          esptool.py --chip esp32p4 merge_bin \
+            -o "release/$FACTORY_BIN" \
+            --flash_mode dio \
+            --flash_freq 40m \
+            --flash_size 32MB \
+            0x2000 "$BOOTLOADER_BIN" \
+            0x8000 "$PARTITIONS_BIN" \
+            0x10000 "$APP_BIN"
+            
+          echo "✅ Factory Binary generated: $FACTORY_BIN"
+        else
+          echo "⚠️ Could not find bootloader or partitions binary. Skipping Factory bin generation."
+          ls -R ./build
+        fi
         
-        # Display build info
+        # List contents to verify
         ls -lh release/
-        echo "✅ OTA-ready firmware prepared: $BIN_NAME"
     
     - name: Upload build artifacts
       if: steps.check_release.outputs.should_release == 'true'
@@ -590,54 +622,26 @@ jobs:
           
           ${{ needs.build.outputs.release_type == 'test' && format('⚠️ **This is a pre-release test build from the `{0}` branch.**', needs.build.outputs.branch) || '' }}
           ${{ needs.build.outputs.release_type == 'test' && '**Use for testing purposes only. For stable releases, use builds from the main branch.**' || '' }}
-          ${{ needs.build.outputs.release_type == 'test' && '' || '' }}
           
-          ### ⚠️ Display Compatibility
+          ### 📦 Binary Files
           
-          **Pre-compiled firmware is configured for the 3.4" display (800×800) only.**
+          **Two binary files are included in this release:**
           
-          - ✅ **3.4" Waveshare Display**: Use the `.bin` file below
-          - ❌ **4.0" Waveshare Display**: Must compile from source (see README.md)
-          - Display configuration is set at compile time and cannot be changed after flashing
+          - **`*-Factory.bin`** - For initial USB installation (includes bootloader + partitions + app)
+            - Use this file for fresh installs via esptool or Flash Download Tool
+            - Flash to address `0x0`
           
-          ### 🚀 Installation Methods
+          - **`*-OTA.bin`** - For wireless OTA updates only (app only)
+            - Use this file for web-based updates via ElegantOTA at `http://[device-ip]:8080/update`
+            - ⚠️ **DO NOT flash this to address 0x0** - will cause boot loop
           
-          #### Initial Installation (USB)
-          1. Download the `.bin` file below (for 3.4" display only)
-          2. Flash using esptool or Arduino IDE
-          3. Configure WiFi via captive portal (device creates `AllSky-Display-Setup` network)
+          ### 🖥️ Display Compatibility
           
-          #### OTA Update (Wireless) ✨
-          **Already have a previous version installed? Update wirelessly!**
+          **Universal Support:** Pre-compiled firmware works with both display sizes:
+          - ✅ **3.4" Waveshare Display** (800×800) - Default on first boot
+          - ✅ **4.0" Waveshare Display** (720×720) - Select in Web UI System settings after flashing
           
-          **Method 1: ElegantOTA (Recommended)**
-          1. Navigate to `http://[device-ip]:8080/update`
-          2. Upload the `.bin` file from this release
-          3. Device reboots automatically with new firmware
-          
-          **Method 2: ArduinoOTA (For Developers)**
-          1. Select network port in Arduino IDE: `Tools → Port → esp32-allsky-display at [IP]`
-          2. Click Upload button
-          
-          ### Key Features
-          - **Over-the-Air Updates**: Wireless firmware updates via web interface or Arduino IDE with automatic rollback protection
-          - **Dual Partition System**: Safe A/B partition scheme ensures system stability during updates
-          - **Persistent Configuration**: Network credentials, MQTT settings, and display preferences are preserved across firmware updates
-          - **Multi-Source Image Display**: Support for up to 10 configurable image sources with automatic cycling
-          - **Home Assistant Integration**: Native MQTT auto-discovery for seamless smart home integration
-          - **Touch Interface**: Responsive single and double-tap gesture controls
-          - **Hardware-Accelerated Processing**: Leverages ESP32-P4 PPA engine for optimized image transformation
-          
-          ### Documentation
-          - [README.md](README.md) - Complete setup and features
-          - [OTA_GUIDE.md](OTA_GUIDE.md) - Detailed OTA update instructions
-          
-          ### 🔧 Technical Details
-          - **Partition Scheme**: 13MB app / 7MB data with A/B OTA support
-          - **Flash Size**: 32MB
-          - **PSRAM**: Required (OPI mode)
-          - **Supported Displays**: Waveshare ESP32-P4 3.4" & 4.0" DSI touch displays
-          ${{ needs.build.outputs.release_type == 'test' && format('- **Branch**: {0}', needs.build.outputs.branch) || '' }}
+          Display type can be changed at runtime without recompilation.
           
           ### Changes in This Release
           ${{ steps.changelog.outputs.changelog || '_No commits found_' }}
@@ -709,12 +713,12 @@ jobs:
           # Escape special characters for JSON
           COMMITS_ESCAPED=$(echo "$COMMITS" | jq -Rs .)
           FILES_ESCAPED=$(echo "$FILES" | jq -Rs .)
-          PR_TITLE=$(echo "${{ github.event.pull_request.title }}" | jq -Rs .)
-          PR_BODY=$(echo "${{ github.event.pull_request.body }}" | jq -Rs .)
+          PR_TITLE=$(echo '${{ github.event.pull_request.title }}' | jq -Rs .)
+          PR_BODY=$(echo '${{ github.event.pull_request.body }}' | jq -Rs .)
           
           # Build the prompt
           read -r -d '' PROMPT << 'EOF'
-          You are a code review assistant. Analyze the following pull request and provide a comprehensive summary.
+          You are a code review assistant. Analyze the following pull request and provide a categorized summary of changes.
 
           **IMPORTANT:** Focus ONLY on the actual code changes listed below. Do NOT mention or summarize any GitHub Actions workflow files (.github/workflows/) as those have been filtered out.
 
@@ -729,10 +733,7 @@ jobs:
           %FILES%
 
           ## Your Task
-          Provide a well-structured summary with these sections:
-
-          ### 📋 Overview
-          Write 2-3 sentences describing what this PR accomplishes overall.
+          Provide ONLY the following section in clean markdown format:
 
           ### 🔄 Changes by Category
           Group the changes into relevant categories such as:
@@ -745,20 +746,7 @@ jobs:
           - **Configuration**: Config file changes
 
           Only include categories that apply. Use bullet points for each change.
-
-          ### ⚠️ Notable Details
-          Highlight any:
-          - Breaking changes
-          - Security considerations
-          - Performance implications
-          - Migration requirements
-
-          If none, write "No notable concerns identified."
-
-          ### 👀 Suggested Review Focus
-          List 2-4 specific areas or files reviewers should pay close attention to.
-
-          Format everything in clean markdown.
+          Do NOT include any other sections, headers, or conclusions.
           EOF
           
           # Replace placeholders (remove jq quotes)
@@ -828,62 +816,35 @@ jobs:
               pull_number: context.issue.number,
             });
             
-            // Create enhanced PR body with AI summary
-            const marker = '<!-- pr-commit-summary-bot -->';
-            const summarySection = `${marker}
-            
-            ${summary}
+            // Create PR body with only Changes by Category section
+            const newBody = `${summary}
             
             ---
-            <sub>📊 Analyzed **${commitCount}** commit(s) | 🕐 Updated: ${timestamp} | Generated by GitHub Actions</sub>
+            <sub>📊 Analyzed **${commitCount}** commit(s) | 🕐 Updated: ${timestamp} | Generated by GitHub Actions</sub>`;
             
-            ---
-            `;
+            // Generate title with emoji prefix (replace existing)
+            const titleLower = pr.title.toLowerCase();
+            let emoji = '✨'; // Default: sparkles for feature
             
-            // Check if the PR body already has our summary marker
-            let newBody;
-            if (pr.body && pr.body.includes(marker)) {
-              // Replace existing summary section
-              const markerIndex = pr.body.indexOf(marker);
-              const endMarkerIndex = pr.body.indexOf('---\n\n', markerIndex + summarySection.length);
-              
-              if (endMarkerIndex !== -1) {
-                // Replace everything from marker to the end of summary section
-                newBody = pr.body.substring(0, markerIndex) + summarySection + pr.body.substring(endMarkerIndex + 5);
-              } else {
-                // Fallback: append new summary
-                newBody = summarySection + (pr.body || '');
-              }
-            } else {
-              // Prepend summary to existing body
-              newBody = summarySection + (pr.body || '');
+            if (titleLower.includes('fix') || titleLower.includes('bug')) {
+              emoji = '🐛';
+            } else if (titleLower.includes('doc')) {
+              emoji = '📚';
+            } else if (titleLower.includes('refactor') || titleLower.includes('cleanup')) {
+              emoji = '♻️';
+            } else if (titleLower.includes('test')) {
+              emoji = '✅';
+            } else if (titleLower.includes('config') || titleLower.includes('setting')) {
+              emoji = '⚙️';
+            } else if (titleLower.includes('security')) {
+              emoji = '🔒';
+            } else if (titleLower.includes('performance') || titleLower.includes('optim')) {
+              emoji = '⚡';
             }
             
-            // Generate enhanced title with emoji prefix if not already present
-            let newTitle = pr.title;
-            if (!pr.title.match(/^[\u{1F300}-\u{1F9FF}]/u)) {
-              // Add a relevant emoji based on keywords in the title
-              const titleLower = pr.title.toLowerCase();
-              let emoji = '✨'; // Default: sparkles for feature
-              
-              if (titleLower.includes('fix') || titleLower.includes('bug')) {
-                emoji = '🐛';
-              } else if (titleLower.includes('doc')) {
-                emoji = '📚';
-              } else if (titleLower.includes('refactor') || titleLower.includes('cleanup')) {
-                emoji = '♻️';
-              } else if (titleLower.includes('test')) {
-                emoji = '✅';
-              } else if (titleLower.includes('config') || titleLower.includes('setting')) {
-                emoji = '⚙️';
-              } else if (titleLower.includes('security')) {
-                emoji = '🔒';
-              } else if (titleLower.includes('performance') || titleLower.includes('optim')) {
-                emoji = '⚡';
-              }
-              
-              newTitle = `${emoji} ${pr.title}`;
-            }
+            // Remove any existing emoji prefix and add new one
+            const cleanTitle = pr.title.replace(/^[\u{1F300}-\u{1F9FF}]\s*/u, '');
+            const newTitle = `${emoji} ${cleanTitle}`;
             
             // Update the PR
             await github.rest.pulls.update({

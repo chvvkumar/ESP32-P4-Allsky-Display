@@ -15,14 +15,17 @@
 
 ### Step 1: Download Firmware
 
-**⚠️ Display Compatibility Notice:**
-- Pre-compiled `.bin` files are configured for the **3.4" display (800×800)** only
-- **4.0" display (720×720) users:** Must compile from source (see [Compiling From Source](#compiling-from-source))
-- Display configuration is set at compile time in `displays_config.h`
+**✨ Display Compatibility Notice (v-snd-0.61+):**
+- Pre-compiled `.bin` files work for **both 3.4" (800×800) and 4.0" (720×720)** displays
+- **4.0" display users:** Flash the standard binary, then select "4.0" 720×720" in Web UI System settings
+- Display type can be changed at runtime without recompilation (see [First Boot Configuration](#first-boot--wifi-setup))
+- Default: 3.4" display on first boot
 
 **Download Latest Release:**
 1. Go to [Releases](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
-2. Download `ESP32-P4-Allsky-Display.bin` (for 3.4" display only)
+2. Download **`ESP32-P4-Allsky-Display-Factory.bin`** (universal for both displays)
+
+⚠️ **Important:** For initial USB installation, use the **`-Factory.bin`** file. The **`-OTA.bin`** file is for wireless updates only and should NOT be flashed to address 0x0.
 
 ### Step 2: Flash Firmware
 
@@ -30,12 +33,12 @@
 
 **Windows:**
 ```powershell
-esptool.py --chip esp32p4 --port COM3 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display.bin
+esptool.py --chip esp32p4 --port COM3 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display-Factory.bin
 ```
 
 **macOS/Linux:**
 ```bash
-esptool.py --chip esp32p4 --port /dev/ttyUSB0 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display.bin
+esptool.py --chip esp32p4 --port /dev/ttyUSB0 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display-Factory.bin
 ```
 
 **Find your port:**

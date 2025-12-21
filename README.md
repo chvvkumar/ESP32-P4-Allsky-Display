@@ -47,7 +47,10 @@ Complete user and developer documentation organized by user journey:
 
 ## ✨ Key Features
 
-- **Multi-Image Display** - Cycle through up to 10 image sources automatically
+- **Multi-Image Display** - Cycle through up to 10 image sources automatically or via API triggers
+- **Flexible Update Modes** - Automatic cycling or API-triggered refresh for external control (v-snd-0.62+)
+- **Runtime Display Selection** - Switch between 3.4" and 4.0" displays via Web UI without recompilation (v-snd-0.61+)
+- **Enhanced Brightness Control** - Three modes: Manual, MQTT Auto, or Home Assistant with clear UI indication (v-snd-0.61+)
 - **Hardware Accelerated** - ESP32-P4 PPA for fast scaling and rotation (385-507ms render time)
 - **High Resolution** - Up to 1448×1448 pixel images with 2× scaling capability
 - **Per-Image Transforms** - Individual scale, offset, and rotation settings for each image
@@ -64,9 +67,11 @@ Complete user and developer documentation organized by user journey:
 ### 1. Hardware Required
 
 - [Waveshare 3.4" ESP32-P4 Touch LCD](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.4c.htm) (800×800) ✅ **Tested & Working**
-- [Waveshare 4.0" ESP32-P4 Touch LCD](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-4C) (720×720) ⚠️ **Untested**
+- [Waveshare 4.0" ESP32-P4 Touch LCD](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-4C) (720×720) ✅ **Tested & Working**
 
 **Requirements:** ESP32-P4 with WiFi 6, DSI display, GT911 touch, PSRAM required
+
+💡 **Both displays supported!** Select display type in Web UI System settings after flashing (v-snd-0.61+)
 
 📖 **Full Details:** [Hardware Requirements Guide](docs/01_hardware.md)
 
@@ -74,14 +79,16 @@ Complete user and developer documentation organized by user journey:
 
 **Download Latest Release:**
 - Go to [Releases](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases/latest)
-- Download `ESP32-P4-Allsky-Display.bin`
+- Download **`ESP32-P4-Allsky-Display-Factory.bin`** (for initial USB installation)
+
+⚠️ **Important:** Use the **`-Factory.bin`** file for USB flashing. The **`-OTA.bin`** file is for wireless updates only.
 
 **Flash using esptool:**
 ```powershell
-esptool.py --chip esp32p4 --port COM3 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display.bin
+esptool.py --chip esp32p4 --port COM3 --baud 921600 write_flash 0x0 ESP32-P4-Allsky-Display-Factory.bin
 ```
 
-⚠️ **Pre-compiled binaries are for 3.4" display only.** 4.0" display users must compile from source.
+✅ **Universal Display Support:** Pre-compiled firmware works with both 3.4" (800×800) and 4.0" (720×720) displays. Select display type in Web UI System settings after flashing.
 
 📖 **Full Instructions:** [Installation Guide](docs/02_installation.md)
 
