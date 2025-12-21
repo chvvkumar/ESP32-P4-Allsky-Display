@@ -387,7 +387,7 @@ jobs:
     
     - name: Install esptool
       run: |
-        pip install esptool
+        pip install --break-system-packages esptool
         echo "✅ esptool installed"
     
     - name: Create memory usage badge data
