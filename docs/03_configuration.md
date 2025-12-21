@@ -104,6 +104,9 @@ Display type can now be changed via Web UI without recompilation:
 | **fullImageBuffer** | Fixed `FULL_IMAGE_BUFFER_SIZE` | 4.00 MB | Active displayed image |
 | **pendingFullImageBuffer** | Same as `fullImageBuffer` | 4.00 MB | Next image (double-buffer) |
 | **scaledBuffer** | w × h × 2 × `SCALED_BUFFER_MULTIPLIER` | 5.12 MB | PPA transformation output |
+| **scratchBuffer** | Fixed | 1.00 MB | QR code display, temporary operations |
+
+**Total PSRAM Usage:** ~15.4 MB (leaves ~17 MB free on 32MB PSRAM)
 
 **Max Scale Factor:** `sqrt(SCALED_BUFFER_MULTIPLIER)`
 - `SCALED_BUFFER_MULTIPLIER = 4` → Max scale = 2.0×
@@ -458,19 +461,21 @@ This table clarifies which settings are **compile-time** (require re-flash) vs. 
 | Setting | Compile-Time | Runtime | Location | Requires Re-flash? |
 |---------|--------------|---------|----------|-------------------|
 | **Hardware** |
-| Display Type (3.4" vs. 4.0") | ✅ | ❌ | `displays_config.h` | ✅ Yes |
-| Display Resolution | ✅ | ❌ | `displays_config.h` | ✅ Yes |
-| Touch I2C Pins | ✅ | ❌ | `displays_config.h` | ✅ Yes |
+| Display Type (3.4" vs. 4.0") | ⚠️ Default | ✅ Configurable | `displays_config.h` / Web UI | ❌ No (v-snd-0.61+) |
+| Display Resolution | ✅ Auto-detected | ❌ | `displays_config.h` | ❌ No (based on display type) |
+| Touch I2C Pins | ✅ Auto-assigned | ❌ | `displays_config.h` | ❌ No (based on display type) |
 | Backlight GPIO | ✅ | ❌ | `config.h` | ✅ Yes |
 | **Memory** |
 | Image Buffer Size | ✅ | ❌ | `config.h` | ✅ Yes |
-| Full Image Buffer Size | ✅ | ❌ | `config.h` | ✅ Yes |
-| Scaled Buffer Multiplier | ✅ | ❌ | `config.h` | ✅ Yes |
-| Max Scale Factor | ✅ Calculated | ❌ | `config.h` | ✅ Yes |
-| Max Image Dimensions | ✅ Calculated | ❌ | `config.h` | ✅ Yes |
+| Full Image Buffer Size | ✅ | ❌ | `config.h` | ✅ Yes (4MB) |
+| Scaled Buffer Multiplier | ✅ | ❌ | `config.h` | ✅ Yes (4× default) |
+| Scratch Buffer Size | ✅ | ❌ | Code | ✅ Yes (1MB for QR codes) |
+| Max Scale Factor | ✅ Calculated | ❌ | `config.h` | ✅ Yes (sqrt of multiplier) |
+| Max Image Dimensions | ✅ Calculated | ❌ | `config.h` | ✅ Yes (1448×1448) |
 | **Network** |
-| WiFi SSID | ⚠️ Fallback | ✅ Primary | `config.cpp` / Web UI | ❌ No |
-| WiFi Password | ⚠️ Fallback | ✅ Primary | `config.cpp` / Web UI | ❌ No |
+| WiFi SSID | ⚠️ Fallback | ✅ Primary | `config.cpp` / Captive Portal / Web UI | ❌ No |
+| WiFi Password | ⚠️ Fallback | ✅ Primary | `config.cpp` / Captive Portal / Web UI | ❌ No |
+| WiFi Setup AP Name | ✅ | ❌ | Code | ✅ Yes (AllSky-Display-Setup) |
 | HTTP Timeouts | ✅ | ❌ | `config.h` | ✅ Yes |
 | DNS Timeout | ✅ | ❌ | `config.h` | ✅ Yes |
 | NTP Server | ⚠️ Default | ✅ Configurable | `config.cpp` / Web UI | ❌ No |
@@ -490,8 +495,9 @@ This table clarifies which settings are **compile-time** (require re-flash) vs. 
 | Cycling Enabled | ⚠️ Default | ✅ Configurable | `config.cpp` / Web UI | ❌ No |
 | Cycle Interval | ⚠️ Default | ✅ Configurable | `config.h` / Web UI | ❌ No |
 | Random Order | ⚠️ Default | ✅ Configurable | `config.cpp` / Web UI | ❌ No |
+| Update Mode (Auto/API) | ⚠️ Default | ✅ Configurable | Web UI | ❌ No |
 | **Display** |
-| Brightness | ⚠️ Default | ✅ Configurable | `config.h` / Web UI | ❌ No |
+| Brightness | ⚠️ Default | ✅ Configurable | `config.h` / Web UI / MQTT | ❌ No |
 | PWM Frequency | ✅ | ❌ | `config.h` | ✅ Yes |
 | PWM Resolution | ✅ | ❌ | `config.h` | ✅ Yes |
 | **System** |
@@ -499,6 +505,7 @@ This table clarifies which settings are **compile-time** (require re-flash) vs. 
 | Watchdog Timeout | ⚠️ Default | ✅ Configurable | `config.h` / Web UI | ❌ No (effective on reboot) |
 | Memory Thresholds | ⚠️ Defaults | ✅ Configurable | `config.h` / Web UI | ❌ No |
 | Log Severity Filter | ⚠️ Default | ✅ Configurable | `config.h` / Web UI | ❌ No |
+| Device Name | ⚠️ Default | ✅ Configurable | `config.cpp` / Web UI | ❌ No |
 
 **Legend:**
 - ✅ **Available:** Setting can be configured at this level
@@ -506,10 +513,13 @@ This table clarifies which settings are **compile-time** (require re-flash) vs. 
 - ⚠️ **Fallback/Default:** Compile-time value used as default if runtime value not set
 
 **Key Takeaways:**
-1. **Hardware changes always require re-flash** (display type, pins, buffer sizes)
-2. **Network and MQTT settings are runtime-configurable** (no re-flash needed)
-3. **Image sources and transforms are fully runtime** (Web UI only)
-4. **Compile-time values serve as fallbacks** when runtime values haven't been configured
+1. **Display type is now runtime-configurable** (v-snd-0.61+) - switch between 3.4" and 4.0" via Web UI without re-flash
+2. **Hardware pin assignments auto-adjust** based on selected display type (touch I2C pins, resolution)
+3. **Memory buffer sizes require re-flash** (image buffers, scaled buffer multiplier, scratch buffer)
+4. **Network and MQTT settings are fully runtime** (no re-flash needed, configured via Captive Portal or Web UI)
+5. **Image sources and transforms are entirely runtime** (Web UI only, up to 10 images with per-image settings)
+6. **WiFi Setup AP name is hardcoded** ("AllSky-Display-Setup") - matches QR code, requires re-flash to change
+7. **Scratch buffer increased to 1MB** to accommodate 594×594 QR code display (was 512KB)
 
 ---
 

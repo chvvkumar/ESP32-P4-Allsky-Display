@@ -275,7 +275,9 @@ int16_t displayWiFiQRCode() {
     int16_t displayHeight = displayManager.getHeight();
     int16_t textStartY = 200; // Default fallback
     
-    LOG_DEBUG("DEBUG: Loading WiFi QR code...");
+    LOG_INFO("Loading WiFi QR code...");
+    Serial.printf("Display dimensions: %dx%d\n", displayWidth, displayHeight);
+    Serial.printf("Scratch buffer: %p\n", scratchBuffer);
     
     // Reset watchdog before system calls
     systemMonitor.forceResetWatchdog();
@@ -289,36 +291,45 @@ int16_t displayWiFiQRCode() {
     // First, open JPEG to get actual dimensions
     if (!jpeg.openRAM((uint8_t*)wifi_qr_code_jpg, wifi_qr_code_jpg_len, JPEGDrawQR)) {
         LOG_ERROR("ERROR: Failed to open QR code JPEG");
+        Serial.println("JPEG open failed!");
         return textStartY; // Return default position
     }
+    
+    Serial.println("JPEG opened successfully");
     
     // Reset watchdog after opening JPEG
     systemMonitor.forceResetWatchdog();
     
     qrCodeWidth = jpeg.getWidth();
     qrCodeHeight = jpeg.getHeight();
-    LOG_DEBUG_F("DEBUG: QR code dimensions - %dx%d\n", qrCodeWidth, qrCodeHeight);
+    LOG_INFO_F("QR code dimensions: %dx%d\n", qrCodeWidth, qrCodeHeight);
+    Serial.printf("QR dimensions: %dx%d\n", qrCodeWidth, qrCodeHeight);
     
     // Check if QR code fits on display
     if (qrCodeWidth > displayWidth || qrCodeHeight > displayHeight) {
         LOG_ERROR("ERROR: QR code too large for display");
+        Serial.println("QR too large!");
         jpeg.close();
         return textStartY; // Return default position
     }
     
     // Use scratch buffer instead of allocating new memory
     const size_t qrBufferSize = qrCodeWidth * qrCodeHeight * sizeof(uint16_t);
-    const size_t scratchBufferSize = 512 * 512 * 2;  // 512KB
+    const size_t scratchBufferSize = 1024 * 1024;  // 1MB (matches allocation above)
     
     if (!scratchBuffer) {
         LOG_ERROR("ERROR: Scratch buffer not available for QR code");
+        Serial.println("Scratch buffer NULL!");
         jpeg.close();
         return textStartY; // Return default position
     }
     
+    Serial.printf("QR buffer size: %d, Scratch size: %d\n", qrBufferSize, scratchBufferSize);
+    
     if (qrBufferSize > scratchBufferSize) {
         LOG_ERROR_F("ERROR: QR code too large for scratch buffer: %d bytes > %d bytes\n", 
                    qrBufferSize, scratchBufferSize);
+        Serial.println("QR too large for scratch!");
         jpeg.close();
         return textStartY;
     }
@@ -326,13 +337,15 @@ int16_t displayWiFiQRCode() {
     // Reuse scratch buffer for QR code (no allocation needed!)
     qrCodeBuffer = scratchBuffer;
     
-    LOG_DEBUG_F("DEBUG: Using scratch buffer for QR code: %d bytes\n", qrBufferSize);
+    LOG_INFO_F("Using scratch buffer for QR code: %d bytes\n", qrBufferSize);
+    Serial.println("Scratch buffer assigned to QR code buffer");
     
     // Reset watchdog after allocation
     systemMonitor.forceResetWatchdog();
     
     // Clear buffer
     memset(qrCodeBuffer, 0, qrBufferSize);
+    Serial.println("QR buffer cleared");
     
     // Reset watchdog before decode
     systemMonitor.forceResetWatchdog();
@@ -340,9 +353,12 @@ int16_t displayWiFiQRCode() {
     // Pause display during decode to prevent memory contention
     displayManager.pauseDisplay();
     
+    Serial.println("Starting JPEG decode...");
+    
     // Decode QR code JPEG
     if (jpeg.decode(0, 0, 0)) {
-        LOG_DEBUG("DEBUG: QR code decoded successfully");
+        LOG_INFO("QR code decoded successfully");
+        Serial.println("JPEG decode SUCCESS");
         
         // Reset watchdog after decode
         systemMonitor.forceResetWatchdog();
@@ -372,10 +388,13 @@ int16_t displayWiFiQRCode() {
             // Reset watchdog before PPA scaling
             systemMonitor.forceResetWatchdog();
             
+            Serial.println("Starting PPA scaling...");
+            
             // Use PPA to scale down
             if (ppaAccelerator.scaleImage(qrCodeBuffer, qrCodeWidth, qrCodeHeight,
                                          scaledQR, scaledWidth, scaledHeight)) {
-                LOG_DEBUG("DEBUG: QR code scaled successfully");
+                LOG_INFO("QR code scaled successfully");
+                Serial.println("PPA scaling SUCCESS");
                 
                 // Reset watchdog after scaling
                 systemMonitor.forceResetWatchdog();
@@ -383,6 +402,8 @@ int16_t displayWiFiQRCode() {
                 // Position at top-center of screen with margin
                 int16_t qrX = (displayWidth - scaledWidth) / 2;
                 int16_t qrY = 50;  // Smaller margin from top
+                
+                Serial.printf("Drawing QR at (%d, %d) size %dx%d\n", qrX, qrY, scaledWidth, scaledHeight);
                 
                 // Clear area around QR code with margin to prevent corruption
                 int16_t clearMargin = 5;
@@ -397,12 +418,15 @@ int16_t displayWiFiQRCode() {
                 // Draw scaled QR code
                 displayManager.drawBitmap(qrX, qrY, scaledQR, scaledWidth, scaledHeight);
                 
+                Serial.println("QR bitmap drawn");
+                
                 // Flush to ensure QR code is visible immediately
                 if (gfx) {
                     gfx->flush();
+                    Serial.println("Display flushed");
                 }
                 
-                LOG_DEBUG_F("DEBUG: Scaled QR code drawn and flushed at (%d, %d)\n", qrX, qrY);
+                LOG_INFO_F("Scaled QR code drawn at (%d, %d)\n", qrX, qrY);
                 
                 // Calculate where text should start (below QR code + small margin)
                 textStartY = qrY + scaledHeight + 15;
@@ -593,7 +617,8 @@ void setup() {
     LOG_DEBUG_F("✓ Scaled buffer allocated: %d bytes\n", scaledBufferSize);
     
     // Allocate reusable scratch buffer for QR codes and other temporary operations
-    size_t scratchBufferSize = 512 * 512 * 2;  // 512KB buffer
+    // QR code is 594x594 = ~700KB, so allocate 1MB to be safe
+    size_t scratchBufferSize = 1024 * 1024;  // 1MB buffer (was 512KB)
     LOG_DEBUG_F("[Memory] Allocating scratch buffer: %d bytes (%.1f KB, reusable)\n", 
                  scratchBufferSize, scratchBufferSize / 1024.0);
     scratchBuffer = (uint16_t*)ps_malloc(scratchBufferSize);
@@ -676,11 +701,17 @@ void setup() {
         // Clear screen and show WiFi setup instructions
         displayManager.clearScreen();
         
+        // Ensure screen clear is flushed to hardware before drawing QR code
+        Arduino_DSI_Display* gfx = displayManager.getGFX();
+        if (gfx) {
+            gfx->flush();
+        }
+        
         // Reset watchdog before captive portal operations
         systemMonitor.forceResetWatchdog();
         
-        // Start captive portal for WiFi configuration
-        if (captivePortal.begin("AllSky-Setup")) {
+        // Start captive portal for WiFi configuration (matches QR code SSID)
+        if (captivePortal.begin("AllSky-Display-Setup")) {
             // Reset watchdog before QR code display
             systemMonitor.forceResetWatchdog();
             
@@ -701,7 +732,7 @@ void setup() {
             debugPrint("WiFi Setup Required", COLOR_YELLOW);
             debugPrint(" ", COLOR_WHITE);
             debugPrint("Scan QR or Connect:", COLOR_CYAN);
-            debugPrint("AllSky-Setup", COLOR_WHITE);
+            debugPrint("AllSky-Display-Setup", COLOR_WHITE);
             debugPrint(" ", COLOR_WHITE);
             debugPrint("Open: 192.168.4.1", COLOR_GREEN);
             debugPrint(" ", COLOR_WHITE);
