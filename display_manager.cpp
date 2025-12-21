@@ -80,6 +80,7 @@ bool DisplayManager::begin() {
     
     // Clear screen and start debug output
     clearScreen();
+    gfx->flush();  // Ensure screen is actually cleared to hardware
     debugY = DEBUG_START_Y;
     debugLineCount = 0;
     
