@@ -387,23 +387,8 @@ jobs:
     
     - name: Install esptool
       run: |
-        # Use esptool.py that comes bundled with ESP32 Arduino core
-        # It's located in ~/.arduino15/packages/esp32/tools/esptool_py/
-        ESPTOOL_PATH=$(find ~/.arduino15/packages/esp32/tools/esptool_py -name "esptool.py" -type f | head -n 1)
-        
-        if [ -z "$ESPTOOL_PATH" ]; then
-          echo "❌ Error: esptool.py not found in ESP32 Arduino core"
-          exit 1
-        fi
-        
-        echo "Found esptool at: $ESPTOOL_PATH"
-        
-        # Create a symlink or wrapper script for easy access
-        sudo ln -sf "$ESPTOOL_PATH" /usr/local/bin/esptool.py || ln -sf "$ESPTOOL_PATH" ~/esptool.py
-        
-        # Test it works
-        python3 "$ESPTOOL_PATH" version
-        echo "✅ esptool ready"
+        pip install esptool
+        echo "✅ esptool installed"
     
     - name: Create memory usage badge data
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -523,12 +508,9 @@ jobs:
           echo "Found Bootloader: $BOOTLOADER_BIN"
           echo "Found Partitions: $PARTITIONS_BIN"
           
-          # Find esptool.py from ESP32 core installation
-          ESPTOOL_PATH=$(find ~/.arduino15/packages/esp32/tools/esptool_py -name "esptool.py" -type f | head -n 1)
-          
           # Merge binaries using standard ESP32-P4 offsets
           # Bootloader @ 0x2000, Partitions @ 0x8000, App @ 0x10000
-          python3 "$ESPTOOL_PATH" --chip esp32p4 merge_bin \
+          esptool.py --chip esp32p4 merge_bin \
             -o "release/$FACTORY_BIN" \
             --flash_mode dio \
             --flash_freq 40m \
