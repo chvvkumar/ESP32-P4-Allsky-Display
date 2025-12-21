@@ -387,7 +387,19 @@ jobs:
     
     - name: Install esptool
       run: |
-        pip install esptool
+        # Try pip3 first, fallback to pip, then python3 -m pip
+        if command -v pip3 &> /dev/null; then
+          pip3 install esptool
+        elif command -v pip &> /dev/null; then
+          pip install esptool
+        elif command -v python3 &> /dev/null; then
+          python3 -m pip install esptool
+        elif command -v python &> /dev/null; then
+          python -m pip install esptool
+        else
+          echo "❌ Error: No Python package manager found"
+          exit 1
+        fi
         echo "✅ esptool installed"
     
     - name: Create memory usage badge data
