@@ -24,16 +24,27 @@ DisplayManager::~DisplayManager() {
 }
 
 bool DisplayManager::begin() {
-    // Initialize display objects
+    // Get runtime display configuration from config storage
+    extern ConfigStorage configStorage;
+    int displayType = configStorage.getDisplayType();
+    
+    // Select the appropriate display config (1 = 3.4", 2 = 4.0")
+    const DisplayConfig& activeConfig = (displayType == SCREEN_4INCH_DSI) 
+        ? SCREEN_4_INCH_CONFIG 
+        : SCREEN_3_4_INCH_CONFIG;
+    
+    Serial.printf("Display type selected: %d (%s)\n", displayType, activeConfig.name);
+    
+    // Initialize display objects with selected config
     dsipanel = new Arduino_ESP32DSIPanel(
-        display_cfg.hsync_pulse_width,
-        display_cfg.hsync_back_porch,
-        display_cfg.hsync_front_porch,
-        display_cfg.vsync_pulse_width,
-        display_cfg.vsync_back_porch,
-        display_cfg.vsync_front_porch,
-        display_cfg.prefer_speed,
-        display_cfg.lane_bit_rate);
+        activeConfig.hsync_pulse_width,
+        activeConfig.hsync_back_porch,
+        activeConfig.hsync_front_porch,
+        activeConfig.vsync_pulse_width,
+        activeConfig.vsync_back_porch,
+        activeConfig.vsync_front_porch,
+        activeConfig.prefer_speed,
+        activeConfig.lane_bit_rate);
     
     if (!dsipanel) {
         Serial.println("ERROR: Failed to create DSI panel!");
@@ -41,14 +52,14 @@ bool DisplayManager::begin() {
     }
     
     gfx = new Arduino_DSI_Display(
-        display_cfg.width,
-        display_cfg.height,
+        activeConfig.width,
+        activeConfig.height,
         dsipanel,
-        display_cfg.rotation,
+        activeConfig.rotation,
         true,
-        display_cfg.lcd_rst,
-        display_cfg.init_cmds,
-        display_cfg.init_cmds_size);
+        activeConfig.lcd_rst,
+        activeConfig.init_cmds,
+        activeConfig.init_cmds_size);
     
     if (!gfx) {
         Serial.println("ERROR: Failed to create display object!");

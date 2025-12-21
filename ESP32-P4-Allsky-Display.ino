@@ -648,7 +648,7 @@ void setup() {
         // Set starting position lower to avoid cutoff at top
         displayManager.setDebugY(150);  // Start at 150px from top (centered vertically)
         
-        debugPrint("ESP32 AllSky Display", COLOR_CYAN);
+        debugPrint(configStorage.getDeviceName().c_str(), COLOR_CYAN);
         debugPrint(" ", COLOR_WHITE);  // Spacing
         
         debugPrint("Initializing hardware...", COLOR_YELLOW);
@@ -867,7 +867,12 @@ void renderFullImage() {
     systemMonitor.forceResetWatchdog();
     
     if (scaleX == 1.0 && scaleY == 1.0 && rotationAngle == 0.0) {
-        // No scaling or rotation needed, direct copy
+        // No scaling or rotation needed, apply color temp directly to full image buffer
+        int currentTemp = configStorage.getColorTemp();
+        if (currentTemp != 6500) {
+            ImageUtils::adjustColorTemperature(fullImageBuffer, fullImageWidth, fullImageHeight, currentTemp);
+        }
+        
         displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
         
         // Flush to display
@@ -913,6 +918,12 @@ void renderFullImage() {
                 unsigned long hwTime = millis() - hwStart;
                 Serial.printf("[PPA] ✓ Hardware acceleration successful in %lu ms\n", hwTime);
                 debugPrintf(COLOR_GREEN, "PPA hardware render: %lu ms", hwTime);
+                
+                // Apply color temperature adjustment to scaled buffer
+                int currentTemp = configStorage.getColorTemp();
+                if (currentTemp != 6500) {
+                    ImageUtils::adjustColorTemperature(scaledBuffer, scaledWidth, scaledHeight, currentTemp);
+                }
                 
                 // Draw the hardware-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
@@ -961,6 +972,12 @@ void renderFullImage() {
                 Serial.printf("[Render] ✓ Software scaling complete in %lu ms\n", swTime);
                 debugPrintf(COLOR_GREEN, "SW render: %lu ms", swTime);
                 
+                // Apply color temperature adjustment to scaled buffer
+                int currentTemp = configStorage.getColorTemp();
+                if (currentTemp != 6500) {
+                    ImageUtils::adjustColorTemperature(scaledBuffer, scaledWidth, scaledHeight, currentTemp);
+                }
+                
                 // Draw the software-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
                 
@@ -985,6 +1002,13 @@ void renderFullImage() {
         // Ultimate fallback: draw original unscaled image
         Serial.println("[Render] Drawing original unscaled image");
         debugPrint("WARNING: Showing unscaled image", COLOR_YELLOW);
+        
+        // Apply color temperature adjustment
+        int currentTemp = configStorage.getColorTemp();
+        if (currentTemp != 6500) {
+            ImageUtils::adjustColorTemperature(fullImageBuffer, fullImageWidth, fullImageHeight, currentTemp);
+        }
+        
         displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
         
         // Flush to display
@@ -1975,21 +1999,32 @@ void loop() {
         Serial.println("DEBUG: Resuming automatic cycling after 30s of inactivity");
     }
     
-    // Only auto-cycle if not in single image refresh mode and not paused for editing
-    if (cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode && !cyclingPausedForEditing) {
+    // Only auto-cycle if in automatic mode, not paused, and multiple images available
+    int imageUpdateMode = configStorage.getImageUpdateMode();
+    if (imageUpdateMode == 0 && cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode && !cyclingPausedForEditing) {
         // Use per-image duration instead of global cycle interval
         unsigned long currentImageDuration = configStorage.getImageDuration(currentImageIndex) * 1000;  // Convert seconds to milliseconds
         if (currentTime - lastCycleTime >= currentImageDuration || lastCycleTime == 0) {
             shouldCycle = true;
             lastCycleTime = currentTime;
-            Serial.println("DEBUG: Time to cycle to next image source");
+            Serial.println("DEBUG: Time to cycle to next image source (Automatic Mode)");
             advanceToNextImage();
         }
     }
     
     // Check if it's time to update the image (either scheduled update or cycling)
+    // In API mode, only update on force refresh (lastUpdate = 0) or scheduled refresh interval
     // Skip image processing during OTA to prevent interference
-    if (!imageProcessing && !imageDownloadPending && !webConfig.isOTAInProgress() && (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0)) {
+    bool shouldUpdate = false;
+    if (imageUpdateMode == 0) {
+        // Automatic cycling mode: normal behavior
+        shouldUpdate = (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0);
+    } else {
+        // API-triggered mode: only update when explicitly triggered (lastUpdate = 0)
+        shouldUpdate = (lastUpdate == 0);
+    }
+    
+    if (!imageProcessing && !imageDownloadPending && !webConfig.isOTAInProgress() && shouldUpdate) {
         // Pre-download system health check
         if (!wifiManager.isConnected()) {
             Serial.println("WARNING: WiFi disconnected, skipping image download");

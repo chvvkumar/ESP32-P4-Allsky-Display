@@ -17,6 +17,9 @@ bool ConfigStorage::begin() {
 
 void ConfigStorage::setDefaults() {
   // Set hardcoded defaults from original config.cpp
+  // Device name default
+  config.deviceName = "ESP32 AllSky Display";
+  
   // WiFi credentials are intentionally empty - device will start captive portal
   // on first boot
   config.wifiProvisioned = false;
@@ -40,6 +43,7 @@ void ConfigStorage::setDefaults() {
 
   // Multi-image cycling defaults using external config arrays
   config.cyclingEnabled = DEFAULT_CYCLING_ENABLED;
+  config.imageUpdateMode = 0;  // Default to automatic cycling mode
   config.cycleInterval = DEFAULT_CYCLE_INTERVAL;
   config.randomOrder = DEFAULT_RANDOM_ORDER;
   config.currentImageIndex = 0;
@@ -77,6 +81,12 @@ void ConfigStorage::setDefaults() {
   config.defaultImageDuration = 30; // Default 30 seconds for new images
   config.backlightFreq = BACKLIGHT_FREQ;
   config.backlightResolution = BACKLIGHT_RESOLUTION;
+  
+  // Display hardware defaults (1 = 3.4" DSI, 2 = 4.0" DSI)
+  config.displayType = 1;  // Default to 3.4" display
+  
+  // Color temperature default
+  config.colorTemp = DEFAULT_COLOR_TEMP;  // 6500K neutral white
 
   config.updateInterval = UPDATE_INTERVAL;
   config.mqttReconnectInterval = MQTT_RECONNECT_INTERVAL;
@@ -112,6 +122,7 @@ void ConfigStorage::loadConfig() {
   preferences.begin(NAMESPACE, true); // Read-only mode
 
   if (preferences.isKey("wifi_ssid")) {
+    config.deviceName = preferences.getString("device_name", config.deviceName);
     config.wifiProvisioned =
         preferences.getBool("wifi_prov", config.wifiProvisioned);
     config.wifiSSID = preferences.getString("wifi_ssid", config.wifiSSID);
@@ -143,6 +154,8 @@ void ConfigStorage::loadConfig() {
     // Load multi-image cycling settings
     config.cyclingEnabled =
         preferences.getBool("cycling_en", config.cyclingEnabled);
+    config.imageUpdateMode =
+        preferences.getInt("img_upd_mode", config.imageUpdateMode);
     config.cycleInterval =
         preferences.getULong("cycle_intv", config.cycleInterval);
     config.randomOrder = preferences.getBool("random_ord", config.randomOrder);
@@ -198,6 +211,10 @@ void ConfigStorage::loadConfig() {
     config.backlightFreq = preferences.getInt("bl_freq", config.backlightFreq);
     config.backlightResolution =
         preferences.getInt("bl_res", config.backlightResolution);
+    
+    config.displayType = preferences.getInt("disp_type", config.displayType);
+    
+    config.colorTemp = preferences.getInt("color_temp", config.colorTemp);
 
     config.updateInterval =
         preferences.getULong("upd_interval", config.updateInterval);
@@ -244,6 +261,7 @@ void ConfigStorage::saveConfig() {
 
   preferences.begin(NAMESPACE, false); // Read-write mode
 
+  preferences.putString("device_name", config.deviceName);
   preferences.putBool("wifi_prov", config.wifiProvisioned);
   preferences.putString("wifi_ssid", config.wifiSSID);
   preferences.putString("wifi_pwd", config.wifiPassword);
@@ -265,6 +283,7 @@ void ConfigStorage::saveConfig() {
 
   // Save multi-image cycling settings
   preferences.putBool("cycling_en", config.cyclingEnabled);
+  preferences.putInt("img_upd_mode", config.imageUpdateMode);
   preferences.putULong("cycle_intv", config.cycleInterval);
   preferences.putBool("random_ord", config.randomOrder);
   preferences.putInt("curr_img_idx", config.currentImageIndex);
@@ -305,6 +324,10 @@ void ConfigStorage::saveConfig() {
   preferences.putULong("def_img_dur", config.defaultImageDuration);
   preferences.putInt("bl_freq", config.backlightFreq);
   preferences.putInt("bl_res", config.backlightResolution);
+  
+  preferences.putInt("disp_type", config.displayType);
+  
+  preferences.putInt("color_temp", config.colorTemp);
 
   preferences.putULong("upd_interval", config.updateInterval);
   preferences.putULong("mqtt_recon", config.mqttReconnectInterval);
@@ -359,6 +382,13 @@ void ConfigStorage::setWiFiProvisioned(bool provisioned) {
     _dirty = true;
   }
 }
+void ConfigStorage::setDeviceName(const String &name) {
+  if (config.deviceName != name) {
+    config.deviceName = name;
+    _dirty = true;
+  }
+}
+
 void ConfigStorage::setWiFiSSID(const String &ssid) {
   if (config.wifiSSID != ssid) {
     config.wifiSSID = ssid;
@@ -371,6 +401,7 @@ void ConfigStorage::setWiFiPassword(const String &password) {
     _dirty = true;
   }
 }
+
 void ConfigStorage::setMQTTServer(const String &server) {
   if (config.mqttServer != server) {
     config.mqttServer = server;
@@ -534,6 +565,7 @@ void ConfigStorage::setCriticalPSRAMThreshold(size_t threshold) {
 }
 
 // Getters
+String ConfigStorage::getDeviceName() { return config.deviceName; }
 String ConfigStorage::getWiFiSSID() { return config.wifiSSID; }
 String ConfigStorage::getWiFiPassword() { return config.wifiPassword; }
 String ConfigStorage::getMQTTServer() { return config.mqttServer; }
@@ -589,6 +621,13 @@ size_t ConfigStorage::getCriticalPSRAMThreshold() {
 void ConfigStorage::setCyclingEnabled(bool enabled) {
   if (config.cyclingEnabled != enabled) {
     config.cyclingEnabled = enabled;
+    _dirty = true;
+  }
+}
+
+void ConfigStorage::setImageUpdateMode(int mode) {
+  if (config.imageUpdateMode != mode) {
+    config.imageUpdateMode = mode;
     _dirty = true;
   }
 }
@@ -706,6 +745,8 @@ void ConfigStorage::clearImageSources() {
 
 // Multi-image cycling getters
 bool ConfigStorage::getCyclingEnabled() { return config.cyclingEnabled; }
+
+int ConfigStorage::getImageUpdateMode() { return config.imageUpdateMode; }
 
 unsigned long ConfigStorage::getCycleInterval() { return config.cycleInterval; }
 
@@ -1053,3 +1094,21 @@ int ConfigStorage::getDisplayMaxBrightness() { return config.displayMaxBrightnes
 bool ConfigStorage::getUseHARestControl() { return config.useHaRestControl; }
 unsigned long ConfigStorage::getHAPollInterval() { return config.haPollInterval; }
 int ConfigStorage::getLightSensorMappingMode() { return config.lightSensorMappingMode; }
+
+// Display hardware getters/setters
+int ConfigStorage::getDisplayType() { return config.displayType; }
+
+void ConfigStorage::setColorTemp(int temp) {
+  config.colorTemp = constrain(temp, MIN_COLOR_TEMP, MAX_COLOR_TEMP);
+  _dirty = true;
+}
+
+int ConfigStorage::getColorTemp() {
+  return config.colorTemp;
+}
+void ConfigStorage::setDisplayType(int type) {
+  if (config.displayType != type && (type == 1 || type == 2)) {
+    config.displayType = type;
+    _dirty = true;
+  }
+}

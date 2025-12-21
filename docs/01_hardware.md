@@ -38,14 +38,23 @@ Two MIPI DSI displays are supported (compile-time selection via `CURRENT_SCREEN`
 
 **Important:** This project has been developed and tested exclusively on the 3.4" display. The 4.0" display configuration is available in the code but has not been verified on actual hardware.
 
-**Display Selection:**
+**✨ Display Selection (v-snd-0.61+):**
+
+**Runtime Configuration (Recommended):**
+1. Flash standard firmware binary (configured for 3.4" by default)
+2. Navigate to Web UI → System → Advanced Settings
+3. Select "Display Type" → "4.0" 720×720"
+4. Click "Save Configuration"
+5. Device reboots with 4.0" display settings
+
+**Compile-Time Configuration (Advanced):**
 ```cpp
-// In displays_config.h
+// In displays_config.h - only needed for custom builds
 #define SCREEN_3INCH_4_DSI 1
 #define SCREEN_4INCH_DSI 2
 
 #ifndef CURRENT_SCREEN
-#define CURRENT_SCREEN SCREEN_3INCH_4_DSI  // <-- Change this
+#define CURRENT_SCREEN SCREEN_3INCH_4_DSI  // Default for first boot
 #endif
 ```
 

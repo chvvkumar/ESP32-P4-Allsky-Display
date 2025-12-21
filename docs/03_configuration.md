@@ -48,30 +48,40 @@ Compile-Time Defaults (config.h)
 
 ### Display Hardware Selection
 
+**⚡ NEW: Runtime Display Type Selection** (v-snd-0.61+)
+
+Display type can now be changed via Web UI without recompilation:
+1. Navigate to `http://allskyesp32.lan:8080/system`
+2. Find "Display Type" dropdown in Advanced Settings
+3. Select "3.4" 800×800" or "4.0" 720×720"
+4. Click "Save Configuration"
+5. Device automatically reboots with new display settings
+
+**Compile-Time Default (Fallback)**
+
 **File:** `displays_config.h`
 
 ```cpp
-// Select your display hardware
+// Select your display hardware (used as default on first boot)
 #define SCREEN_3INCH_4_DSI 1    // 800×800 3.4" round display
 #define SCREEN_4INCH_DSI 2      // 720×720 4.0" round display
 
 #ifndef CURRENT_SCREEN
-#define CURRENT_SCREEN SCREEN_3INCH_4_DSI  // <-- CHANGE HERE
+#define CURRENT_SCREEN SCREEN_3INCH_4_DSI  // <-- Default for first boot
 #endif
 ```
 
 **Effect:** 
+- Sets initial display type on first boot (before NVS configuration exists)
+- Runtime setting in NVS takes precedence after first configuration
 - Changes display resolution (800×800 vs. 720×720)
 - Adjusts touch I2C pin assignments
 - Modifies vendor init sequences
-- **Requires:** Clean build and re-flash
 
-**How to Change:**
-1. Edit `displays_config.h`
-2. Change `CURRENT_SCREEN` to desired display
-3. Delete `build/` folder
-4. Run `compile-and-upload.ps1` to recompile
-5. Upload new firmware
+**When to Use Compile-Time Setting:**
+- Pre-configured firmware for specific display hardware
+- Building multiple firmware variants for distribution
+- Factory default settings for new devices
 
 ---
 
@@ -552,15 +562,24 @@ This table clarifies which settings are **compile-time** (require re-flash) vs. 
 
 ## Multi-Image Setup
 
+### Overview
+
+Display up to **10 different image sources** with automatic cycling or API-triggered refresh modes.
+
+**Update Modes** (v-snd-0.62+):
+- **⏺ Automatic Cycling**: Traditional behavior - cycles through images at configured intervals
+- **🔗 API-Triggered Refresh**: Only updates when `/api/force-refresh` endpoint is called
+
 ### Example: 5 Weather Camera Feeds
 
 **Scenario:** Display 5 different AllSky camera views, cycling every 30 seconds.
 
 **Configuration:**
 1. Navigate to `http://allskyesp32.lan:8080/image`
-2. Enable "Multi-Image Cycling"
-3. Set "Cycle Interval" to 30 seconds
-4. Add image sources:
+2. Select "Update Mode": **⏺ Automatic Cycling**
+3. Enable "Multi-Image Cycling"
+4. Set "Cycle Interval" to 30 seconds
+5. Add image sources:
    ```
    Image 1: https://camera1.example.com/allsky/current.jpg
    Image 2: https://camera2.example.com/allsky/current.jpg

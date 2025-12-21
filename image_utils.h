@@ -44,8 +44,23 @@ public:
         const uint16_t* srcBuffer, int srcWidth, int srcHeight,
         uint16_t* dstBuffer, int dstWidth, int dstHeight
     );
+    
+    /**
+     * @brief Adjust color temperature of an image buffer
+     * 
+     * @param buffer Image buffer (RGB565)
+     * @param width Image width
+     * @param height Image height
+     * @param tempKelvin Color temperature in Kelvin (2000-10000, 6500 is neutral)
+     */
+    static void adjustColorTemperature(uint16_t* buffer, int width, int height, int tempKelvin);
 
 private:
+    /**
+     * @brief Helper to get RGB scaling factors from Kelvin temperature
+     */
+    static void getKelvinScales(int temp, float& rScale, float& gScale, float& bScale);
+    
     /**
      * @brief Extract RGB components from RGB565 color
      */

@@ -52,6 +52,7 @@ private:
     void handleClearImageSources();
     void handleBulkDeleteImageSources();
     void handleNextImage();
+    void handleForceRefresh();
     void handleUpdateImageTransform();
     void handleCopyDefaultsToImage();
     void handleApplyTransform();
@@ -63,6 +64,7 @@ private:
     void handleFactoryReset();
     void handleSetLogSeverity();
     void handleClearCrashLogs();
+    void handleForceBrightnessUpdate();
     void handleGetHealth();
     
 public:

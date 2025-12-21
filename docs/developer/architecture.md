@@ -926,6 +926,7 @@ ppa_dst_buffer = (uint16_t*)heap_caps_aligned_alloc(
 - `GET /api/current_image`: Current image URL and index
 - `POST /api/save`: Save configuration to NVS
 - `POST /api/next_image`: Manually advance to next image
+- `POST /api/force-refresh`: Force immediate re-download of current image (v-snd-0.62+)
 - `POST /api/restart`: Reboot device
 - `POST /api/factory_reset`: Clear all NVS settings
 

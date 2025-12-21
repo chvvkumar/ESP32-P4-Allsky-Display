@@ -76,7 +76,7 @@ String HADiscovery::getCommandTopicFilter() {
 String HADiscovery::getDeviceJson() {
     String json = "{";
     json += "\"identifiers\":[\"" + deviceId + "\"],";
-    json += "\"name\":\"" + configStorage.getHADeviceName() + "\",";
+    json += "\"name\":\"" + configStorage.getDeviceName() + "\",";
     json += "\"model\":\"ESP32-P4-WIFI6-Touch-LCD\",";
     json += "\"manufacturer\":\"chvvkumar\",";
     json += "\"sw_version\":\"1.0\",";
@@ -89,7 +89,7 @@ bool HADiscovery::publishLightDiscovery() {
     LOG_DEBUG("[HA] Publishing light entity discovery");
     String topic = buildDiscoveryTopic("light", "brightness");
     String payload = "{";
-    payload += "\"name\":\"Brightness\",";
+    payload += "\"name\":\"" + configStorage.getDeviceName() + " Brightness\",";
     payload += "\"unique_id\":\"" + deviceId + "_brightness\",";
     payload += "\"device\":" + getDeviceJson() + ",";
     payload += "\"state_topic\":\"" + buildStateTopic("brightness") + "\",";
@@ -112,7 +112,7 @@ bool HADiscovery::publishLightDiscovery() {
 bool HADiscovery::publishSwitchDiscovery(const char* entityId, const char* name, const char* icon) {
     String topic = buildDiscoveryTopic("switch", entityId);
     String payload = "{";
-    payload += "\"name\":\"" + String(name) + "\",";
+    payload += "\"name\":\"" + configStorage.getDeviceName() + " " + String(name) + "\",";
     payload += "\"unique_id\":\"" + deviceId + "_" + String(entityId) + "\",";
     payload += "\"device\":" + getDeviceJson() + ",";
     payload += "\"state_topic\":\"" + buildStateTopic(entityId) + "\",";
@@ -132,7 +132,7 @@ bool HADiscovery::publishNumberDiscovery(const char* entityId, const char* name,
                                          const char* unit, const char* icon) {
     String topic = buildDiscoveryTopic("number", entityId);
     String payload = "{";
-    payload += "\"name\":\"" + String(name) + "\",";
+    payload += "\"name\":\"" + configStorage.getDeviceName() + " " + String(name) + "\",";
     payload += "\"unique_id\":\"" + deviceId + "_" + String(entityId) + "\",";
     payload += "\"device\":" + getDeviceJson() + ",";
     payload += "\"state_topic\":\"" + buildStateTopic(entityId) + "\",";
@@ -164,7 +164,7 @@ bool HADiscovery::publishSelectDiscovery() {
     options += "]";
     
     String payload = "{";
-    payload += "\"name\":\"Image Source\",";
+    payload += "\"name\":\"" + configStorage.getDeviceName() + " Image Source\",";
     payload += "\"unique_id\":\"" + deviceId + "_image_source\",";
     payload += "\"device\":" + getDeviceJson() + ",";
     payload += "\"state_topic\":\"" + buildStateTopic("image_source") + "\",";
@@ -181,7 +181,7 @@ bool HADiscovery::publishSelectDiscovery() {
 bool HADiscovery::publishButtonDiscovery(const char* entityId, const char* name, const char* icon) {
     String topic = buildDiscoveryTopic("button", entityId);
     String payload = "{";
-    payload += "\"name\":\"" + String(name) + "\",";
+    payload += "\"name\":\"" + configStorage.getDeviceName() + " " + String(name) + "\",";
     payload += "\"unique_id\":\"" + deviceId + "_" + String(entityId) + "\",";
     payload += "\"device\":" + getDeviceJson() + ",";
     payload += "\"command_topic\":\"" + buildCommandTopic(entityId) + "\",";
@@ -194,12 +194,12 @@ bool HADiscovery::publishButtonDiscovery(const char* entityId, const char* name,
     return result;
 }
 
-bool HADiscovery::publishSensorDiscovery(const char* entityId, const char* name, 
-                                         const char* unit, const char* deviceClass, 
+bool HADiscovery::publishSensorDiscovery(const char* entityId, const char* name,
+                                         const char* unit, const char* deviceClass,
                                          const char* icon) {
     String topic = buildDiscoveryTopic("sensor", entityId);
     String payload = "{";
-    payload += "\"name\":\"" + String(name) + "\",";
+    payload += "\"name\":\"" + configStorage.getDeviceName() + " " + String(name) + "\",";
     payload += "\"unique_id\":\"" + deviceId + "_" + String(entityId) + "\",";
     payload += "\"device\":" + getDeviceJson() + ",";
     payload += "\"state_topic\":\"" + buildStateTopic(entityId) + "\",";

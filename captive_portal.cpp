@@ -243,7 +243,7 @@ String CaptivePortal::generateHeader(const String& title) {
 
 String CaptivePortal::generateFooter() {
     String html = "<div class='footer'>";
-    html += "<p>ESP32 AllSky Display - WiFi Configuration</p>";
+    html += "<p>" + configStorage.getDeviceName() + " - WiFi Configuration</p>";
     html += "<p style='font-size:0.8rem;color:#64748b;margin-top:0.5rem'>Select a network and enter the password to continue</p>";
     html += "</div></body></html>";
     return html;
