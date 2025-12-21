@@ -388,6 +388,9 @@ jobs:
     - name: Install esptool
       run: |
         pip install --break-system-packages esptool
+        # Ensure esptool is in PATH
+        export PATH="$HOME/.local/bin:$PATH"
+        esptool.py version
         echo "✅ esptool installed"
     
     - name: Create memory usage badge data
@@ -476,6 +479,9 @@ jobs:
     - name: Prepare release binary
       if: steps.check_release.outputs.should_release == 'true'
       run: |
+        # Ensure esptool is in PATH
+        export PATH="$HOME/.local/bin:$PATH"
+        
         # Ensure release directory exists
         mkdir -p ./release
         
