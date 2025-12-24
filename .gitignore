@@ -157,5 +157,8 @@ coverage.xml
 # Custom project specific ignores
 # Add any project-specific files you want to ignore below
 
+# AI conversation context documentation
+CONVERSATION_CONTEXT.md
+
 # GitHub Copilot instructions (development-only)
 # .github/copilot-instructions.md
