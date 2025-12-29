@@ -551,13 +551,15 @@ ESP32-P4 Function EV Board
 
 ![3D Printed Case](../images/Case.jpg)
 
-**Download:** [Printables.com - Desk Stand for ESP32-P4 Display](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
+**Download:** 
+- [3.4" Display Stand](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
+- [4" Display Stand](https://www.printables.com/model/1520845-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
 
 **Features:**
 - Vertical or angled display positioning
 - Cable management cutouts
 - Access to USB-C port for power/programming
-- Secure mounting for Waveshare 3.4" display
+- Secure mounting for Waveshare displays
 
 ---
 

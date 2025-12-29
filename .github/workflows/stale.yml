@@ -1,0 +1,61 @@
+name: 'Close stale issues and PRs'
+
+on:
+  schedule:
+    # Run daily at 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          # Labels to identify stale items
+          stale-issue-label: 'stale'
+          stale-pr-label: 'stale'
+          
+          # Messages to post
+          stale-issue-message: |
+            This issue has been automatically marked as stale because it has not had recent activity. 
+            It will be closed in 7 days if no further activity occurs. Thank you for your contributions.
+          stale-pr-message: |
+            This pull request has been automatically marked as stale because it has not had recent activity.
+            It will be closed in 7 days if no further activity occurs. Thank you for your contributions.
+          close-issue-message: |
+            This issue was automatically closed because it has been stale for 7 days with no activity.
+          close-pr-message: |
+            This pull request was automatically closed because it has been stale for 7 days with no activity.
+          
+          # Days before marking as stale
+          days-before-stale: 14
+          # Days before closing after marked stale
+          days-before-close: 7
+          
+          # Days before marking PR as stale (can be different from issues)
+          days-before-pr-stale: 14
+          days-before-pr-close: 7
+          
+          # Exempt labels - issues/PRs with these labels will never be marked stale
+          exempt-issue-labels: 'pinned,security,enhancement,bug'
+          exempt-pr-labels: 'pinned,security,work-in-progress,WIP'
+          
+          # Exempt milestones - issues/PRs in these milestones won't be marked stale
+          exempt-all-milestones: true
+          
+          # Remove stale label when there's new activity
+          remove-stale-when-updated: true
+          
+          # Only process issues/PRs (set to false to process both)
+          # only-labels: 'needs-response'
+          
+          # Limit API operations per run to avoid rate limiting
+          operations-per-run: 100
+          
+          # Debug mode (set to true for testing)
+          debug-only: false

@@ -15,6 +15,9 @@ extern WebConfig webConfig;
 extern ConfigStorage configStorage;
 extern bool firstImageLoaded;  // From main .ino file
 
+// Static member initialization
+unsigned long WiFiManager::lastScanTime = 0;
+
 WiFiManager::WiFiManager() :
     wifiConnected(false),
     lastConnectionAttempt(0),
@@ -347,4 +350,114 @@ bool WiFiManager::isTimeValid() {
     }
     // Check if year is reasonable (>2020)
     return (timeinfo.tm_year + 1900) > 2020;
+}
+
+int WiFiManager::scanNetworks(bool async, bool show_hidden) {
+    LOG_INFO_F("[WiFi] Starting network scan (async=%d, show_hidden=%d)\n", async, show_hidden);
+    
+    // Rate limiting - enforce minimum 10 second gap between scans
+    unsigned long now = millis();
+    if (now - lastScanTime < 10000) {
+        LOG_WARNING_F("[WiFi] Scan rate limited - last scan was %lu ms ago (min: 10000 ms)\n", now - lastScanTime);
+        return -1;  // Rate limited
+    }
+    
+    lastScanTime = now;
+    
+    // Start scan - async=false for blocking, show_hidden=true to include hidden networks
+    int n = WiFi.scanNetworks(async, show_hidden);
+    
+    if (n == WIFI_SCAN_RUNNING) {
+        LOG_DEBUG("[WiFi] Async scan started");
+        return WIFI_SCAN_RUNNING;
+    } else if (n == WIFI_SCAN_FAILED) {
+        LOG_ERROR("[WiFi] Network scan failed");
+        return WIFI_SCAN_FAILED;
+    } else {
+        LOG_INFO_F("[WiFi] Network scan complete - found %d networks\n", n);
+        return n;
+    }
+}
+
+bool WiFiManager::isScanComplete() {
+    int16_t status = WiFi.scanComplete();
+    return (status >= 0);
+}
+
+String WiFiManager::getScanResultsJSON() {
+    int n = WiFi.scanComplete();
+    
+    if (n == WIFI_SCAN_RUNNING) {
+        return "{\"status\":\"scanning\",\"message\":\"Scan in progress\"}";
+    } else if (n == WIFI_SCAN_FAILED) {
+        return "{\"status\":\"error\",\"message\":\"Scan failed\"}";
+    } else if (n == 0) {
+        return "{\"status\":\"success\",\"networks\":[]}";
+    }
+    
+    // Build JSON response with only 2.4GHz networks
+    String json = "{\"status\":\"success\",\"networks\":[";
+    
+    int count = 0;
+    for (int i = 0; i < n; i++) {
+        uint8_t channel = WiFi.channel(i);
+        
+        // Only include 2.4GHz networks (channels 1-13)
+        if (channel >= 1 && channel <= 13) {
+            if (count > 0) json += ",";
+            
+            String ssid = WiFi.SSID(i);
+            int32_t rssi = WiFi.RSSI(i);
+            wifi_auth_mode_t encryption = WiFi.encryptionType(i);
+            
+            // Handle hidden networks
+            String displaySSID = (ssid.length() == 0) ? "[Hidden Network]" : ssid;
+            
+            // Determine encryption type string
+            String encType;
+            switch (encryption) {
+                case WIFI_AUTH_OPEN: encType = "Open"; break;
+                case WIFI_AUTH_WEP: encType = "WEP"; break;
+                case WIFI_AUTH_WPA_PSK: encType = "WPA"; break;
+                case WIFI_AUTH_WPA2_PSK: encType = "WPA2"; break;
+                case WIFI_AUTH_WPA_WPA2_PSK: encType = "WPA/WPA2"; break;
+                case WIFI_AUTH_WPA2_ENTERPRISE: encType = "WPA2-EAP"; break;
+                case WIFI_AUTH_WPA3_PSK: encType = "WPA3"; break;
+                case WIFI_AUTH_WPA2_WPA3_PSK: encType = "WPA2/WPA3"; break;
+                default: encType = "Unknown"; break;
+            }
+            
+            // Calculate signal quality
+            String quality;
+            if (rssi > -50) quality = "Excellent";
+            else if (rssi > -60) quality = "Good";
+            else if (rssi > -70) quality = "Fair";
+            else if (rssi > -80) quality = "Poor";
+            else quality = "Weak";
+            
+            // Escape SSID for JSON
+            displaySSID.replace("\\", "\\\\");
+            displaySSID.replace("\"", "\\\"");
+            
+            json += "{";
+            json += "\"ssid\":\"" + displaySSID + "\",";
+            json += "\"rssi\":" + String(rssi) + ",";
+            json += "\"channel\":" + String(channel) + ",";
+            json += "\"encryption\":\"" + encType + "\",";
+            json += "\"quality\":\"" + quality + "\",";
+            json += "\"is_open\":" + String(encryption == WIFI_AUTH_OPEN ? "true" : "false");
+            json += "}";
+            
+            count++;
+        }
+    }
+    
+    json += "],\"count\":" + String(count) + "}";
+    
+    LOG_INFO_F("[WiFi] Returning %d 2.4GHz networks (filtered from %d total)\n", count, n);
+    
+    // Clear scan results to free memory
+    WiFi.scanDelete();
+    
+    return json;
 }

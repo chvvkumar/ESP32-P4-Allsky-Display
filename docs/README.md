@@ -178,7 +178,7 @@ The documentation follows a **User Journey** approach, guiding you from hardware
 - **[Issues & Bug Reports](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/issues)**
 - **[Discussions](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/discussions)**
 - **[Releases](https://github.com/chvvkumar/ESP32-P4-Allsky-Display/releases)**
-- **[3D Printed Case](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)**
+- **[3D Printed Cases](https://www.printables.com/model/1352883-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)** - 3.4" and [4" Display](https://www.printables.com/model/1520845-desk-stand-for-waveshare-esp32-p4-wifi6-touch-lcd)
 
 ---
 
