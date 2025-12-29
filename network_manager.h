@@ -56,8 +56,23 @@ public:
     // ArduinoOTA support
     void initOTA();
     void handleOTA();
+    
+    // WiFi scanning
+    int scanNetworks(bool async = false, bool show_hidden = true);
+    String getScanResultsJSON();
+    bool isScanComplete();
+    static unsigned long lastScanTime;
 };
 
+
+// WiFi scan result structure
+struct WiFiScanResult {
+    String ssid;
+    int32_t rssi;
+    uint8_t encryption;
+    uint8_t channel;
+    bool is_2_4GHz;
+};
 
 // Global instance
 extern WiFiManager wifiManager;

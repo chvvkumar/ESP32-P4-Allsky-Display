@@ -66,6 +66,7 @@ private:
     void handleClearCrashLogs();
     void handleForceBrightnessUpdate();
     void handleGetHealth();
+    void handleWiFiScan();
     
 public:
     // WebSocket log broadcasting with severity filtering
