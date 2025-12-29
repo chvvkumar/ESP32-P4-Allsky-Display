@@ -1111,3 +1111,27 @@ void WebConfig::handleGetHealth() {
     
     sendResponse(200, "application/json", json);
 }
+
+void WebConfig::handleWiFiScan() {
+    LOG_INFO("[WebAPI] WiFi scan requested via API");
+    
+    // Start the scan (blocking mode with hidden networks)
+    int result = wifiManager.scanNetworks(false, true);
+    
+    if (result == -1) {
+        // Rate limited
+        LOG_WARNING("[WebAPI] WiFi scan rate limited");
+        sendResponse(429, "application/json", "{\"status\":\"error\",\"message\":\"Scan rate limited - please wait 10 seconds between scans\"}");
+        return;
+    } else if (result == WIFI_SCAN_FAILED) {
+        LOG_ERROR("[WebAPI] WiFi scan failed");
+        sendResponse(500, "application/json", "{\"status\":\"error\",\"message\":\"WiFi scan failed\"}");
+        return;
+    }
+    
+    // Get scan results as JSON
+    String json = wifiManager.getScanResultsJSON();
+    
+    LOG_INFO("[WebAPI] WiFi scan completed successfully");
+    sendResponse(200, "application/json", json);
+}

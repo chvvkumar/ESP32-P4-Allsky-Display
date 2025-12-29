@@ -181,23 +181,86 @@ String WebConfig::generateMainPage() {
 
 String WebConfig::generateNetworkPage() {
     String html;
-    html.reserve(2000);  // Pre-allocate ~2KB for network config page
+    html.reserve(8000);  // Pre-allocate ~8KB for network config page with scan UI
     html = "<div class='main'><div class='container'>";
     html += "<form id='networkForm'><div class='card'>";
     html += "<h2>📡 WiFi Configuration " + generateDocLink("docs/03_configuration.md", "wifi-configuration") + "</h2>";
     
-    // Info box
-    html += "<div style='background:rgba(56,189,248,0.1);border:1px solid #38bdf8;border-radius:8px;padding:1rem;margin-bottom:1.5rem'>";
-    html += "<p style='color:#38bdf8;margin:0;font-size:0.9rem'><i class='fas fa-info-circle' style='margin-right:8px'></i>";
-    html += "<strong>WiFi Setup Mode:</strong> To reconfigure WiFi from scratch (with network scanning), use Factory Reset which will trigger the WiFi setup portal on next boot.</p>";
+    // WiFi Scan Section
+    html += "<div style='margin-bottom:1.5rem'>";
+    html += "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem'>";
+    html += "<h3 style='margin:0;color:#38bdf8'>Available Networks (2.4GHz)</h3>";
+    html += "<button type='button' class='btn btn-primary' id='scanBtn' onclick='scanWiFi()'><i class='fas fa-sync-alt' id='scanIcon'></i> Scan Networks</button>";
     html += "</div>";
     
+    // Scan status and results container
+    html += "<div id='scanStatus' style='padding:1rem;background:#1e293b;border-radius:8px;border:1px solid #334155;margin-bottom:1rem;display:none'>";
+    html += "<p style='margin:0;color:#38bdf8'><i class='fas fa-spinner fa-spin'></i> Scanning for networks...</p>";
+    html += "</div>";
+    
+    html += "<div id='networksContainer' style='max-height:400px;overflow-y:auto;background:#0f172a;border-radius:8px;border:1px solid #334155;padding:0.5rem'>";
+    html += "<p style='color:#64748b;text-align:center;padding:2rem'>Click 'Scan Networks' to discover available WiFi networks</p>";
+    html += "</div></div>";
+    
+    // Manual Configuration Section
+    html += "<h3 style='color:#38bdf8;margin-bottom:1rem'>Manual Configuration</h3>";
     html += "<div class='form-group'><label for='wifi_ssid'>Network Name (SSID)</label>";
     html += "<input type='text' id='wifi_ssid' name='wifi_ssid' class='form-control' value='" + escapeHtml(configStorage.getWiFiSSID()) + "' required></div>";
     html += "<div class='form-group'><label for='wifi_password'>Password</label>";
     html += "<input type='password' id='wifi_password' name='wifi_password' class='form-control' value='" + escapeHtml(configStorage.getWiFiPassword()) + "'></div>";
     html += "<button type='submit' class='btn btn-primary'>💾 Save Network Settings</button>";
-    html += "</div></form></div></div>";
+    html += "</div></form>";
+    
+    // JavaScript for WiFi scanning
+    html += "<script>";
+    html += "let scanInterval=null;let lastScanTime=0;const SCAN_COOLDOWN=10000;";
+    
+    // Scan function
+    html += "function canScan(){return(Date.now()-lastScanTime)>=SCAN_COOLDOWN;}";
+    html += "function scanWiFi(){if(!canScan()){alert('Please wait '+(SCAN_COOLDOWN/1000)+' seconds between scans');return;}";
+    html += "const scanBtn=document.getElementById('scanBtn');const scanIcon=document.getElementById('scanIcon');";
+    html += "const scanStatus=document.getElementById('scanStatus');const container=document.getElementById('networksContainer');";
+    html += "scanBtn.disabled=true;scanIcon.className='fas fa-spinner fa-spin';scanStatus.style.display='block';";
+    html += "fetch('/api/wifi-scan').then(r=>r.json()).then(data=>{lastScanTime=Date.now();";
+    html += "if(data.status==='success'){displayNetworks(data.networks);}else{";
+    html += "container.innerHTML='<p style=\"color:#ef4444;text-align:center;padding:2rem\">'+data.message+'</p>';}";
+    html += "}).catch(err=>{container.innerHTML='<p style=\"color:#ef4444;text-align:center;padding:2rem\">Scan failed: '+err+'</p>';";
+    html += "}).finally(()=>{scanBtn.disabled=false;scanIcon.className='fas fa-sync-alt';scanStatus.style.display='none';});}";
+    
+    // Display networks function
+    html += "function displayNetworks(networks){const container=document.getElementById('networksContainer');";
+    html += "if(!networks||networks.length===0){container.innerHTML='<p style=\"color:#64748b;text-align:center;padding:2rem\">No 2.4GHz networks found</p>';return;}";
+    html += "let html='';networks.forEach(n=>{const bars=getSignalBars(n.rssi);const lockIcon=n.is_open?'🔓':'🔒';";
+    html += "const qualityColor=n.quality==='Excellent'?'#10b981':n.quality==='Good'?'#3b82f6':n.quality==='Fair'?'#f59e0b':'#ef4444';";
+    html += "html+='<div style=\"display:flex;align-items:center;justify-content:between;padding:0.75rem;margin:0.25rem 0;background:#1e293b;border-radius:6px;cursor:pointer;border:1px solid #334155\" onclick=\"selectNetwork(\\''+n.ssid.replace(/'/g,\"\\\\'\")+'\\')\">';";
+    html += "html+='<div style=\"flex:1\"><div style=\"display:flex;align-items:center;gap:0.5rem\"><span style=\"font-size:1.2rem\">'+lockIcon+'</span>';";
+    html += "html+='<strong style=\"color:#e2e8f0\">'+n.ssid+'</strong></div>';";
+    html += "html+='<div style=\"display:flex;gap:1rem;margin-top:0.25rem;font-size:0.85rem;color:#94a3b8\">';";
+    html += "html+='<span>Ch '+n.channel+'</span><span>'+n.encryption+'</span>';";
+    html += "html+='<span style=\"color:'+qualityColor+'\">'+n.quality+'</span></div></div>';";
+    html += "html+='<div style=\"text-align:right\"><div>'+bars+'</div><div style=\"font-size:0.75rem;color:#64748b;margin-top:0.25rem\">'+n.rssi+' dBm</div></div>';";
+    html += "html+='</div>';});container.innerHTML=html;}";
+    
+    // Signal bars helper
+    html += "function getSignalBars(rssi){let bars='';const count=rssi>-50?4:rssi>-60?3:rssi>-70?2:rssi>-80?1:0;";
+    html += "for(let i=1;i<=4;i++){const color=i<=count?'#10b981':'#334155';";
+    html += "bars+='<span style=\"display:inline-block;width:4px;height:'+(i*3)+'px;background:'+color+';margin:0 1px;vertical-align:bottom\"></span>';}";
+    html += "return bars;}";
+    
+    // Select network function
+    html += "function selectNetwork(ssid){document.getElementById('wifi_ssid').value=ssid;";
+    html += "document.getElementById('wifi_password').value='';document.getElementById('wifi_password').focus();";
+    html += "showNotification('Network selected: '+ssid,'success');}";
+    
+    // Auto-scan on page load and 60s refresh
+    html += "window.addEventListener('load',()=>{setTimeout(scanWiFi,500);";
+    html += "scanInterval=setInterval(()=>{if(canScan())scanWiFi();},60000);});";
+    
+    // Cleanup on page unload
+    html += "window.addEventListener('beforeunload',()=>{if(scanInterval)clearInterval(scanInterval);});";
+    html += "</script>";
+    
+    html += "</div></div>";
     return html;
 }
 
@@ -1521,5 +1584,3 @@ String WebConfig::generateConsolePage() {
     
     return html;
 }
-
-
