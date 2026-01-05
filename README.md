@@ -51,6 +51,7 @@ Complete user and developer documentation organized by user journey:
 - **Flexible Update Modes** - Automatic cycling or API-triggered refresh for external control (v-snd-0.62+)
 - **Runtime Display Selection** - Switch between 3.4" and 4.0" displays via Web UI without recompilation (v-snd-0.61+)
 - **Enhanced Brightness Control** - Three modes: Manual, MQTT Auto, or Home Assistant with clear UI indication (v-snd-0.61+)
+- **AllSky Module Integration** - Dedicated [allsky_esp32round module](https://github.com/AllskyTeam/allsky-modules/tree/master/allsky_esp32round) by @Alex-developer for automatic image optimization
 - **Hardware Accelerated** - ESP32-P4 PPA for fast scaling and rotation (385-507ms render time)
 - **High Resolution** - Up to 1448×1448 pixel images with 2× scaling capability
 - **Per-Image Transforms** - Individual scale, offset, and rotation settings for each image
