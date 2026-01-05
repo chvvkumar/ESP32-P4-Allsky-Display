@@ -616,7 +616,22 @@ Display up to **10 different image sources** with automatic cycling or API-trigg
 - 3.4" display (800×800): Use **800×800 to 1200×1200** source images
 - 4.0" display (720×720): Use **720×720 to 1200×1200** source images
 
-**AllSky Camera Resize Script:**
+**AllSky Module for ESP32 Round Display:**
+
+A dedicated AllSky module is available to automatically resize and optimize images for the ESP32 round displays. This module, created by Alex, handles the conversion seamlessly within the AllSky system.
+
+🔗 **Module Repository:** [allsky_esp32round](https://github.com/AllskyTeam/allsky-modules/tree/master/allsky_esp32round)
+
+**Installation:**
+1. Navigate to AllSky Module Manager in your AllSky web interface
+2. Search for "esp32round" or "ESP32 Round Display"
+3. Install the module
+4. Configure the output dimensions (720×720 or 800×800)
+5. Point your ESP32 display to the module's output URL
+
+**Alternative: Custom Resize Script:**
+
+If you prefer a manual approach, you can use this bash script:
 
 ```bash
 #!/bin/bash
@@ -630,8 +645,8 @@ mkdir -p "${OUTPUT_DIR}"
 
 **Setup Options:**
 
-1. **AllSky Module** (Recommended): Add script to AllSky Module Manager → Use `http://your-server/resized/image.jpg`
-2. **Cron Job**: Run script every 1-10 minutes with `crontab -e`
+1. **AllSky Module** (Recommended): Use the [allsky_esp32round module](https://github.com/AllskyTeam/allsky-modules/tree/master/allsky_esp32round) → Use `http://your-server/resized/image.jpg`
+2. **Custom Script**: Add script to AllSky Module Manager or run via cron job every 1-10 minutes with `crontab -e`
 
 ---
 
