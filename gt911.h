@@ -75,9 +75,12 @@ esp_err_t esp_lcd_touch_new_i2c_gt911(const esp_lcd_panel_io_handle_t io, const 
  * This function initializes the GT911 touch controller by configuring the I2C 
  * interface and touch settings.
  *
+ * @param port I2C port for touch controller communication
+ * @param rst_pin GPIO number for reset pin (or -1/GPIO_NUM_NC if unused)
+ * @param int_pin GPIO number for interrupt pin (or -1/GPIO_NUM_NC if unused)
  * @return Touch handle for the initialized controller
  */
-esp_lcd_touch_handle_t touch_gt911_init(DEV_I2C_Port port);
+esp_lcd_touch_handle_t touch_gt911_init(DEV_I2C_Port port, int8_t rst_pin, int8_t int_pin);
 
 /**
  * @brief Read touch points from the GT911 touch controller

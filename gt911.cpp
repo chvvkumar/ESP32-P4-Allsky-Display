@@ -342,7 +342,7 @@ static esp_err_t esp_lcd_touch_gt911_del(esp_lcd_touch_handle_t tp)
 }
 
 // Function to initialize the GT911 touch controller
-esp_lcd_touch_handle_t touch_gt911_init(DEV_I2C_Port port)
+esp_lcd_touch_handle_t touch_gt911_init(DEV_I2C_Port port, int8_t rst_pin, int8_t int_pin)
 {
     esp_lcd_panel_io_handle_t tp_io_handle = NULL;  // Declare a handle for touch panel I/O
     // Configure the I2C communication settings for the GT911 touch controller
@@ -359,11 +359,12 @@ esp_lcd_touch_handle_t touch_gt911_init(DEV_I2C_Port port)
 
     ESP_LOGI(TAG, "Initialize touch controller GT911");  // Log touch controller initialization
     // Configure the touch controller with necessary settings (coordinates, GPIO pins, etc.)
+    // Use dynamic pins from display configuration instead of hardcoded macros
     const esp_lcd_touch_config_t tp_cfg = {
         .x_max = display_cfg.width,  // Set the maximum X coordinate based on screen resolution
         .y_max = display_cfg.height,  // Set the maximum Y coordinate based on screen resolution
-        .rst_gpio_num = EXAMPLE_PIN_NUM_TOUCH_RST,  // GPIO number for reset
-        .int_gpio_num = EXAMPLE_PIN_NUM_TOUCH_INT,  // GPIO number for interrupt
+        .rst_gpio_num = (gpio_num_t)rst_pin,  // Use passed argument
+        .int_gpio_num = (gpio_num_t)int_pin,  // Use passed argument
         .levels = {
             .reset = 0,  // Low level for reset
             .interrupt = 0,  // Low level for interrupt

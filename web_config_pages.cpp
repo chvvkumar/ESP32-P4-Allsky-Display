@@ -728,6 +728,7 @@ String WebConfig::generateAdvancedPage() {
     int currentDisplayType = configStorage.getDisplayType();
     html += "<option value='1'" + String(currentDisplayType == 1 ? " selected" : "") + ">3.4\" DSI (800×800)</option>";
     html += "<option value='2'" + String(currentDisplayType == 2 ? " selected" : "") + ">4.0\" DSI (720×720)</option>";
+    html += "<option value='3'" + String(currentDisplayType == 3 ? " selected" : "") + ">Waveshare P4 Box (720×720)</option>";
     
     html += "</select>";
     html += "<small style='color:#94a3b8;display:block;margin-top:0.5rem'>⚠️ <strong>Requires restart:</strong> Changing display type will restart the device to reinitialize the display hardware.</small></div></div>";

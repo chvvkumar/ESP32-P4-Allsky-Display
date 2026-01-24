@@ -28,23 +28,28 @@ bool DisplayManager::begin() {
     extern ConfigStorage configStorage;
     int displayType = configStorage.getDisplayType();
     
-    // Select the appropriate display config (1 = 3.4", 2 = 4.0")
-    const DisplayConfig& activeConfig = (displayType == SCREEN_4INCH_DSI) 
-        ? SCREEN_4_INCH_CONFIG 
-        : SCREEN_3_4_INCH_CONFIG;
+    // Select the appropriate display config (1 = 3.4", 2 = 4.0", 3 = Waveshare)
+    const DisplayConfig* activeConfig = nullptr;
+    if (displayType == SCREEN_WAVESHARE_P4_BOX) {
+        activeConfig = &SCREEN_WAVESHARE_CONFIG;
+    } else if (displayType == SCREEN_4INCH_DSI) {
+        activeConfig = &SCREEN_4_INCH_CONFIG;
+    } else {
+        activeConfig = &SCREEN_3_4_INCH_CONFIG;
+    }
     
-    Serial.printf("Display type selected: %d (%s)\n", displayType, activeConfig.name);
+    Serial.printf("Display type selected: %d (%s)\n", displayType, activeConfig->name);
     
     // Initialize display objects with selected config
     dsipanel = new Arduino_ESP32DSIPanel(
-        activeConfig.hsync_pulse_width,
-        activeConfig.hsync_back_porch,
-        activeConfig.hsync_front_porch,
-        activeConfig.vsync_pulse_width,
-        activeConfig.vsync_back_porch,
-        activeConfig.vsync_front_porch,
-        activeConfig.prefer_speed,
-        activeConfig.lane_bit_rate);
+        activeConfig->hsync_pulse_width,
+        activeConfig->hsync_back_porch,
+        activeConfig->hsync_front_porch,
+        activeConfig->vsync_pulse_width,
+        activeConfig->vsync_back_porch,
+        activeConfig->vsync_front_porch,
+        activeConfig->prefer_speed,
+        activeConfig->lane_bit_rate);
     
     if (!dsipanel) {
         Serial.println("ERROR: Failed to create DSI panel!");
@@ -52,14 +57,14 @@ bool DisplayManager::begin() {
     }
     
     gfx = new Arduino_DSI_Display(
-        activeConfig.width,
-        activeConfig.height,
+        activeConfig->width,
+        activeConfig->height,
         dsipanel,
-        activeConfig.rotation,
+        activeConfig->rotation,
         true,
-        activeConfig.lcd_rst,
-        activeConfig.init_cmds,
-        activeConfig.init_cmds_size);
+        activeConfig->lcd_rst,
+        activeConfig->init_cmds,
+        activeConfig->init_cmds_size);
     
     if (!gfx) {
         Serial.println("ERROR: Failed to create display object!");

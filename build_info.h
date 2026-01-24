@@ -9,8 +9,8 @@
 #define BUILD_TIME __TIME__
 
 // Git information (updated by compile script)
-#define GIT_COMMIT_HASH "84dc4a6"
-#define GIT_COMMIT_FULL "84dc4a6c5126ac2ff32c14332fc9b093bac163bf"
-#define GIT_BRANCH "snd"
+#define GIT_COMMIT_HASH "c514991"
+#define GIT_COMMIT_FULL "c51499118e9bb86ea066c1e2f2308313b022f318"
+#define GIT_BRANCH "ESP32-P4-WIFI6-Touch-LCD-4B"
 
 #endif // BUILD_INFO_H

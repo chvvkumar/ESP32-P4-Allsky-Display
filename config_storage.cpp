@@ -1,5 +1,6 @@
 #include "config_storage.h"
 #include "config.h"
+#include "displays_config.h"  // For CURRENT_SCREEN default
 
 // Global instance
 ConfigStorage configStorage;
@@ -82,8 +83,9 @@ void ConfigStorage::setDefaults() {
   config.backlightFreq = BACKLIGHT_FREQ;
   config.backlightResolution = BACKLIGHT_RESOLUTION;
   
-  // Display hardware defaults (1 = 3.4" DSI, 2 = 4.0" DSI)
-  config.displayType = 1;  // Default to 3.4" display
+  // Display hardware defaults (1 = 3.4" DSI, 2 = 4.0" DSI, 3 = Waveshare P4 Box)
+  // Use compile-time selection from displays_config.h as runtime default
+  config.displayType = CURRENT_SCREEN;  // Defaults to compile-time CURRENT_SCREEN selection
   
   // Color temperature default
   config.colorTemp = DEFAULT_COLOR_TEMP;  // 6500K neutral white

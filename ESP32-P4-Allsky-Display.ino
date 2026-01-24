@@ -19,6 +19,9 @@
 #include "image_utils.h"  // Software image scaling fallback
 #include "ha_rest_client.h"  // Home Assistant REST brightness control
 
+// ESP-IDF includes for LDO power management (Waveshare P4 Box support)
+#include "esp_ldo_regulator.h"
+
 // Additional required libraries
 #include <HTTPClient.h>
 #include <JPEGDEC.h>
@@ -115,6 +118,9 @@ bool touchTriggeredModeToggle = false;
 
 // Touch mode control
 bool singleImageRefreshMode = false;  // false = cycling mode, true = single image refresh mode
+
+// LDO Power Management (Waveshare P4 Box)
+esp_ldo_channel_handle_t ldoHandle = nullptr;  // Global handle to keep LDO powered
 
 // =============================================================================
 // WIFI SETUP MODE GLOBALS
@@ -638,6 +644,32 @@ void setup() {
     
     // Reset watchdog after large memory allocations
     systemMonitor.forceResetWatchdog();
+    
+    // --- Dynamic LDO Power Management (Waveshare P4 Box) ---
+    if (display_cfg.ldo_channel_id != -1) {
+        Serial.printf("[LDO] Enabling LDO Channel %d at %d mV for %s\n", 
+                      display_cfg.ldo_channel_id, 
+                      display_cfg.ldo_voltage_mv,
+                      display_cfg.name);
+        
+        esp_ldo_channel_config_t ldo_config = {
+            .chan_id = (uint8_t)display_cfg.ldo_channel_id,
+            .voltage_mv = display_cfg.ldo_voltage_mv,
+        };
+        
+        esp_err_t ldo_result = esp_ldo_acquire_channel(&ldo_config, &ldoHandle);
+        if (ldo_result != ESP_OK) {
+            Serial.printf("[LDO] ERROR: Failed to enable LDO! Error code: 0x%x\n", ldo_result);
+            LOG_ERROR("LDO power enable FAILED - display may not work\n");
+        } else {
+            Serial.println("[LDO] ✓ LDO power enabled successfully (handle preserved)");
+            LOG_INFO("✓ LDO Channel 3 powered @ 2.5V\n");
+            delay(50);  // Allow LDO voltage to stabilize
+        }
+    } else {
+        Serial.printf("[LDO] No LDO required for %s\n", display_cfg.name);
+    }
+    // -------------------------------------------------------
     
     // NOW initialize display - it should have plenty of contiguous PSRAM remaining
     if (!displayManager.begin()) {
@@ -2142,8 +2174,22 @@ void initializeTouchController() {
         // Initialize I2C interface first
         DEV_I2C_Port i2cPort = DEV_I2C_Init();
         
-        // Initialize the GT911 touch controller
-        touchHandle = touch_gt911_init(i2cPort);
+        // Get touch pins from active display configuration
+        int8_t rst_pin = display_cfg.touch_rst_pin;
+        int8_t int_pin = display_cfg.touch_int_pin;
+        
+        // Fall back to hardcoded defaults if not specified in config
+        if (rst_pin == -1) {
+            rst_pin = EXAMPLE_PIN_NUM_TOUCH_RST;  // Default: GPIO 23
+        }
+        if (int_pin == -1) {
+            int_pin = EXAMPLE_PIN_NUM_TOUCH_INT;  // Default: GPIO_NUM_NC
+        }
+        
+        LOG_DEBUG_F("Touch pins: RST=%d, INT=%d\n", rst_pin, int_pin);
+        
+        // Initialize the GT911 touch controller with dynamic pins
+        touchHandle = touch_gt911_init(i2cPort, rst_pin, int_pin);
         
         if (touchHandle != nullptr) {
             touchEnabled = true;
