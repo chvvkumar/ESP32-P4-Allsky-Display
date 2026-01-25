@@ -3,10 +3,10 @@
 This project enables the use of an ESP32-P4 display into an all-sky camera viewer. It features multi-image cycling, hardware acceleration, and seamless integration with Home Assistant.
 
 3.6" Screen
-![3.6" Display in Action](images/display.jpg)
+![3.6-inch Display in Action](images/display.jpg)
 
 4" Screen
-![4" Display in Action](images\4-inch.png)
+![4-inch Display in Action](images/4-inch.png)
 
 ---
 
