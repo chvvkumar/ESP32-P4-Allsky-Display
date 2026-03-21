@@ -5,7 +5,9 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Read(//c/Users/Kumar/Documents/Arduino/libraries/GFX_Library_for_Arduino/**)",
       "Read(//c/Users/Kumar/AppData/Local/Arduino15/packages/esp32/hardware/esp32/3.3.7/**)",
-      "Read(//c/Users/Kumar/AppData/Local/Arduino15/packages/esp32/**)"
+      "Read(//c/Users/Kumar/AppData/Local/Arduino15/packages/esp32/**)",
+      "Bash(gh run:*)",
+      "Bash(arduino-cli lib:*)"
     ]
   }
 }
