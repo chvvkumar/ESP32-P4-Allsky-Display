@@ -449,9 +449,18 @@ String CaptivePortal::generateNetworkList() {
 void CaptivePortal::scanNetworks() {
     Serial.println("Scanning WiFi networks...");
     scannedNetworks.clear();
-    
-    int n = WiFi.scanNetworks(false, true); // async=false, show_hidden=true
-    
+
+    // WiFi.scanNetworks() can return negative values when the ESP-Hosted
+    // link to the C6 co-processor isn't ready yet. Retry a few times.
+    int n = -1;
+    for (int attempt = 0; attempt < 4 && n < 0; attempt++) {
+        if (attempt > 0) {
+            Serial.printf("Scan returned %d, retrying (%d/3)...\n", n, attempt);
+            delay(1000);
+        }
+        n = WiFi.scanNetworks(false, true); // async=false, show_hidden=true
+    }
+
     Serial.printf("Found %d networks\n", n);
     
     for (int i = 0; i < n; i++) {

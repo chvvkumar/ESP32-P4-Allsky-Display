@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Kumar/git/ESP32-P4-Allsky-Display/$USERPROFILE/Documents/Arduino/libraries/GFX_Library_for_Arduino/**)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//c/Users/Kumar/Documents/Arduino/libraries/GFX_Library_for_Arduino/**)",
+      "Read(//c/Users/Kumar/AppData/Local/Arduino15/packages/esp32/hardware/esp32/3.3.7/**)",
+      "Read(//c/Users/Kumar/AppData/Local/Arduino15/packages/esp32/**)"
+    ]
+  }
+}

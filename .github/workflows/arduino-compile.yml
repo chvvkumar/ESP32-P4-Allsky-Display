@@ -117,46 +117,46 @@ jobs:
         path: |
           ~/.arduino15
           ~/Arduino/libraries
-        key: ${{ runner.os }}-arduino-esp32-3.3.4-${{ hashFiles('**/*.ino', '**/*.cpp', '**/*.h') }}
+        key: ${{ runner.os }}-arduino-esp32-3.3.7-${{ hashFiles('**/*.ino', '**/*.cpp', '**/*.h') }}
         restore-keys: |
-          ${{ runner.os }}-arduino-esp32-3.3.4-
+          ${{ runner.os }}-arduino-esp32-3.3.7-
           ${{ runner.os }}-arduino-
     
     - name: Install ESP32 core
       run: |
         if [ ! -d ~/.arduino15/packages/esp32 ]; then
           arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli core install esp32:esp32@3.3.4 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.7 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
         else
           echo "✅ ESP32 core already installed (cached)"
         fi
     
     - name: Install required libraries
       run: |
-        # Check and install GFX Library for Arduino 1.6.0
+        # Check and install GFX Library for Arduino 1.6.5
         if [ -d ~/Arduino/libraries/GFX_Library_for_Arduino ]; then
           INSTALLED_VERSION=$(arduino-cli lib list | grep "GFX Library for Arduino" | awk '{print $2}')
           if [ "$INSTALLED_VERSION" = "1.6.0" ]; then
-            echo "✅ GFX Library for Arduino 1.6.0 already installed (cached)"
+            echo "✅ GFX Library for Arduino 1.6.5 already installed (cached)"
           else
             echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 1.6.0"
-            arduino-cli lib install "GFX Library for Arduino@1.6.0"
+            arduino-cli lib install "GFX Library for Arduino@1.6.5"
           fi
         else
-          arduino-cli lib install "GFX Library for Arduino@1.6.0"
+          arduino-cli lib install "GFX Library for Arduino@1.6.5"
         fi
         
-        # Check and install JPEGDEC 1.8.2
+        # Check and install JPEGDEC 1.8.4
         if [ -d ~/Arduino/libraries/JPEGDEC ]; then
           INSTALLED_VERSION=$(arduino-cli lib list | grep "JPEGDEC" | awk '{print $2}')
           if [ "$INSTALLED_VERSION" = "1.8.2" ]; then
-            echo "✅ JPEGDEC 1.8.2 already installed (cached)"
+            echo "✅ JPEGDEC 1.8.4 already installed (cached)"
           else
             echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 1.8.2"
-            arduino-cli lib install "JPEGDEC@1.8.2"
+            arduino-cli lib install "JPEGDEC@1.8.4"
           fi
         else
-          arduino-cli lib install "JPEGDEC@1.8.2"
+          arduino-cli lib install "JPEGDEC@1.8.4"
         fi
         
         # Check and install PubSubClient 2.8
@@ -185,30 +185,30 @@ jobs:
           arduino-cli lib install "ElegantOTA@3.1.7"
         fi
         
-        # Check and install WebSockets 2.7.1
+        # Check and install WebSockets 2.7.2
         if [ -d ~/Arduino/libraries/WebSockets ]; then
           INSTALLED_VERSION=$(arduino-cli lib list | grep "WebSockets" | awk '{print $2}')
           if [ "$INSTALLED_VERSION" = "2.7.1" ]; then
-            echo "✅ WebSockets 2.7.1 already installed (cached)"
+            echo "✅ WebSockets 2.7.2 already installed (cached)"
           else
             echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 2.7.1"
-            arduino-cli lib install "WebSockets@2.7.1"
+            arduino-cli lib install "WebSockets@2.7.2"
           fi
         else
-          arduino-cli lib install "WebSockets@2.7.1"
+          arduino-cli lib install "WebSockets@2.7.2"
         fi
         
-        # Check and install ArduinoJson 7.2.1
+        # Check and install ArduinoJson 7.4.3
         if [ -d ~/Arduino/libraries/ArduinoJson ]; then
           INSTALLED_VERSION=$(arduino-cli lib list | grep "ArduinoJson" | awk '{print $2}')
           if [ "$INSTALLED_VERSION" = "7.2.1" ]; then
-            echo "✅ ArduinoJson 7.2.1 already installed (cached)"
+            echo "✅ ArduinoJson 7.4.3 already installed (cached)"
           else
             echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 7.2.1"
-            arduino-cli lib install "ArduinoJson@7.2.1"
+            arduino-cli lib install "ArduinoJson@7.4.3"
           fi
         else
-          arduino-cli lib install "ArduinoJson@7.2.1"
+          arduino-cli lib install "ArduinoJson@7.4.3"
         fi
         
         # Verify installed versions
