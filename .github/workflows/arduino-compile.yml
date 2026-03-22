@@ -449,7 +449,7 @@ jobs:
         FACTORY_BIN="${BASE_NAME}-Factory.bin"
         
         # 1. Handle OTA Binary (Application Only)
-        APP_BIN=$(find ./build -name "ESP32-P4-Allsky-Display.ino.bin" -type f)
+        APP_BIN=$(find ./build -name "ESP32-P4-Allsky-Display.ino.bin" -type f | head -n 1)
         if [ -z "$APP_BIN" ]; then
           echo "❌ Error: App binary not found"
           exit 1
