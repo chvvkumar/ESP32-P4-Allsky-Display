@@ -179,16 +179,22 @@ void MQTTManager::loop() {
 }
 
 void MQTTManager::messageCallback(char* topic, byte* payload, unsigned int length) {
+    // Reject oversized payloads early to prevent heap pressure
+    if (length > 1024) {
+        LOG_WARNING_F("[MQTT] Payload too large (%u bytes), ignoring\n", length);
+        return;
+    }
+
     // Convert payload to string using pre-allocated buffer to avoid O(n^2) concatenation
     String message;
     message.reserve(length);
     for (unsigned int i = 0; i < length; i++) {
         message += (char)payload[i];
     }
-    
+
     LOG_DEBUG_F("[MQTT] Message received on topic: %s\n", topic);
     LOG_DEBUG_F("[MQTT] Message payload: %s\n", message.c_str());
-    
+
     // Handle Home Assistant commands
     String topicStr = String(topic);
     haDiscovery.handleCommand(topicStr, message);
