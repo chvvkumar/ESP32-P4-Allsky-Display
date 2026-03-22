@@ -150,9 +150,6 @@ void downloadTask(void* params);
 // Touch function declarations
 void initializeTouchController();
 void updateTouchState();
-void processTouchGestures();
-void handleSingleTap();
-void handleDoubleTap();
 
 // Universal logging function - sends to Serial AND WebSocket console
 // Default parameter defined in logging.h
@@ -1952,10 +1949,9 @@ void loop() {
     commandInterpreter.processCommands();
     systemMonitor.forceResetWatchdog();
     
-    // Update touch state and process gestures
+    // Update touch state
     if (touchEnabled) {
         updateTouchState();
-        processTouchGestures();
         systemMonitor.forceResetWatchdog();
     }
     
@@ -2269,28 +2265,6 @@ void updateTouchState() {
             Serial.printf("Touch: Double-tap timeout - triggering single tap action\n");
         }
     }
-}
-
-void processTouchGestures() {
-    // This function is called from the main loop
-    // The actual gesture processing is handled in updateTouchState()
-    // Touch-triggered actions are processed in the main loop via flags
-}
-
-void handleSingleTap() {
-    Serial.println("Touch: Single tap - advancing to next image");
-    debugPrint("Touch: Single tap detected", COLOR_GREEN);
-    
-    // Set flag to trigger next image in main loop
-    touchTriggeredNextImage = true;
-}
-
-void handleDoubleTap() {
-    Serial.println("Touch: Double tap - toggling mode");
-    debugPrint("Touch: Double tap detected", COLOR_GREEN);
-    
-    // Set flag to trigger mode toggle in main loop
-    touchTriggeredModeToggle = true;
 }
 
 

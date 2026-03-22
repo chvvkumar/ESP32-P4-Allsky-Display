@@ -44,7 +44,7 @@ bool SystemMonitor::begin(unsigned long timeoutMs) {
     // Initialize memory tracking
     minFreeHeap = ESP.getFreeHeap();
     minFreePsram = ESP.getFreePsram();
-    LOG_DEBUG_F("[SystemMonitor] Initial heap: %d bytes, PSRAM: %d bytes\n", minFreeHeap, minFreePsram);
+    LOG_DEBUG_F("[SystemMonitor] Initial heap: %zu bytes, PSRAM: %zu bytes\n", minFreeHeap, minFreePsram);
     LOG_DEBUG("[SystemMonitor] System monitor initialization complete");
     
     return true;
@@ -79,7 +79,7 @@ void SystemMonitor::checkSystemHealth() {
         
         if (heapCritical || psramCritical) {
             systemHealthy = false;
-            LOG_CRITICAL_F("[SystemMonitor] Low memory detected - Heap: %d bytes (threshold: %d), PSRAM: %d bytes (threshold: %d)\n", 
+            LOG_CRITICAL_F("[SystemMonitor] Low memory detected - Heap: %zu bytes (threshold: %d), PSRAM: %zu bytes (threshold: %d)\n",
                           freeHeap, CRITICAL_HEAP_THRESHOLD, freePsram, CRITICAL_PSRAM_THRESHOLD);
             
             // Force garbage collection
