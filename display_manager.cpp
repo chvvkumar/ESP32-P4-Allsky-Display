@@ -16,7 +16,8 @@ DisplayManager::DisplayManager() :
     debugLineCount(0),
     firstImageLoaded(false),
     otaScreenInitialized(false),
-    lastOTAPercent(255)
+    lastOTAPercent(255),
+    _paused(false)
 {}
 
 DisplayManager::~DisplayManager() {
@@ -225,25 +226,20 @@ void DisplayManager::clearScreen(uint16_t color) {
 }
 
 void DisplayManager::drawBitmap(int16_t x, int16_t y, uint16_t* bitmap, int16_t w, int16_t h) {
+    if (_paused) return;
     if (gfx && bitmap) {
         gfx->draw16bitRGBBitmap(x, y, bitmap, w, h);
     }
 }
 
 void DisplayManager::pauseDisplay() {
-    // Pause display updates to prevent memory bandwidth conflicts during heavy operations
-    // This reduces LCD underrun errors during concurrent memory-intensive tasks
-    if (!gfx) return;
-    
-    // The LCD controller will pause reading from PSRAM when memory bus is saturated
-    // This is handled at hardware level by the ESP32-P4 DSI controller
+    // Pause display rendering to prevent memory bandwidth conflicts during heavy PSRAM operations
+    _paused = true;
 }
 
 void DisplayManager::resumeDisplay() {
-    // Resume normal display updates after heavy operations complete
-    if (!gfx) return;
-    
-    // Display automatically resumes when memory bandwidth becomes available
+    // Resume normal display rendering after heavy operations complete
+    _paused = false;
 }
 
 void DisplayManager::showSystemStatus() {
@@ -267,6 +263,7 @@ void DisplayManager::showSystemStatus() {
 }
 
 void DisplayManager::drawStatusOverlay(const char* message, uint16_t color, int yOffset) {
+    if (_paused) return;
     if (!gfx || !message) return;
     
     // Draw semi-transparent background box with rounded corners effect
@@ -302,6 +299,7 @@ void DisplayManager::drawStatusOverlay(const char* message, uint16_t color, int 
 }
 
 void DisplayManager::drawOverlayMessage(const char* message, int x, int y, uint16_t color, int backgroundColor) {
+    if (_paused) return;
     if (!gfx || !message) return;
     
     // Calculate text dimensions
@@ -385,8 +383,8 @@ void DisplayManager::showOTAProgress(const char* title, uint8_t percent, const c
         otaScreenInitialized = true;
     }
     
-    // Special handling for completion or error
-    if (percent == 100 && !otaScreenInitialized) {
+    // Special handling for completion
+    if (percent == 100) {
         int centerX = displayWidth / 2;
         int centerY = displayHeight / 2;
         int16_t x1, y1;
@@ -414,7 +412,7 @@ void DisplayManager::showOTAProgress(const char* title, uint8_t percent, const c
         }
     }
     
-    // Reset screen initialized flag when OTA completes (100%)
+    // Reset screen initialized flag after showing completion so next OTA starts fresh
     if (percent == 100) {
         otaScreenInitialized = false;
     }

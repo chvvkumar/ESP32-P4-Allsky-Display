@@ -26,6 +26,8 @@ private:
     Preferences prefs;
     bool initialized;
     uint32_t sessionStartTime;
+    bool _lastBootWasCrash;
+    portMUX_TYPE _spinlock;
     
     // Write to ring buffer
     void writeToRingBuffer(char* buffer, size_t& writePos, size_t& length, size_t bufferSize, const char* msg, size_t msgLen);

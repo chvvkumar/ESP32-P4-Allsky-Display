@@ -43,7 +43,19 @@ public:
     
     bool scaleImage(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
                    uint16_t* dstPixels, int16_t dstWidth, int16_t dstHeight);
-    
+
+    /**
+     * @brief Zero-copy scale+rotate for DMA-aligned buffers
+     *
+     * Operates directly on the provided buffers without memcpy.
+     * Buffers MUST be 64-byte aligned and allocated with MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM.
+     * This eliminates two full-buffer memcpy operations per image.
+     */
+    bool scaleRotateImageZeroCopy(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
+                                  uint16_t* dstPixels, size_t dstBufferSize,
+                                  int16_t dstWidth, int16_t dstHeight,
+                                  float rotation = 0.0);
+
     // Buffer information
     size_t getSourceBufferSize() const;
     size_t getDestinationBufferSize() const;

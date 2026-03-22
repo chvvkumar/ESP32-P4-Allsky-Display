@@ -204,6 +204,95 @@ bool PPAAccelerator::scaleImage(uint16_t* srcPixels, int16_t srcWidth, int16_t s
     return scaleRotateImage(srcPixels, srcWidth, srcHeight, dstPixels, dstWidth, dstHeight, 0.0);
 }
 
+bool PPAAccelerator::scaleRotateImageZeroCopy(uint16_t* srcPixels, int16_t srcWidth, int16_t srcHeight,
+                                              uint16_t* dstPixels, size_t dstBufferSize,
+                                              int16_t dstWidth, int16_t dstHeight,
+                                              float rotation) {
+    if (!ppa_available || !ppa_scaling_handle) {
+        LOG_DEBUG("DEBUG: PPA not available or handle invalid");
+        return false;
+    }
+
+    // Convert rotation angle to PPA enum
+    ppa_srm_rotation_angle_t ppa_rotation = convertRotationAngle(rotation);
+    if (ppa_rotation == (ppa_srm_rotation_angle_t)-1) {
+        LOG_DEBUG_F("DEBUG: Invalid rotation angle: %.1f\n", rotation);
+        return false;
+    }
+
+    size_t srcSize = srcWidth * srcHeight * sizeof(uint16_t);
+    size_t dstSize = dstWidth * dstHeight * sizeof(uint16_t);
+
+    if (dstSize > dstBufferSize) {
+        LOG_DEBUG_F("DEBUG: Destination too large (%d > %d)\n", dstSize, dstBufferSize);
+        return false;
+    }
+
+    LOG_DEBUG_F("DEBUG: PPA zero-copy scale+rotate %dx%d -> %dx%d (%.1f°)\n",
+                 srcWidth, srcHeight, dstWidth, dstHeight, rotation);
+
+    // Flush source data from cache to memory for DMA (no memcpy needed)
+    size_t srcSizeAligned = (srcSize + 63) & ~63;
+    esp_cache_msync(srcPixels, srcSizeAligned, ESP_CACHE_MSYNC_FLAG_DIR_C2M);
+
+    // Configure PPA scaling and rotation operation
+    ppa_srm_oper_config_t srm_oper_config = {};
+
+    // Source configuration - use caller's buffer directly
+    srm_oper_config.in.buffer = srcPixels;
+    srm_oper_config.in.pic_w = srcWidth;
+    srm_oper_config.in.pic_h = srcHeight;
+    srm_oper_config.in.block_w = srcWidth;
+    srm_oper_config.in.block_h = srcHeight;
+    srm_oper_config.in.block_offset_x = 0;
+    srm_oper_config.in.block_offset_y = 0;
+    srm_oper_config.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+
+    // Output configuration - use caller's buffer directly
+    srm_oper_config.out.buffer = dstPixels;
+    srm_oper_config.out.buffer_size = dstBufferSize;
+    srm_oper_config.out.pic_w = dstWidth;
+    srm_oper_config.out.pic_h = dstHeight;
+    srm_oper_config.out.block_offset_x = 0;
+    srm_oper_config.out.block_offset_y = 0;
+    srm_oper_config.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
+
+    // Scaling configuration
+    srm_oper_config.scale_x = (float)dstWidth / srcWidth;
+    srm_oper_config.scale_y = (float)dstHeight / srcHeight;
+
+    // Rotation configuration
+    srm_oper_config.rotation_angle = ppa_rotation;
+
+    // Mirror configuration (no mirroring)
+    srm_oper_config.mirror_x = false;
+    srm_oper_config.mirror_y = false;
+
+    // Additional configuration
+    srm_oper_config.rgb_swap = false;
+    srm_oper_config.byte_swap = false;
+    srm_oper_config.alpha_update_mode = PPA_ALPHA_NO_CHANGE;
+    srm_oper_config.mode = PPA_TRANS_MODE_BLOCKING;
+    srm_oper_config.user_data = nullptr;
+
+    LOG_DEBUG_F("DEBUG: PPA zero-copy scale factors: x=%.3f, y=%.3f, rotation=%d\n",
+                 srm_oper_config.scale_x, srm_oper_config.scale_y, (int)ppa_rotation);
+
+    // Perform the scaling and rotation operation
+    esp_err_t ret = ppa_do_scale_rotate_mirror(ppa_scaling_handle, &srm_oper_config);
+    if (ret != ESP_OK) {
+        LOG_ERROR_F("PPA zero-copy scale+rotate failed: %s (0x%x)\n", esp_err_to_name(ret), ret);
+        return false;
+    }
+
+    // Invalidate cache for destination so CPU reads the DMA result (no memcpy needed)
+    size_t dstSizeAligned = (dstSize + 63) & ~63;
+    esp_cache_msync(dstPixels, dstSizeAligned, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+
+    LOG_DEBUG("DEBUG: PPA zero-copy scale+rotate successful!");
+    return true;
+}
+
 size_t PPAAccelerator::getSourceBufferSize() const {
     return ppa_src_buffer_size;
 }

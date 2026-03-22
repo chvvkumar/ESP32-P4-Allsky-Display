@@ -38,7 +38,7 @@ enum LogSeverity {
 #define WATCHDOG_RESET_INTERVAL 1000     // Reset watchdog every 1 second
 #define MEMORY_CHECK_INTERVAL 30000      // Check memory every 30 seconds
 #define SERIAL_FLUSH_INTERVAL 5000       // Flush serial every 5 seconds
-#define IMAGE_PROCESS_TIMEOUT 5000       // 5 second timeout for image processing
+#define IMAGE_PROCESS_TIMEOUT 100000     // 100 second timeout for image processing (must exceed TOTAL_DOWNLOAD_TIMEOUT)
 #define MQTT_RECONNECT_INTERVAL 5000     // 5 seconds between MQTT reconnect attempts
 
 // Memory thresholds
@@ -159,7 +159,7 @@ extern const bool DEFAULT_RANDOM_ORDER;
 // ASYNC DOWNLOAD TASK CONFIGURATION
 // =============================================================================
 
-#define DOWNLOAD_TASK_STACK_SIZE 8192    // Stack size for async download task
+#define DOWNLOAD_TASK_STACK_SIZE 16384   // Stack size for async download task (16KB for TLS)
 #define DOWNLOAD_TASK_PRIORITY 2         // Priority for download task (Core 0)
 
 // =============================================================================

@@ -22,6 +22,12 @@ WiFiManager::WiFiManager() :
     wifiConnected(false),
     lastConnectionAttempt(0),
     connectionAttempts(0),
+    connectionInProgress(false),
+    connectionStartTime(0),
+    reconnectBackoff(RECONNECT_BACKOFF_MIN),
+    ntpSyncInProgress(false),
+    ntpSyncStartTime(0),
+    ntpRetries(0),
     debugPrintFunc(nullptr),
     debugPrintfFunc(nullptr),
     firstImageLoaded(false)
@@ -42,66 +48,72 @@ bool WiFiManager::begin() {
 
 void WiFiManager::connectToWiFi() {
     unsigned long now = millis();
-    
-    // Don't attempt reconnection too frequently
-    if (now - lastConnectionAttempt < WIFI_RETRY_DELAY * 4) {
+
+    // If a connection attempt is already in progress, poll its status
+    if (connectionInProgress) {
+        // Check for timeout
+        if (now - connectionStartTime > WIFI_MAX_WAIT_TIME) {
+            LOG_INFO_F("[WiFi] Connection timeout after %lu ms (max: %d ms)\n",
+                       now - connectionStartTime, WIFI_MAX_WAIT_TIME);
+            if (debugPrintFunc) debugPrintFunc("WiFi connection timeout!", COLOR_RED);
+            connectionInProgress = false;
+            wifiConnected = false;
+
+            // Exponential backoff for next attempt
+            reconnectBackoff = min(reconnectBackoff * 2, RECONNECT_BACKOFF_MAX);
+            LOG_INFO_F("[WiFi] Next reconnect backoff: %lu ms\n", reconnectBackoff);
+
+            WiFi.disconnect();
+            return;
+        }
+
+        // Poll connection status (non-blocking)
+        if (WiFi.status() == WL_CONNECTED) {
+            connectionInProgress = false;
+            wifiConnected = true;
+            reconnectBackoff = RECONNECT_BACKOFF_MIN;  // Reset backoff on success
+
+            LOG_INFO_F("WiFi connected - IP: %s\n", WiFi.localIP().toString().c_str());
+            if (debugPrintFunc && debugPrintfFunc) {
+                debugPrintfFunc(COLOR_GREEN, "%s :: %s", WIFI_SSID, WiFi.localIP().toString().c_str());
+                debugPrintfFunc(COLOR_WHITE, " ");  // Group spacing
+            }
+            LOG_DEBUG_F("[WiFi] Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+            LOG_DEBUG_F("[WiFi] DNS: %s\n", WiFi.dnsIP().toString().c_str());
+            LOG_DEBUG_F("[WiFi] Signal Strength (RSSI): %d dBm\n", WiFi.RSSI());
+            LOG_DEBUG_F("[WiFi] Connection took %lu ms\n", now - connectionStartTime);
+
+            // Start NTP time sync (non-blocking)
+            syncNTPTime();
+        } else if (WiFi.status() == WL_CONNECT_FAILED || WiFi.status() == WL_NO_SSID_AVAIL) {
+            // Definite failure — stop waiting
+            connectionInProgress = false;
+            wifiConnected = false;
+            LOG_ERROR_F("[WiFi] Connection failed, status: %d\n", WiFi.status());
+
+            reconnectBackoff = min(reconnectBackoff * 2, RECONNECT_BACKOFF_MAX);
+            WiFi.disconnect();
+        }
+        // Otherwise still connecting — just return and check next loop iteration
         return;
     }
-    
+
+    // Rate-limit new connection attempts using exponential backoff
+    if (now - lastConnectionAttempt < reconnectBackoff) {
+        return;
+    }
+
+    // Start a new non-blocking connection attempt
     lastConnectionAttempt = now;
+    connectionStartTime = now;
+    connectionInProgress = true;
+
     LOG_INFO_F("Connecting to WiFi: %s\n", WIFI_SSID);
     if (debugPrintFunc) debugPrintFunc("Connecting to WiFi...", COLOR_YELLOW);
     LOG_DEBUG_F("[WiFi] MAC Address: %s\n", WiFi.macAddress().c_str());
+
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    
-    connectionAttempts = 0;
-    unsigned long startTime = millis();
-    
-    while (WiFi.status() != WL_CONNECTED && connectionAttempts < WIFI_MAX_ATTEMPTS) {
-        // Check for timeout to prevent infinite hanging
-        if (millis() - startTime > WIFI_MAX_WAIT_TIME) {
-            LOG_INFO_F("[WiFi] Connection timeout after %lu ms (max: %d ms)\n", millis() - startTime, WIFI_MAX_WAIT_TIME);
-            if (debugPrintFunc) debugPrintFunc("WiFi connection timeout!", COLOR_RED);
-            break;
-        }
-        
-        systemMonitor.safeDelay(WIFI_RETRY_DELAY);
-        systemMonitor.resetWatchdog(); // Explicitly reset watchdog during connection attempts
-        connectionAttempts++;
-        
-        if (connectionAttempts % 4 == 0) {
-            systemMonitor.resetWatchdog(); // Additional watchdog reset
-        }
-        
-        // Allow other tasks to run
-        yield();
-    }
-    
-    if (WiFi.status() == WL_CONNECTED) {
-        wifiConnected = true;
-        LOG_INFO_F("✓ WiFi connected - IP: %s\n", WiFi.localIP().toString().c_str());
-        if (debugPrintFunc && debugPrintfFunc) {
-            debugPrintfFunc(COLOR_GREEN, "%s :: %s", WIFI_SSID, WiFi.localIP().toString().c_str());
-            debugPrintfFunc(COLOR_WHITE, " ");  // Group spacing
-        }
-        LOG_DEBUG_F("[WiFi] Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
-        LOG_DEBUG_F("[WiFi] DNS: %s\n", WiFi.dnsIP().toString().c_str());
-        LOG_DEBUG_F("[WiFi] Signal Strength (RSSI): %d dBm\n", WiFi.RSSI());
-        LOG_DEBUG_F("[WiFi] Connection took %d attempts, %lu ms\n", connectionAttempts, millis() - startTime);
-        
-        // Sync NTP time after successful connection
-        syncNTPTime();
-    } else {
-        wifiConnected = false;
-        LOG_ERROR_F("[WiFi] Connection failed after %d attempts\n", connectionAttempts);
-        LOG_INFO_F("[WiFi] WiFi status code: %d\n", WiFi.status());
-        LOG_ERROR_F("[WiFi] Status meanings: 0=IDLE, 1=NO_SSID_AVAIL, 3=CONNECTED, 4=CONNECT_FAILED, 6=DISCONNECTED\n");
-        
-        // Disconnect to clean up any partial connection state
-        LOG_INFO("[WiFi] Cleaning up connection state...");
-        WiFi.disconnect();
-        systemMonitor.safeDelay(1000);
-    }
+    // Return immediately — status will be polled on subsequent update() calls
 }
 
 bool WiFiManager::isConnected() const {
@@ -156,10 +168,36 @@ void WiFiManager::setDebugFunctions(void (*debugPrint)(const char*, uint16_t),
 
 void WiFiManager::update() {
     checkConnection();
-    
-    // Attempt reconnection if disconnected
+
+    // Attempt reconnection if disconnected (non-blocking)
     if (!isConnected()) {
         connectToWiFi();
+    }
+
+    // Poll non-blocking NTP sync
+    if (ntpSyncInProgress) {
+        unsigned long now = millis();
+        if (now - ntpSyncStartTime >= ntpRetries * NTP_POLL_INTERVAL) {
+            struct tm timeinfo;
+            if (getLocalTime(&timeinfo, 0)) {
+                // NTP sync succeeded
+                ntpSyncInProgress = false;
+                char timeStr[64];
+                strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S %Z", &timeinfo);
+                LOG_INFO_F("Time synced: %s\n", timeStr);
+                if (debugPrintfFunc && !firstImageLoaded) {
+                    debugPrintfFunc(COLOR_CYAN, "%s", timeStr);
+                    debugPrintfFunc(COLOR_WHITE, " ");  // Group spacing
+                }
+            } else {
+                ntpRetries++;
+                if (ntpRetries >= NTP_MAX_RETRIES) {
+                    ntpSyncInProgress = false;
+                    LOG_ERROR("[NTP] Failed to synchronize time");
+                    if (debugPrintFunc) debugPrintFunc("NTP sync failed", COLOR_RED);
+                }
+            }
+        }
     }
 }
 
@@ -295,52 +333,37 @@ void WiFiManager::syncNTPTime() {
         LOG_WARNING("[NTP] Cannot sync time - WiFi not connected");
         return;
     }
-    
+
     if (!configStorage.getNTPEnabled()) {
         LOG_INFO("[NTP] Time synchronization disabled in config");
         return;
     }
-    
+
+    // If already syncing, don't restart
+    if (ntpSyncInProgress) {
+        return;
+    }
+
     String ntpServer = configStorage.getNTPServer();
     String timezone = configStorage.getTimezone();
-    
+
     LOG_DEBUG_F("[NTP] Synchronizing time from %s...\n", ntpServer.c_str());
     LOG_DEBUG_F("[NTP] Timezone: %s\n", timezone.c_str());
-    
+
     // Show NTP start message on display
     if (debugPrintFunc && !firstImageLoaded) {
         debugPrintFunc("Updating NTP...", COLOR_YELLOW);
     }
-    
+
     // Configure time with NTP server and timezone
-    // GMT offset and daylight offset are handled by the timezone string
     configTime(0, 0, ntpServer.c_str());
     setenv("TZ", timezone.c_str(), 1);
     tzset();
-    
-    // Wait for time to be set (up to 5 seconds)
-    int retries = 0;
-    const int maxRetries = 10;
-    struct tm timeinfo;
-    
-    while (!getLocalTime(&timeinfo, 500) && retries < maxRetries) {
-        LOG_DEBUG("[NTP] Waiting for time sync...");
-        retries++;
-        systemMonitor.resetWatchdog();
-    }
-    
-    if (retries >= maxRetries) {
-        LOG_ERROR("[NTP] Failed to synchronize time");
-        if (debugPrintFunc) debugPrintFunc("NTP sync failed", COLOR_RED);
-    } else {
-        char timeStr[64];
-        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S %Z", &timeinfo);
-        LOG_INFO_F("✓ Time synced: %s\n", timeStr);
-        if (debugPrintfFunc && !firstImageLoaded) {
-            debugPrintfFunc(COLOR_CYAN, "%s", timeStr);
-            debugPrintfFunc(COLOR_WHITE, " ");  // Group spacing
-        }
-    }
+
+    // Start non-blocking NTP poll
+    ntpSyncInProgress = true;
+    ntpSyncStartTime = millis();
+    ntpRetries = 0;
 }
 
 bool WiFiManager::isTimeValid() {
@@ -396,8 +419,11 @@ String WiFiManager::getScanResultsJSON() {
     }
     
     // Build JSON response with only 2.4GHz networks
-    String json = "{\"status\":\"success\",\"networks\":[";
-    
+    // Pre-reserve ~128 bytes per network to reduce heap fragmentation
+    String json;
+    json.reserve(128 * n + 64);
+    json = "{\"status\":\"success\",\"networks\":[";
+
     int count = 0;
     for (int i = 0; i < n; i++) {
         uint8_t channel = WiFi.channel(i);

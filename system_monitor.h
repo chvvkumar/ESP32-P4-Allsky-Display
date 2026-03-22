@@ -16,6 +16,7 @@ private:
     unsigned long lastWatchdogReset;
     unsigned long lastMemoryCheck;
     unsigned long lastSerialFlush;
+    unsigned long lastStackCheck;
     size_t minFreeHeap;
     size_t minFreePsram;
     bool systemHealthy;
@@ -52,6 +53,9 @@ public:
     
     // Print memory status
     void printMemoryStatus();
+
+    // Check task stack high water marks
+    void checkStackHighWaterMarks();
 };
 
 // Global instance

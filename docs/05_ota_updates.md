@@ -214,21 +214,49 @@ E (5722) rpc_core: Response not received
 
 **Root cause:** ESP-Hosted firmware mismatch between ESP32-P4 host and ESP32-C6 WiFi co-processor. The P4 has no built-in WiFi and relies on RPC (Remote Procedure Call) to the co-processor. Version mismatches cause the host's internal state ("I am connected") to get out of sync with the co-processor reality, leading to "zombie" connections and RPC timeouts.
 
-**Solution:** ESP32-C6 slave firmware must be the same version or higher than the ESP32-P4 host firmware. Update the co-processor firmware using this guide.
+**Solution:** ESP32-C6 slave firmware must be the same version or higher than the ESP32-P4 host firmware. Update the co-processor firmware using one of the methods below.
+
+### Quick Method: Pre-Built Firmware
+
+A pre-built combined firmware image is included in this repository at `firmware_esphosted/merged-flash.bin`. This is the easiest way to update the co-processor — no need to build anything from source.
+
+**This image contains:**
+- ESP32-P4 host OTA updater (flashes the C6 over SDIO)
+- ESP32-C6 slave firmware (ESP-Hosted v2.12.3)
+- Built with ESP-IDF v5.5.2
+
+**Flash with esptool:**
+```powershell
+esptool.py --chip esp32p4 -p COM3 -b 460800 \
+  --before=default_reset --after=hard_reset \
+  write_flash --flash_mode dio --flash_freq 80m --flash_size 8MB \
+  0x0 firmware_esphosted/merged-flash.bin
+```
+
+**After flashing:**
+1. Monitor the serial output (`idf.py -p COM3 monitor` or your serial terminal)
+2. Wait for the OTA to complete — you should see `OTA completed successfully` or `Versions compatible - OTA not required`
+3. Re-flash your normal AllSky Display firmware via USB or OTA
+
+> **Note:** This temporarily replaces your AllSky Display firmware with the OTA updater. Once the C6 is updated, flash the AllSky Display firmware back.
+
+### Advanced Method: Build From Source
+
+If you need a different ESP-Hosted version or want to build from source, follow the steps below.
 
 ### Overview
 
 **Steps:**
-- ✅ Built ESP-Hosted slave firmware (v2.7.2) for ESP32-C6
+- ✅ Built ESP-Hosted slave firmware for ESP32-C6
 - ✅ Configured and built the host OTA example for ESP32-P4
 - ✅ Performed successful OTA update over SDIO
-- ✅ Upgraded slave firmware from v0.0.6 → v2.7.2
 - ✅ Verified version checking and update prevention
 
-**Document Version:** 1.0  
-**Date:** December 11, 2025  
-**ESP-IDF Version:** v5.5.1  
-**ESP-Hosted Version:** v2.7.2  
+**Document Version:** 2.0
+**Date:** March 21, 2026
+**ESP-IDF Version:** v5.5.2
+**ESP-Hosted Version:** v2.12.3
+**Pre-built firmware:** `firmware_esphosted/merged-flash.bin`
 **Tested Hardware:** [Waveshare 3.4" ESP32-P4 Touch LCD](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.4c.htm)
 
 ### Additional Resources
@@ -247,7 +275,7 @@ E (5722) rpc_core: Response not received
 - USB-C cable for programming/monitoring
 
 **Software:**
-- ESP-IDF v5.5.1 (installed and configured)
+- ESP-IDF v5.5.2 (installed and configured)
 - Windows PowerShell (with ESP-IDF environment activated)
 - Working `idf.py` command line tools
 
@@ -262,7 +290,7 @@ cd F:\espp4c6
 
 # Create the slave project from ESP-Hosted example
 # This downloads the example from the ESP Component Registry
-idf.py create-project-from-example "espressif/esp_hosted^2.7.2:slave"
+idf.py create-project-from-example "espressif/esp_hosted^2.12.3:slave"
 ```
 
 **Expected output:**

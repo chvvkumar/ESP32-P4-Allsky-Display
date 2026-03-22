@@ -211,7 +211,7 @@ static esp_err_t esp_lcd_touch_gt911_read_data(esp_lcd_touch_handle_t tp)
         ESP_RETURN_ON_ERROR(err, TAG, "I2C read error!");
 
         /* Clear all */
-        touch_gt911_i2c_write(tp, ESP_LCD_TOUCH_GT911_READ_XY_REG, clear);
+        err = touch_gt911_i2c_write(tp, ESP_LCD_TOUCH_GT911_READ_XY_REG, clear);
         ESP_RETURN_ON_ERROR(err, TAG, "I2C write error!");
 
         portENTER_CRITICAL(&tp->data.lock);
@@ -241,7 +241,11 @@ static esp_err_t esp_lcd_touch_gt911_read_data(esp_lcd_touch_handle_t tp)
 
         /* Read all points */
         err = touch_gt911_i2c_read(tp, ESP_LCD_TOUCH_GT911_READ_XY_REG + 1, &buf[1], touch_cnt * 8);
-        ESP_RETURN_ON_ERROR(err, TAG, "I2C read error!");
+        if (err != ESP_OK) {
+            /* Always clear status register even on read failure to prevent stale data */
+            touch_gt911_i2c_write(tp, ESP_LCD_TOUCH_GT911_READ_XY_REG, clear);
+            ESP_RETURN_ON_ERROR(err, TAG, "I2C read error!");
+        }
 
         /* Clear all */
         err = touch_gt911_i2c_write(tp, ESP_LCD_TOUCH_GT911_READ_XY_REG, clear);
@@ -336,7 +340,7 @@ static esp_err_t esp_lcd_touch_gt911_del(esp_lcd_touch_handle_t tp)
         gpio_reset_pin(tp->config.rst_gpio_num);
     }
 
-    free(tp);
+    heap_caps_free(tp);
 
     return ESP_OK;
 }
@@ -355,7 +359,11 @@ esp_lcd_touch_handle_t touch_gt911_init(DEV_I2C_Port port)
 
     ESP_LOGI(TAG, "Initialize I2C panel IO");  // Log I2C panel I/O initialization
     // Create a new I2C panel I/O handle for the touch controller
-    ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(port.bus, &tp_io_config, &tp_io_handle));
+    esp_err_t ret = esp_lcd_new_panel_io_i2c(port.bus, &tp_io_config, &tp_io_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create I2C panel IO: %s", esp_err_to_name(ret));
+        return NULL;
+    }
 
     ESP_LOGI(TAG, "Initialize touch controller GT911");  // Log touch controller initialization
     // Configure the touch controller with necessary settings (coordinates, GPIO pins, etc.)
@@ -376,7 +384,11 @@ esp_lcd_touch_handle_t touch_gt911_init(DEV_I2C_Port port)
     };
 
     // Create a new touch controller instance using the configured I2C and settings
-    ESP_ERROR_CHECK(esp_lcd_touch_new_i2c_gt911(tp_io_handle, &tp_cfg, &tp_handle));
+    ret = esp_lcd_touch_new_i2c_gt911(tp_io_handle, &tp_cfg, &tp_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "GT911 touch controller init failed: %s", esp_err_to_name(ret));
+        return NULL;
+    }
 
     return tp_handle;  // Return the touch controller handle
 }

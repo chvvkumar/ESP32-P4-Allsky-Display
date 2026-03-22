@@ -8,6 +8,7 @@ SystemMonitor::SystemMonitor() :
     lastWatchdogReset(0),
     lastMemoryCheck(0),
     lastSerialFlush(0),
+    lastStackCheck(0),
     minFreeHeap(SIZE_MAX),
     minFreePsram(SIZE_MAX),
     systemHealthy(true)
@@ -44,7 +45,7 @@ bool SystemMonitor::begin(unsigned long timeoutMs) {
     // Initialize memory tracking
     minFreeHeap = ESP.getFreeHeap();
     minFreePsram = ESP.getFreePsram();
-    LOG_DEBUG_F("[SystemMonitor] Initial heap: %d bytes, PSRAM: %d bytes\n", minFreeHeap, minFreePsram);
+    LOG_DEBUG_F("[SystemMonitor] Initial heap: %zu bytes, PSRAM: %zu bytes\n", minFreeHeap, minFreePsram);
     LOG_DEBUG("[SystemMonitor] System monitor initialization complete");
     
     return true;
@@ -79,7 +80,7 @@ void SystemMonitor::checkSystemHealth() {
         
         if (heapCritical || psramCritical) {
             systemHealthy = false;
-            LOG_CRITICAL_F("[SystemMonitor] Low memory detected - Heap: %d bytes (threshold: %d), PSRAM: %d bytes (threshold: %d)\n", 
+            LOG_CRITICAL_F("[SystemMonitor] Low memory detected - Heap: %zu bytes (threshold: %d), PSRAM: %zu bytes (threshold: %d)\n",
                           freeHeap, CRITICAL_HEAP_THRESHOLD, freePsram, CRITICAL_PSRAM_THRESHOLD);
             
             // Force garbage collection
@@ -140,9 +141,43 @@ void SystemMonitor::safeDelay(unsigned long ms) {
     }
 }
 
+void SystemMonitor::checkStackHighWaterMarks() {
+    unsigned long now = millis();
+    // Check every 60 seconds to avoid log spam
+    if (now - lastStackCheck < 60000) {
+        return;
+    }
+    lastStackCheck = now;
+
+    // Log the current task's stack high water mark
+    UBaseType_t hwm = uxTaskGetStackHighWaterMark(NULL);
+    LOG_INFO_F("[SystemMonitor] Current task stack HWM: %u words (%u bytes free)\n",
+               hwm, hwm * sizeof(StackType_t));
+
+    if (hwm < 256) {
+        LOG_WARNING_F("[SystemMonitor] Current task stack is low! HWM: %u words\n", hwm);
+    }
+
+    // Enumerate all known named tasks and log their stack usage
+    const char* taskNames[] = {"ImageDownloader", "HARestClient", NULL};
+    for (int i = 0; taskNames[i] != NULL; i++) {
+        TaskHandle_t handle = xTaskGetHandle(taskNames[i]);
+        if (handle != NULL) {
+            UBaseType_t taskHwm = uxTaskGetStackHighWaterMark(handle);
+            LOG_INFO_F("[SystemMonitor] Task '%s' stack HWM: %u words (%u bytes free)\n",
+                       taskNames[i], taskHwm, taskHwm * sizeof(StackType_t));
+            if (taskHwm < 256) {
+                LOG_WARNING_F("[SystemMonitor] Task '%s' stack is low! HWM: %u words\n",
+                             taskNames[i], taskHwm);
+            }
+        }
+    }
+}
+
 void SystemMonitor::update() {
     forceResetWatchdog();
     checkSystemHealth();
+    checkStackHighWaterMarks();
     flushSerial();
 }
 

@@ -117,100 +117,52 @@ jobs:
         path: |
           ~/.arduino15
           ~/Arduino/libraries
-        key: ${{ runner.os }}-arduino-esp32-3.3.4-${{ hashFiles('**/*.ino', '**/*.cpp', '**/*.h') }}
+        key: ${{ runner.os }}-arduino-esp32-3.3.7-${{ hashFiles('**/*.ino', '**/*.cpp', '**/*.h') }}
         restore-keys: |
-          ${{ runner.os }}-arduino-esp32-3.3.4-
+          ${{ runner.os }}-arduino-esp32-3.3.7-
           ${{ runner.os }}-arduino-
     
     - name: Install ESP32 core
       run: |
-        if [ ! -d ~/.arduino15/packages/esp32 ]; then
-          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli core install esp32:esp32@3.3.4 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+        arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+        INSTALLED_CORE=$(arduino-cli core list | grep "esp32:esp32" | awk '{print $2}')
+        if [ "$INSTALLED_CORE" = "3.3.7" ]; then
+          echo "✅ ESP32 core 3.3.7 already installed"
         else
-          echo "✅ ESP32 core already installed (cached)"
+          echo "⚠️ Installing ESP32 core 3.3.7 (was: $INSTALLED_CORE)"
+          arduino-cli core install esp32:esp32@3.3.7 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
         fi
-    
+
     - name: Install required libraries
       run: |
-        # Check and install GFX Library for Arduino 1.6.0
-        if [ -d ~/Arduino/libraries/GFX_Library_for_Arduino ]; then
-          INSTALLED_VERSION=$(arduino-cli lib list | grep "GFX Library for Arduino" | awk '{print $2}')
-          if [ "$INSTALLED_VERSION" = "1.6.0" ]; then
-            echo "✅ GFX Library for Arduino 1.6.0 already installed (cached)"
-          else
-            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 1.6.0"
-            arduino-cli lib install "GFX Library for Arduino@1.6.0"
+        # Update library index to ensure latest versions are available
+        arduino-cli lib update-index
+
+        # Helper function to install a library if not already at the desired version
+        install_lib() {
+          local name="$1"
+          local version="$2"
+          local dir_name="$3"
+
+          if [ -d ~/Arduino/libraries/"$dir_name" ]; then
+            INSTALLED=$(grep "^version=" ~/Arduino/libraries/"$dir_name"/library.properties 2>/dev/null | cut -d= -f2)
+            if [ "$INSTALLED" = "$version" ]; then
+              echo "✅ $name $version already installed"
+              return
+            fi
+            echo "⚠️ $name: installed=$INSTALLED, need=$version — upgrading"
+            rm -rf ~/Arduino/libraries/"$dir_name"
           fi
-        else
-          arduino-cli lib install "GFX Library for Arduino@1.6.0"
-        fi
-        
-        # Check and install JPEGDEC 1.8.2
-        if [ -d ~/Arduino/libraries/JPEGDEC ]; then
-          INSTALLED_VERSION=$(arduino-cli lib list | grep "JPEGDEC" | awk '{print $2}')
-          if [ "$INSTALLED_VERSION" = "1.8.2" ]; then
-            echo "✅ JPEGDEC 1.8.2 already installed (cached)"
-          else
-            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 1.8.2"
-            arduino-cli lib install "JPEGDEC@1.8.2"
-          fi
-        else
-          arduino-cli lib install "JPEGDEC@1.8.2"
-        fi
-        
-        # Check and install PubSubClient 2.8
-        if [ -d ~/Arduino/libraries/PubSubClient ]; then
-          INSTALLED_VERSION=$(arduino-cli lib list | grep "PubSubClient" | awk '{print $2}')
-          if [ "$INSTALLED_VERSION" = "2.8" ] || [ "$INSTALLED_VERSION" = "2.8.0" ]; then
-            echo "✅ PubSubClient 2.8 already installed (cached)"
-          else
-            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 2.8"
-            arduino-cli lib install "PubSubClient@2.8"
-          fi
-        else
-          arduino-cli lib install "PubSubClient@2.8"
-        fi
-        
-        # Check and install ElegantOTA 3.1.7
-        if [ -d ~/Arduino/libraries/ElegantOTA ]; then
-          INSTALLED_VERSION=$(arduino-cli lib list | grep "ElegantOTA" | awk '{print $2}')
-          if [ "$INSTALLED_VERSION" = "3.1.7" ]; then
-            echo "✅ ElegantOTA 3.1.7 already installed (cached)"
-          else
-            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 3.1.7"
-            arduino-cli lib install "ElegantOTA@3.1.7"
-          fi
-        else
-          arduino-cli lib install "ElegantOTA@3.1.7"
-        fi
-        
-        # Check and install WebSockets 2.7.1
-        if [ -d ~/Arduino/libraries/WebSockets ]; then
-          INSTALLED_VERSION=$(arduino-cli lib list | grep "WebSockets" | awk '{print $2}')
-          if [ "$INSTALLED_VERSION" = "2.7.1" ]; then
-            echo "✅ WebSockets 2.7.1 already installed (cached)"
-          else
-            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 2.7.1"
-            arduino-cli lib install "WebSockets@2.7.1"
-          fi
-        else
-          arduino-cli lib install "WebSockets@2.7.1"
-        fi
-        
-        # Check and install ArduinoJson 7.2.1
-        if [ -d ~/Arduino/libraries/ArduinoJson ]; then
-          INSTALLED_VERSION=$(arduino-cli lib list | grep "ArduinoJson" | awk '{print $2}')
-          if [ "$INSTALLED_VERSION" = "7.2.1" ]; then
-            echo "✅ ArduinoJson 7.2.1 already installed (cached)"
-          else
-            echo "⚠️ Wrong version ($INSTALLED_VERSION), installing 7.2.1"
-            arduino-cli lib install "ArduinoJson@7.2.1"
-          fi
-        else
-          arduino-cli lib install "ArduinoJson@7.2.1"
-        fi
-        
+          arduino-cli lib install "$name@$version"
+        }
+
+        install_lib "GFX Library for Arduino" "1.6.5" "GFX_Library_for_Arduino"
+        install_lib "JPEGDEC"                 "1.8.4" "JPEGDEC"
+        install_lib "PubSubClient"            "2.8"   "PubSubClient"
+        install_lib "ElegantOTA"              "3.1.7" "ElegantOTA"
+        install_lib "WebSockets"              "2.7.2" "WebSockets"
+        install_lib "ArduinoJson"             "7.4.3" "ArduinoJson"
+
         # Verify installed versions
         echo ""
         echo "📦 Final installed library versions:"
@@ -497,7 +449,7 @@ jobs:
         FACTORY_BIN="${BASE_NAME}-Factory.bin"
         
         # 1. Handle OTA Binary (Application Only)
-        APP_BIN=$(find ./build -name "ESP32-P4-Allsky-Display.ino.bin" -type f)
+        APP_BIN=$(find ./build -name "ESP32-P4-Allsky-Display.ino.bin" -type f | head -n 1)
         if [ -z "$APP_BIN" ]; then
           echo "❌ Error: App binary not found"
           exit 1

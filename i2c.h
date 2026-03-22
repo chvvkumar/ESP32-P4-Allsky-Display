@@ -38,20 +38,20 @@ typedef struct {
 
 /**
  * @brief Initialize the I2C master interface.
- * 
+ *
  * This function sets up the I2C master interface, including the SDA/SCL pins,
  * clock frequency, and device address.
- * 
- * @param Addr The I2C address of the device to initialize.
- * @return A handle to the I2C device if initialization is successful, NULL if failure.
+ *
+ * @return A DEV_I2C_Port with bus/dev handles. Check bus != NULL for success.
  */
 DEV_I2C_Port DEV_I2C_Init();
 
 /**
  * @brief Set a new I2C slave address for the device.
- * 
+ *
  * This function allows you to change the slave address of an I2C device during runtime.
- * 
+ * It removes the old device before adding the new one to prevent handle leaks.
+ *
  * @param dev_handle The handle to the I2C device.
  * @param Addr The new I2C address to set for the device.
  */
@@ -59,58 +59,63 @@ void DEV_I2C_Set_Slave_Addr(i2c_master_dev_handle_t *dev_handle, uint8_t Addr);
 
 /**
  * @brief Write a single byte to the I2C device.
- * 
+ *
  * This function sends a command byte and a data byte to the I2C device.
- * 
+ *
  * @param dev_handle The handle to the I2C device.
  * @param Cmd The command byte to send to the device.
  * @param value The value byte to send to the device.
+ * @return ESP_OK on success, or an error code on failure.
  */
-void DEV_I2C_Write_Byte(i2c_master_dev_handle_t dev_handle, uint8_t Cmd, uint8_t value);
+esp_err_t DEV_I2C_Write_Byte(i2c_master_dev_handle_t dev_handle, uint8_t Cmd, uint8_t value);
 
 /**
  * @brief Read a single byte from the I2C device.
- * 
+ *
  * This function reads one byte of data from the I2C device.
- * 
+ *
  * @param dev_handle The handle to the I2C device.
- * @return The byte read from the I2C device.
+ * @param out Pointer to store the byte read from the I2C device.
+ * @return ESP_OK on success, or an error code on failure.
  */
-uint8_t DEV_I2C_Read_Byte(i2c_master_dev_handle_t dev_handle);
+esp_err_t DEV_I2C_Read_Byte(i2c_master_dev_handle_t dev_handle, uint8_t *out);
 
 /**
  * @brief Read a word (2 bytes) from the I2C device.
- * 
+ *
  * This function sends a command byte and reads two bytes from the I2C device.
  * It combines the two bytes into a 16-bit word.
- * 
+ *
  * @param dev_handle The handle to the I2C device.
  * @param Cmd The command byte to send.
- * @return The 16-bit word read from the device.
+ * @param out Pointer to store the 16-bit word read from the device.
+ * @return ESP_OK on success, or an error code on failure.
  */
-uint16_t DEV_I2C_Read_Word(i2c_master_dev_handle_t dev_handle, uint8_t Cmd);
+esp_err_t DEV_I2C_Read_Word(i2c_master_dev_handle_t dev_handle, uint8_t Cmd, uint16_t *out);
 
 /**
  * @brief Write multiple bytes to the I2C device.
- * 
+ *
  * This function sends a block of data (multiple bytes) to the I2C device.
- * 
+ *
  * @param dev_handle The handle to the I2C device.
  * @param pdata A pointer to the data to write.
  * @param len The number of bytes to write.
+ * @return ESP_OK on success, or an error code on failure.
  */
-void DEV_I2C_Write_Nbyte(i2c_master_dev_handle_t dev_handle, uint8_t *pdata, uint8_t len);
+esp_err_t DEV_I2C_Write_Nbyte(i2c_master_dev_handle_t dev_handle, uint8_t *pdata, uint8_t len);
 
 /**
  * @brief Read multiple bytes from the I2C device.
- * 
+ *
  * This function sends a command byte and reads multiple bytes from the I2C device.
- * 
+ *
  * @param dev_handle The handle to the I2C device.
  * @param Cmd The command byte to send.
  * @param pdata A pointer to the buffer to store the received data.
  * @param len The number of bytes to read.
+ * @return ESP_OK on success, or an error code on failure.
  */
-void DEV_I2C_Read_Nbyte(i2c_master_dev_handle_t dev_handle, uint8_t Cmd, uint8_t *pdata, uint8_t len);
+esp_err_t DEV_I2C_Read_Nbyte(i2c_master_dev_handle_t dev_handle, uint8_t Cmd, uint8_t *pdata, uint8_t len);
 
 #endif // I2C_H

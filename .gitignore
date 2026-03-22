@@ -157,6 +157,12 @@ coverage.xml
 # Custom project specific ignores
 # Add any project-specific files you want to ignore below
 
+# Claude Code local settings
+.claude/
+
+# Implementation plans (local development only)
+docs/plans/
+
 # AI conversation context documentation
 CONVERSATION_CONTEXT.md
 

@@ -6,6 +6,9 @@
 #include <PubSubClient.h>
 #include "config_storage.h"
 
+// Total number of discovery entity steps
+#define HA_DISCOVERY_TOTAL_STEPS 28
+
 class HADiscovery {
 private:
     PubSubClient* mqttClient;
@@ -13,12 +16,18 @@ private:
     String baseTopic; // Base topic for all device entities
     unsigned long lastSensorUpdate;
     unsigned long lastSensorPublish;
-    
+
+    // Non-blocking discovery state machine
+    int _discoveryStep;                    // Current step in discovery sequence
+    bool _discoveryInProgress;             // Whether discovery is actively publishing
+    unsigned long _lastDiscoveryPublish;   // Rate-limit timer for discovery publishes
+    bool _discoveryFailed;                 // Track if any step failed
+
     // Cached topic strings to prevent memory leaks from repeated String concatenation
     String cachedAvailabilityTopic;
     String cachedCommandTopicFilter;
     String cachedAttributesTopic;
-    
+
     // Helper methods for discovery message generation
     String getDeviceId();
     String getBaseTopic();
@@ -26,10 +35,10 @@ private:
     String buildStateTopic(const char* entity = nullptr);
     String buildCommandTopic(const char* entity);
     String buildAttributesTopic();
-    
+
     // Device information JSON
     String getDeviceJson();
-    
+
     // Discovery message builders for each entity type
     bool publishLightDiscovery();
     bool publishSwitchDiscovery(const char* entityId, const char* name, const char* icon);
@@ -38,36 +47,45 @@ private:
     bool publishButtonDiscovery(const char* entityId, const char* name, const char* icon);
     bool publishSensorDiscovery(const char* entityId, const char* name, const char* unit, const char* deviceClass, const char* icon);
 
+    // Non-blocking discovery: publish one step per call
+    bool publishDiscoveryStep(int step);
+
 public:
     HADiscovery();
-    
+
     // Initialize with MQTT client
     void begin(PubSubClient* client);
-    
-    // Publish all discovery messages
-    bool publishDiscovery();
-    
+
+    // Start non-blocking discovery publishing (returns immediately)
+    bool startDiscovery();
+
+    // Check if discovery is currently in progress
+    bool isDiscoveryInProgress() const { return _discoveryInProgress; }
+
+    // Check if discovery completed successfully
+    bool isDiscoveryComplete() const { return !_discoveryInProgress && _discoveryStep >= HA_DISCOVERY_TOTAL_STEPS; }
+
     // Publish availability status
     bool publishAvailability(bool online);
-    
+
     // Publish device state (all entities)
     bool publishState();
-    
+
     // Publish sensor updates only
     bool publishSensors();
-    
-    // Update loop - call regularly to publish sensor updates
+
+    // Update loop - call regularly to publish sensor updates and advance discovery
     void update();
-    
+
     // Get last sensor publish time
     unsigned long getLastSensorPublish() const { return lastSensorPublish; }
-    
+
     // Handle incoming command messages
     void handleCommand(const String& topic, const String& payload);
-    
+
     // Get the base command topic for subscription
     String getCommandTopicFilter();
-    
+
     // Get the availability topic
     String getAvailabilityTopic();
 };

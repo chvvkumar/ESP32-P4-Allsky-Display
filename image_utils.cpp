@@ -93,16 +93,21 @@ bool ImageUtils::bilinearScale(
     const uint16_t* srcBuffer, int srcWidth, int srcHeight,
     uint16_t* dstBuffer, int dstWidth, int dstHeight
 ) {
-    // Calculate scaling ratios
-    float xRatio = (float)(srcWidth - 1) / dstWidth;
-    float yRatio = (float)(srcHeight - 1) / dstHeight;
-    
-    Serial.printf("[ImageUtils] Scale ratios: X=%.3f, Y=%.3f\n", xRatio, yRatio);
-    
+    // 16.16 fixed-point arithmetic for ~2-4x speedup over float on RISC-V
+    static constexpr int FP_SHIFT = 16;
+    static constexpr uint32_t FP_ONE = 1u << FP_SHIFT;
+    static constexpr uint32_t FP_MASK = FP_ONE - 1;
+
+    // Calculate scaling ratios in 16.16 fixed-point
+    uint32_t xRatio_fp = ((uint32_t)(srcWidth - 1) << FP_SHIFT) / dstWidth;
+    uint32_t yRatio_fp = ((uint32_t)(srcHeight - 1) << FP_SHIFT) / dstHeight;
+
+    Serial.printf("[ImageUtils] Scale ratios (fixed-point): X=0x%08X, Y=0x%08X\n", xRatio_fp, yRatio_fp);
+
     unsigned long startTime = millis();
     int pixelsProcessed = 0;
     unsigned long lastWatchdogReset = millis();
-    
+
     // Process each destination pixel
     for (int dstY = 0; dstY < dstHeight; dstY++) {
         // Reset watchdog periodically during long operations
@@ -110,59 +115,72 @@ bool ImageUtils::bilinearScale(
             systemMonitor.forceResetWatchdog();
             lastWatchdogReset = millis();
         }
-        
+
+        uint32_t srcY_fp = (uint32_t)dstY * yRatio_fp;
+        int y0 = srcY_fp >> FP_SHIFT;
+        uint32_t yFrac = srcY_fp & FP_MASK;
+        uint32_t yFracInv = FP_ONE - yFrac;
+        int y1 = (y0 + 1 < srcHeight) ? y0 + 1 : y0;
+
+        const uint16_t* srcRow0 = srcBuffer + y0 * srcWidth;
+        const uint16_t* srcRow1 = srcBuffer + y1 * srcWidth;
+
         for (int dstX = 0; dstX < dstWidth; dstX++) {
-            // Map destination coordinates to source coordinates
-            float srcX = dstX * xRatio;
-            float srcY = dstY * yRatio;
-            
-            // Get integer and fractional parts
-            int x0 = (int)srcX;
-            int y0 = (int)srcY;
+            uint32_t srcX_fp = (uint32_t)dstX * xRatio_fp;
+            int x0 = srcX_fp >> FP_SHIFT;
+            uint32_t xFrac = srcX_fp & FP_MASK;
+            uint32_t xFracInv = FP_ONE - xFrac;
             int x1 = (x0 + 1 < srcWidth) ? x0 + 1 : x0;
-            int y1 = (y0 + 1 < srcHeight) ? y0 + 1 : y0;
-            
-            float xFrac = srcX - x0;
-            float yFrac = srcY - y0;
-            
+
             // Get the four surrounding pixels
-            uint16_t p00 = srcBuffer[y0 * srcWidth + x0];
-            uint16_t p10 = srcBuffer[y0 * srcWidth + x1];
-            uint16_t p01 = srcBuffer[y1 * srcWidth + x0];
-            uint16_t p11 = srcBuffer[y1 * srcWidth + x1];
-            
-            // Extract RGB components for all four pixels
-            uint8_t r00, g00, b00, r10, g10, b10, r01, g01, b01, r11, g11, b11;
-            rgb565ToRgb(p00, r00, g00, b00);
-            rgb565ToRgb(p10, r10, g10, b10);
-            rgb565ToRgb(p01, r01, g01, b01);
-            rgb565ToRgb(p11, r11, g11, b11);
-            
-            // Bilinear interpolation for each channel
-            // Top row interpolation
-            float r0 = r00 * (1 - xFrac) + r10 * xFrac;
-            float g0 = g00 * (1 - xFrac) + g10 * xFrac;
-            float b0 = b00 * (1 - xFrac) + b10 * xFrac;
-            
-            // Bottom row interpolation
-            float r1 = r01 * (1 - xFrac) + r11 * xFrac;
-            float g1 = g01 * (1 - xFrac) + g11 * xFrac;
-            float b1 = b01 * (1 - xFrac) + b11 * xFrac;
-            
-            // Vertical interpolation
-            uint8_t r = (uint8_t)(r0 * (1 - yFrac) + r1 * yFrac);
-            uint8_t g = (uint8_t)(g0 * (1 - yFrac) + g1 * yFrac);
-            uint8_t b = (uint8_t)(b0 * (1 - yFrac) + b1 * yFrac);
-            
-            // Pack and store result
-            dstBuffer[dstY * dstWidth + dstX] = rgbToRgb565(r, g, b);
+            uint16_t p00 = srcRow0[x0];
+            uint16_t p10 = srcRow0[x1];
+            uint16_t p01 = srcRow1[x0];
+            uint16_t p11 = srcRow1[x1];
+
+            // Extract RGB565 components inline
+            uint32_t r00 = (p00 >> 11) & 0x1F;
+            uint32_t g00 = (p00 >> 5) & 0x3F;
+            uint32_t b00 = p00 & 0x1F;
+
+            uint32_t r10 = (p10 >> 11) & 0x1F;
+            uint32_t g10 = (p10 >> 5) & 0x3F;
+            uint32_t b10 = p10 & 0x1F;
+
+            uint32_t r01 = (p01 >> 11) & 0x1F;
+            uint32_t g01 = (p01 >> 5) & 0x3F;
+            uint32_t b01 = p01 & 0x1F;
+
+            uint32_t r11 = (p11 >> 11) & 0x1F;
+            uint32_t g11 = (p11 >> 5) & 0x3F;
+            uint32_t b11 = p11 & 0x1F;
+
+            // Bilinear interpolation using fixed-point (all in 16.16)
+            // Top row: lerp(p00, p10, xFrac)
+            uint32_t r0 = r00 * xFracInv + r10 * xFrac;
+            uint32_t g0 = g00 * xFracInv + g10 * xFrac;
+            uint32_t b0 = b00 * xFracInv + b10 * xFrac;
+
+            // Bottom row: lerp(p01, p11, xFrac)
+            uint32_t r1 = r01 * xFracInv + r11 * xFrac;
+            uint32_t g1 = g01 * xFracInv + g11 * xFrac;
+            uint32_t b1 = b01 * xFracInv + b11 * xFrac;
+
+            // Vertical: lerp(row0, row1, yFrac) - result is in 32.16 after two multiplies
+            // r0/g0/b0 are already in 5.16 (or 6.16 for green), shift down by 2*FP_SHIFT
+            uint32_t r = (r0 * yFracInv + r1 * yFrac) >> (2 * FP_SHIFT);
+            uint32_t g = (g0 * yFracInv + g1 * yFrac) >> (2 * FP_SHIFT);
+            uint32_t b = (b0 * yFracInv + b1 * yFrac) >> (2 * FP_SHIFT);
+
+            // Pack RGB565 and store
+            dstBuffer[dstY * dstWidth + dstX] = ((r & 0x1F) << 11) | ((g & 0x3F) << 5) | (b & 0x1F);
             pixelsProcessed++;
         }
     }
-    
+
     unsigned long duration = millis() - startTime;
-    Serial.printf("[ImageUtils] ✓ Software scaling complete: %d pixels in %lu ms (%.1f ms/Kpixel)\n",
+    Serial.printf("[ImageUtils] Software scaling complete: %d pixels in %lu ms (%.1f ms/Kpixel)\n",
                  pixelsProcessed, duration, (duration * 1000.0) / pixelsProcessed);
-    
+
     return true;
 }
