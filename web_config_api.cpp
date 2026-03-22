@@ -48,11 +48,13 @@ void WebConfig::handleSaveConfig() {
             configStorage.setWiFiSSID(value);
         }
         else if (name == "wifi_password") {
-            if (configStorage.getWiFiPassword() != value) {
-                LOG_INFO("[WebAPI] WiFi password updated (value hidden for security) - restart required");
-                needsRestart = true;
+            if (value.length() > 0) {  // Skip empty values (placeholder pattern)
+                if (configStorage.getWiFiPassword() != value) {
+                    LOG_INFO("[WebAPI] WiFi password updated (value hidden for security) - restart required");
+                    needsRestart = true;
+                }
+                configStorage.setWiFiPassword(value);
             }
-            configStorage.setWiFiPassword(value);
         }
         
         // MQTT settings
@@ -75,8 +77,10 @@ void WebConfig::handleSaveConfig() {
             configStorage.setMQTTUser(value);
         }
         else if (name == "mqtt_password") {
-            LOG_DEBUG("[WebAPI] MQTT password updated (value hidden for security)");
-            configStorage.setMQTTPassword(value);
+            if (value.length() > 0) {  // Skip empty values (placeholder pattern)
+                LOG_DEBUG("[WebAPI] MQTT password updated (value hidden for security)");
+                configStorage.setMQTTPassword(value);
+            }
         }
         else if (name == "mqtt_client_id") configStorage.setMQTTClientID(value);
         
@@ -284,14 +288,14 @@ void WebConfig::handleSaveConfig() {
     // Switch images immediately when mode changes
     if (modeChanged) {
         extern void advanceToNextImage();
-        extern void downloadAndDisplayImage();
+        extern volatile bool imageDownloadPending;
         extern unsigned long lastUpdate;
         extern unsigned long lastCycleTime;
         extern bool cyclingEnabled;
-        
+
         // Update the global cycling state
         cyclingEnabled = nowCycling;
-        
+
         if (nowCycling) {
             // Switched to multi-image mode: reset to first image (index 0)
             Serial.println("[Mode] Switched to CYCLING mode (multi-image)");
@@ -306,10 +310,10 @@ void WebConfig::handleSaveConfig() {
             Serial.println("[Mode] Switched to SINGLE IMAGE mode");
             displayManager.debugPrint("Mode: SINGLE IMAGE", COLOR_CYAN);
         }
-        
-        // Force immediate download
+
+        // Queue async image download
         lastUpdate = 0;
-        downloadAndDisplayImage();
+        imageDownloadPending = true;
     }
     
     // Consolidate restart requirement
@@ -381,6 +385,10 @@ void WebConfig::handleRemoveImageSource() {
 void WebConfig::handleUpdateImageSource() {
     if (server->hasArg("index") && server->hasArg("url")) {
         int index = server->arg("index").toInt();
+        if (index < 0 || index >= configStorage.getImageSourceCount()) {
+            sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+            return;
+        }
         String url = server->arg("url");
         LOG_INFO_F("[WebAPI] Updating image source %d to: %s\n", index, url.c_str());
         configStorage.setImageSource(index, url);
@@ -497,36 +505,40 @@ void WebConfig::handleBulkDeleteImageSources() {
 void WebConfig::handleNextImage() {
     extern void advanceToNextImage();
     extern void updateCyclingVariables();
-    extern void downloadAndDisplayImage();
+    extern volatile bool imageDownloadPending;
     extern unsigned long lastUpdate;
     extern unsigned long lastCycleTime;
-    
+
     LOG_INFO("[WebAPI] Next image requested via web interface");
     updateCyclingVariables();
     advanceToNextImage();
     lastCycleTime = millis(); // Reset cycle timer for fresh interval
     lastUpdate = 0; // Force immediate image download
-    downloadAndDisplayImage();
-    LOG_DEBUG("[WebAPI] Image advance completed");
-    
-    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Switched to next image and refreshed display\"}");
+    imageDownloadPending = true;
+    LOG_DEBUG("[WebAPI] Image advance queued");
+
+    sendResponse(200, "application/json", "{\"status\":\"queued\",\"message\":\"Image download queued\"}");
 }
 
 void WebConfig::handleForceRefresh() {
-    extern void downloadAndDisplayImage();
+    extern volatile bool imageDownloadPending;
     extern unsigned long lastUpdate;
-    
+
     LOG_INFO("[WebAPI] Force refresh requested via web interface - redownloading current image");
     lastUpdate = 0; // Force immediate image download
-    downloadAndDisplayImage();
-    LOG_DEBUG("[WebAPI] Image refresh completed");
-    
-    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Current image refreshed\"}");
+    imageDownloadPending = true;
+    LOG_DEBUG("[WebAPI] Image refresh queued");
+
+    sendResponse(200, "application/json", "{\"status\":\"queued\",\"message\":\"Image download queued\"}");
 }
 
 void WebConfig::handleUpdateImageTransform() {
     if (server->hasArg("index") && server->hasArg("property") && server->hasArg("value")) {
         int index = server->arg("index").toInt();
+        if (index < 0 || index >= configStorage.getImageSourceCount()) {
+            sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+            return;
+        }
         String property = server->arg("property");
         String value = server->arg("value");
         
@@ -580,7 +592,11 @@ void WebConfig::handleUpdateImageTransform() {
 void WebConfig::handleCopyDefaultsToImage() {
     if (server->hasArg("index")) {
         int index = server->arg("index").toInt();
-        
+        if (index < 0 || index >= configStorage.getImageSourceCount()) {
+            sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+            return;
+        }
+
         configStorage.copyDefaultsToImageTransform(index);
         configStorage.saveConfig();
         
@@ -609,7 +625,11 @@ void WebConfig::handleCopyDefaultsToImage() {
 void WebConfig::handleApplyTransform() {
     if (server->hasArg("index")) {
         int index = server->arg("index").toInt();
-        
+        if (index < 0 || index >= configStorage.getImageSourceCount()) {
+            sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+            return;
+        }
+
         // Keep editing session active when applying transforms
         extern bool cyclingPausedForEditing;
         extern unsigned long lastEditActivity;
@@ -620,9 +640,9 @@ void WebConfig::handleApplyTransform() {
         if (index != currentIndex) {
             configStorage.setCurrentImageIndex(index);
             configStorage.saveConfig();
-            
-            extern void downloadAndDisplayImage();
-            downloadAndDisplayImage();
+
+            extern volatile bool imageDownloadPending;
+            imageDownloadPending = true;
         } else {
             extern float scaleX, scaleY;
             extern int16_t offsetX, offsetY;
@@ -694,11 +714,11 @@ void WebConfig::handleToggleImageEnabled() {
         LOG_INFO("[WebAPI] Image switch flag set, will download new image");
     }
     
-    // Trigger image download and display if we switched
+    // Trigger async image download if we switched
     if (shouldSwitchImage) {
-        LOG_INFO("[WebAPI] Triggering downloadAndDisplayImage()");
-        extern void downloadAndDisplayImage();
-        downloadAndDisplayImage();
+        LOG_INFO("[WebAPI] Queuing image download for switched image");
+        extern volatile bool imageDownloadPending;
+        imageDownloadPending = true;
     }
     
     String response = "{\"status\":\"success\",\"enabled\":" + String(newState ? "true" : "false") + 
@@ -739,9 +759,9 @@ void WebConfig::handleSelectImage() {
     extern void updateCurrentImageTransformSettings();
     updateCurrentImageTransformSettings();
     
-    extern void downloadAndDisplayImage();
-    downloadAndDisplayImage();
-    
+    extern volatile bool imageDownloadPending;
+    imageDownloadPending = true;
+
     sendResponse(200, "application/json", "{\"status\":\"success\",\"index\":" + String(index) + "}");
 }
 
