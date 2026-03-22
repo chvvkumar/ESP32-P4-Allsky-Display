@@ -1823,7 +1823,10 @@ void loop() {
     }
     
     // Process background retry tasks (handles network, MQTT, and image download failures)
-    taskRetryHandler.process();
+    // Skip during OTA to free network bandwidth and reduce PSRAM contention
+    if (!webConfig.isOTAInProgress()) {
+        taskRetryHandler.process();
+    }
     systemMonitor.forceResetWatchdog();
     
     // Handle web server first for maximum responsiveness
@@ -1889,8 +1892,8 @@ void loop() {
             if (webHandleTime > 5000) {
                 Serial.printf("WARNING: Web client handling took %lu ms\n", webHandleTime);
             }
-        } else {
-            // Try to start web server if not running
+        } else if (!webConfig.isOTAInProgress()) {
+            // Try to start web server if not running (skip during OTA)
             Serial.println("DEBUG: Web server not running, attempting to restart...");
             systemMonitor.forceResetWatchdog();  // Reset before webConfig.begin
             if (webConfig.begin(8080)) {
@@ -1904,19 +1907,20 @@ void loop() {
     }
     
     // Update MQTT manager (connect to MQTT after WiFi is established) with protection
-    if (wifiManager.isConnected()) {
+    // Skip during OTA to free network bandwidth
+    if (wifiManager.isConnected() && !webConfig.isOTAInProgress()) {
         unsigned long mqttStartTime = millis();
         mqttManager.update();
-        
+
         // Check if MQTT update took too long
         if (millis() - mqttStartTime > 2000) {
             Serial.printf("WARNING: MQTT update took %lu ms\n", millis() - mqttStartTime);
         }
         systemMonitor.forceResetWatchdog();
     }
-    
-    // Handle WebSocket events
-    if (wifiManager.isConnected() && webConfig.isRunning()) {
+
+    // Handle WebSocket events — skip during OTA to free network bandwidth
+    if (wifiManager.isConnected() && webConfig.isRunning() && !webConfig.isOTAInProgress()) {
         webConfig.loopWebSocket();
     }
     
@@ -2016,8 +2020,9 @@ void loop() {
     }
     
     // Only auto-cycle if in automatic mode, not paused, and multiple images available
+    // Skip during OTA — no point cycling images while firmware is being written
     int imageUpdateMode = cachedImageUpdateMode;
-    if (imageUpdateMode == 0 && cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode && !cyclingPausedForEditing) {
+    if (imageUpdateMode == 0 && cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode && !cyclingPausedForEditing && !webConfig.isOTAInProgress()) {
         // Use per-image duration instead of global cycle interval (from cached NVS value)
         unsigned long currentImageDuration = cachedImageDuration * 1000;  // Convert seconds to milliseconds
         if (currentTime - lastCycleTime >= currentImageDuration || lastCycleTime == 0) {

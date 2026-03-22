@@ -30,8 +30,14 @@ WiFiManager::WiFiManager() :
     ntpRetries(0),
     debugPrintFunc(nullptr),
     debugPrintfFunc(nullptr),
-    firstImageLoaded(false)
+    firstImageLoaded(false),
+    roamScanPending(false),
+    roamInProgress(false),
+    lastRoamScanTime(0),
+    roamStartTime(0),
+    roamTargetChannel(0)
 {
+    memset(roamTargetBSSID, 0, sizeof(roamTargetBSSID));
 }
 
 bool WiFiManager::begin() {
@@ -166,11 +172,135 @@ void WiFiManager::setDebugFunctions(void (*debugPrint)(const char*, uint16_t),
     }
 }
 
+void WiFiManager::checkForBetterAP() {
+    unsigned long now = millis();
+
+    // --- State: Roam in progress (polling reconnection to target AP) ---
+    if (roamInProgress) {
+        if (WiFi.status() == WL_CONNECTED) {
+            // Roam succeeded
+            roamInProgress = false;
+            wifiConnected = true;
+            LOG_INFO_F("[WiFi] Roam successful - connected to %s (RSSI: %d dBm, ch: %d) in %lu ms\n",
+                       WiFi.BSSIDstr().c_str(), WiFi.RSSI(), WiFi.channel(),
+                       now - roamStartTime);
+            DeviceHealthAnalyzer::recordRoam();
+            syncNTPTime();
+        } else if (now - roamStartTime > WIFI_MAX_WAIT_TIME) {
+            // Roam timed out — fall back to normal reconnection
+            LOG_WARNING_F("[WiFi] Roam failed (timeout after %lu ms) - falling back to auto-connect\n",
+                          now - roamStartTime);
+            roamInProgress = false;
+            wifiConnected = false;
+            WiFi.disconnect();
+            // Next update() cycle will call connectToWiFi() without BSSID lock
+        } else if (WiFi.status() == WL_CONNECT_FAILED || WiFi.status() == WL_NO_SSID_AVAIL) {
+            LOG_WARNING_F("[WiFi] Roam failed (status: %d) - falling back to auto-connect\n",
+                          WiFi.status());
+            roamInProgress = false;
+            wifiConnected = false;
+            WiFi.disconnect();
+        }
+        return;
+    }
+
+    // Don't start roam logic if not connected or if NTP sync is in progress
+    if (!isConnected() || ntpSyncInProgress) {
+        return;
+    }
+
+    // --- State: Scan pending (poll for async scan completion) ---
+    if (roamScanPending) {
+        int scanResult = WiFi.scanComplete();
+
+        if (scanResult == WIFI_SCAN_RUNNING) {
+            return;  // Still scanning
+        }
+
+        roamScanPending = false;
+
+        if (scanResult == WIFI_SCAN_FAILED || scanResult < 0) {
+            LOG_WARNING("[WiFi] Roam scan failed");
+            WiFi.scanDelete();
+            return;
+        }
+
+        // Get current connection info for comparison
+        int currentRSSI = WiFi.RSSI();
+        String currentBSSID = WiFi.BSSIDstr();
+        String currentSSID = String(WIFI_SSID);
+
+        // Find the strongest AP with the same SSID but different BSSID
+        int bestIndex = -1;
+        int bestRSSI = currentRSSI;
+
+        for (int i = 0; i < scanResult; i++) {
+            String scanSSID = WiFi.SSID(i);
+            String scanBSSID = WiFi.BSSIDstr(i);
+            int scanRSSI = WiFi.RSSI(i);
+
+            if (scanSSID == currentSSID && scanBSSID != currentBSSID) {
+                if (scanRSSI > bestRSSI + WIFI_ROAM_RSSI_THRESHOLD) {
+                    bestRSSI = scanRSSI;
+                    bestIndex = i;
+                }
+            }
+        }
+
+        if (bestIndex >= 0) {
+            // Found a significantly stronger AP — initiate roam
+            LOG_INFO_F("[WiFi] Roaming from %s (%d dBm) to %s (%d dBm, ch: %d)\n",
+                       currentBSSID.c_str(), currentRSSI,
+                       WiFi.BSSIDstr(bestIndex).c_str(), bestRSSI, WiFi.channel(bestIndex));
+
+            // Save target BSSID and channel before scanDelete clears them
+            memcpy(roamTargetBSSID, WiFi.BSSID(bestIndex), 6);
+            roamTargetChannel = WiFi.channel(bestIndex);
+
+            WiFi.scanDelete();
+
+            // Disconnect and reconnect to the stronger AP
+            WiFi.disconnect();
+            roamInProgress = true;
+            roamStartTime = now;
+            WiFi.begin(WIFI_SSID, WIFI_PASSWORD, roamTargetChannel, roamTargetBSSID);
+        } else {
+            LOG_DEBUG_F("[WiFi] Roam scan: no better AP found (current: %s, %d dBm, %d candidates)\n",
+                        currentBSSID.c_str(), currentRSSI, scanResult);
+            WiFi.scanDelete();
+        }
+
+        return;
+    }
+
+    // --- State: Idle (check if it's time to start a new roam scan) ---
+    if (now - lastRoamScanTime >= WIFI_ROAM_CHECK_INTERVAL) {
+        // Don't start a scan if one is already running (e.g., web API scan)
+        if (WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+            return;
+        }
+
+        lastRoamScanTime = now;
+        roamScanPending = true;
+        DeviceHealthAnalyzer::recordRoamScan();
+        WiFi.scanNetworks(true, false);  // async=true, show_hidden=false
+        LOG_DEBUG("[WiFi] Roam scan started (async)");
+    }
+}
+
 void WiFiManager::update() {
+    // During a roam, skip checkConnection/connectToWiFi to prevent interference
+    if (roamInProgress) {
+        checkForBetterAP();  // Poll roam connection status
+        return;
+    }
+
     checkConnection();
 
-    // Attempt reconnection if disconnected (non-blocking)
-    if (!isConnected()) {
+    if (isConnected()) {
+        checkForBetterAP();  // Scan for better APs / evaluate results
+    } else {
+        // Attempt reconnection if disconnected (non-blocking)
         connectToWiFi();
     }
 
