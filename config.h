@@ -159,7 +159,7 @@ extern const bool DEFAULT_RANDOM_ORDER;
 // ASYNC DOWNLOAD TASK CONFIGURATION
 // =============================================================================
 
-#define DOWNLOAD_TASK_STACK_SIZE 8192    // Stack size for async download task
+#define DOWNLOAD_TASK_STACK_SIZE 16384   // Stack size for async download task (16KB for TLS)
 #define DOWNLOAD_TASK_PRIORITY 2         // Priority for download task (Core 0)
 
 // =============================================================================

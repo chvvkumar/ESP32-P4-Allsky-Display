@@ -76,7 +76,7 @@ void MQTTManager::connect() {
     } else {
         LOG_DEBUG("[MQTT] Connecting without authentication");
         connected = mqttClient.connect(clientId.c_str(), nullptr, nullptr,
-                                      availabilityTopic.c_str(), 0, true, "offline");
+                                      availabilityTopic.c_str(), 1, true, "offline");
     }
     
     // Reset watchdog after connection attempt
@@ -96,30 +96,16 @@ void MQTTManager::connect() {
         LOG_DEBUG("[MQTT] Publishing availability: online");
         haDiscovery.publishAvailability(true);
         
-        // Publish Home Assistant discovery if enabled
+        // Start non-blocking Home Assistant discovery if enabled
         if (configStorage.getHADiscoveryEnabled()) {
             esp_task_wdt_reset();
-            LOG_DEBUG("[MQTT] Home Assistant discovery enabled, publishing...");
-            
-            if (haDiscovery.publishDiscovery()) {
+            LOG_DEBUG("[MQTT] Home Assistant discovery enabled, starting non-blocking publish...");
+
+            if (haDiscovery.startDiscovery()) {
                 discoveryPublished = true;
-                LOG_DEBUG("[MQTT] ✓ HA discovery messages published");
-                
-                // Subscribe to command topic filter
-                String commandFilter = haDiscovery.getCommandTopicFilter();
-                LOG_DEBUG_F("[MQTT] Subscribing to HA commands: %s\n", commandFilter.c_str());
-                if (!mqttClient.subscribe(commandFilter.c_str())) {
-                    LOG_ERROR_F("[MQTT] ✗ FAILED to subscribe to HA command topics! MQTT state: %d\n", mqttClient.state());
-                } else {
-                    LOG_DEBUG("[MQTT] ✓ Subscribed to HA command topics");
-                }
-                
-                // Publish initial state
-                esp_task_wdt_reset();
-                LOG_DEBUG("[MQTT] Publishing initial state to HA");
-                haDiscovery.publishState();
+                LOG_DEBUG("[MQTT] HA discovery started (will complete over multiple update cycles)");
             } else {
-                LOG_WARNING("[MQTT] Failed to publish HA discovery");
+                LOG_WARNING("[MQTT] Failed to start HA discovery");
             }
         } else {
             LOG_DEBUG("[MQTT] HA discovery disabled in configuration");
@@ -193,8 +179,9 @@ void MQTTManager::loop() {
 }
 
 void MQTTManager::messageCallback(char* topic, byte* payload, unsigned int length) {
-    // Convert payload to string
-    String message = "";
+    // Convert payload to string using pre-allocated buffer to avoid O(n^2) concatenation
+    String message;
+    message.reserve(length);
     for (unsigned int i = 0; i < length; i++) {
         message += (char)payload[i];
     }

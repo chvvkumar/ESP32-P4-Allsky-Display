@@ -13,7 +13,11 @@ extern CrashLogger crashLogger;
 HADiscovery::HADiscovery() :
     mqttClient(nullptr),
     lastSensorUpdate(0),
-    lastSensorPublish(0)
+    lastSensorPublish(0),
+    _discoveryStep(0),
+    _discoveryInProgress(false),
+    _lastDiscoveryPublish(0),
+    _discoveryFailed(false)
 {
 }
 
@@ -217,94 +221,63 @@ bool HADiscovery::publishSensorDiscovery(const char* entityId, const char* name,
     return result;
 }
 
-bool HADiscovery::publishDiscovery() {
+bool HADiscovery::startDiscovery() {
     if (!mqttClient || !mqttClient->connected()) {
-        LOG_WARNING("[HA] Cannot publish discovery - MQTT not connected");
+        LOG_WARNING("[HA] Cannot start discovery - MQTT not connected");
         return false;
     }
-    
+
     if (!configStorage.getHADiscoveryEnabled()) {
         LOG_DEBUG("[HA] Discovery disabled in configuration");
         return false;
     }
-    
-    LOG_INFO("[HA] Publishing Home Assistant discovery messages");
-    
-    // Light entity (brightness)
-    if (!publishLightDiscovery()) {
-        LOG_ERROR("[HA] Failed to publish light discovery");
-        return false;
-    }
-    delay(50);
-    
-    // Switch entities
-    LOG_DEBUG("[HA] Publishing switch entities");
-    if (!publishSwitchDiscovery("cycling", "Cycling Enabled", "mdi:image-multiple")) return false;
-    delay(50);
-    if (!publishSwitchDiscovery("random_order", "Random Order", "mdi:shuffle")) return false;
-    delay(50);
-    if (!publishSwitchDiscovery("auto_brightness", "Auto Brightness", "mdi:brightness-auto")) return false;
-    delay(50);
-    
-    // Number entities
-    if (!publishNumberDiscovery("cycle_interval", "Cycle Interval", 10, 3600, 10, "s", "mdi:timer")) return false;
-    delay(50);
-    if (!publishNumberDiscovery("update_interval", "Update Interval", 10, 3600, 10, "s", "mdi:update")) return false;
-    delay(50);
-    
-    // Select entity (image source)
-    if (!publishSelectDiscovery()) return false;
-    delay(50);
-    
-    // Button entities
-    if (!publishButtonDiscovery("reboot", "Reboot", "mdi:restart")) return false;
-    delay(50);
-    if (!publishButtonDiscovery("next_image", "Next Image", "mdi:skip-next")) return false;
-    delay(50);
-    if (!publishButtonDiscovery("reset_transforms", "Reset Transforms", "mdi:restore")) return false;
-    delay(50);
-    
-    // Sensor entities
-    LOG_DEBUG("[HA] Publishing sensor entities");
-    if (!publishSensorDiscovery("current_image", "Current Image URL", "", "", "mdi:image")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("free_heap", "Free Heap", "KB", "", "mdi:memory")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("free_psram", "Free PSRAM", "KB", "", "mdi:memory")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("wifi_rssi", "WiFi Signal", "dBm", "signal_strength", "mdi:wifi")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("uptime", "Uptime", "s", "duration", "mdi:clock-outline")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("uptime_readable", "Uptime Readable", "", "", "mdi:clock-outline")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("image_count", "Image Count", "", "", "mdi:counter")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("current_image_index", "Current Image Index", "", "", "mdi:numeric")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("cycling_mode", "Cycling Mode", "", "", "mdi:sync")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("random_order_status", "Random Order", "", "", "mdi:shuffle-variant")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("cycle_interval_status", "Cycle Interval", "s", "", "mdi:timer-outline")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("update_interval_status", "Update Interval", "s", "", "mdi:update")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("display_width", "Display Width", "px", "", "mdi:monitor-screenshot")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("display_height", "Display Height", "px", "", "mdi:monitor-screenshot")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("auto_brightness_status", "Auto Brightness", "", "", "mdi:brightness-auto")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("brightness_level", "Brightness Level", "%", "", "mdi:brightness-6")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("temperature_celsius", "Temperature", "°C", "temperature", "mdi:thermometer")) return false;
-    delay(50);
-    if (!publishSensorDiscovery("temperature_fahrenheit", "Temperature (F)", "°F", "temperature", "mdi:thermometer")) return false;
-    delay(50);
-    
-    LOG_INFO("[HA] All discovery messages published successfully");
+
+    LOG_INFO("[HA] Starting non-blocking Home Assistant discovery");
+    _discoveryStep = 0;
+    _discoveryInProgress = true;
+    _discoveryFailed = false;
+    _lastDiscoveryPublish = 0;  // Allow immediate first publish
     return true;
+}
+
+bool HADiscovery::publishDiscoveryStep(int step) {
+    switch (step) {
+        // Light entity
+        case 0:  return publishLightDiscovery();
+        // Switch entities
+        case 1:  return publishSwitchDiscovery("cycling", "Cycling Enabled", "mdi:image-multiple");
+        case 2:  return publishSwitchDiscovery("random_order", "Random Order", "mdi:shuffle");
+        case 3:  return publishSwitchDiscovery("auto_brightness", "Auto Brightness", "mdi:brightness-auto");
+        // Number entities
+        case 4:  return publishNumberDiscovery("cycle_interval", "Cycle Interval", 10, 3600, 10, "s", "mdi:timer");
+        case 5:  return publishNumberDiscovery("update_interval", "Update Interval", 10, 3600, 10, "s", "mdi:update");
+        // Select entity
+        case 6:  return publishSelectDiscovery();
+        // Button entities
+        case 7:  return publishButtonDiscovery("reboot", "Reboot", "mdi:restart");
+        case 8:  return publishButtonDiscovery("next_image", "Next Image", "mdi:skip-next");
+        case 9:  return publishButtonDiscovery("reset_transforms", "Reset Transforms", "mdi:restore");
+        // Sensor entities
+        case 10: return publishSensorDiscovery("current_image", "Current Image URL", "", "", "mdi:image");
+        case 11: return publishSensorDiscovery("free_heap", "Free Heap", "KB", "", "mdi:memory");
+        case 12: return publishSensorDiscovery("free_psram", "Free PSRAM", "KB", "", "mdi:memory");
+        case 13: return publishSensorDiscovery("wifi_rssi", "WiFi Signal", "dBm", "signal_strength", "mdi:wifi");
+        case 14: return publishSensorDiscovery("uptime", "Uptime", "s", "duration", "mdi:clock-outline");
+        case 15: return publishSensorDiscovery("uptime_readable", "Uptime Readable", "", "", "mdi:clock-outline");
+        case 16: return publishSensorDiscovery("image_count", "Image Count", "", "", "mdi:counter");
+        case 17: return publishSensorDiscovery("current_image_index", "Current Image Index", "", "", "mdi:numeric");
+        case 18: return publishSensorDiscovery("cycling_mode", "Cycling Mode", "", "", "mdi:sync");
+        case 19: return publishSensorDiscovery("random_order_status", "Random Order", "", "", "mdi:shuffle-variant");
+        case 20: return publishSensorDiscovery("cycle_interval_status", "Cycle Interval", "s", "", "mdi:timer-outline");
+        case 21: return publishSensorDiscovery("update_interval_status", "Update Interval", "s", "", "mdi:update");
+        case 22: return publishSensorDiscovery("display_width", "Display Width", "px", "", "mdi:monitor-screenshot");
+        case 23: return publishSensorDiscovery("display_height", "Display Height", "px", "", "mdi:monitor-screenshot");
+        case 24: return publishSensorDiscovery("auto_brightness_status", "Auto Brightness", "", "", "mdi:brightness-auto");
+        case 25: return publishSensorDiscovery("brightness_level", "Brightness Level", "%", "", "mdi:brightness-6");
+        case 26: return publishSensorDiscovery("temperature_celsius", "Temperature", "\xC2\xB0" "C", "temperature", "mdi:thermometer");
+        case 27: return publishSensorDiscovery("temperature_fahrenheit", "Temperature (F)", "\xC2\xB0" "F", "temperature", "mdi:thermometer");
+        default: return true;  // Unknown step, skip
+    }
 }
 
 bool HADiscovery::publishAvailability(bool online) {
@@ -374,98 +347,117 @@ bool HADiscovery::publishSensors() {
     if (!mqttClient || !mqttClient->connected()) {
         return false;
     }
-    
+
     if (!configStorage.getHADiscoveryEnabled()) {
         return false;
     }
-    
+
     // Update last publish time
     lastSensorPublish = millis();
-    
-    // Current image URL
+
+    // Reusable buffers to avoid String fragmentation
+    char topic[128];
+    char value[64];
+
+    // Current image URL (needs String for the URL, but we avoid extra copies)
+    snprintf(topic, sizeof(topic), "%s/current_image/state", baseTopic.c_str());
     String currentImageURL = configStorage.getCurrentImageURL();
-    mqttClient->publish(buildStateTopic("current_image").c_str(), currentImageURL.c_str());
-    
+    mqttClient->publish(topic, currentImageURL.c_str());
+
     // Free heap (in KB)
-    String freeHeap = String(ESP.getFreeHeap() / 1024);
-    mqttClient->publish(buildStateTopic("free_heap").c_str(), freeHeap.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/free_heap/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%u", (unsigned)(ESP.getFreeHeap() / 1024));
+    mqttClient->publish(topic, value);
+
     // Free PSRAM (in KB)
-    String freePSRAM = String(ESP.getFreePsram() / 1024);
-    mqttClient->publish(buildStateTopic("free_psram").c_str(), freePSRAM.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/free_psram/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%u", (unsigned)(ESP.getFreePsram() / 1024));
+    mqttClient->publish(topic, value);
+
     // WiFi RSSI
-    String rssi = String(WiFi.RSSI());
-    mqttClient->publish(buildStateTopic("wifi_rssi").c_str(), rssi.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/wifi_rssi/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%d", WiFi.RSSI());
+    mqttClient->publish(topic, value);
+
     // Uptime (in seconds)
     unsigned long uptimeSeconds = millis() / 1000;
-    String uptime = String(uptimeSeconds);
-    mqttClient->publish(buildStateTopic("uptime").c_str(), uptime.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/uptime/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%lu", uptimeSeconds);
+    mqttClient->publish(topic, value);
+
     // Readable uptime (formatted)
     unsigned long days = uptimeSeconds / 86400;
     unsigned long hours = (uptimeSeconds % 86400) / 3600;
     unsigned long minutes = (uptimeSeconds % 3600) / 60;
     unsigned long seconds = uptimeSeconds % 60;
 
-    char timeBuffer[32];
+    snprintf(topic, sizeof(topic), "%s/uptime_readable/state", baseTopic.c_str());
     if (days > 0) {
-        snprintf(timeBuffer, sizeof(timeBuffer), "%lud %luh %lum", days, hours, minutes);
+        snprintf(value, sizeof(value), "%lud %luh %lum", days, hours, minutes);
     } else if (hours > 0) {
-        snprintf(timeBuffer, sizeof(timeBuffer), "%luh %lum", hours, minutes);
+        snprintf(value, sizeof(value), "%luh %lum", hours, minutes);
     } else {
-        snprintf(timeBuffer, sizeof(timeBuffer), "%lum %lus", minutes, seconds);
+        snprintf(value, sizeof(value), "%lum %lus", minutes, seconds);
     }
-    mqttClient->publish(buildStateTopic("uptime_readable").c_str(), timeBuffer);
-    
+    mqttClient->publish(topic, value);
+
     // Image count
-    String imageCount = String(configStorage.getImageSourceCount());
-    mqttClient->publish(buildStateTopic("image_count").c_str(), imageCount.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/image_count/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%d", configStorage.getImageSourceCount());
+    mqttClient->publish(topic, value);
+
     // Current image index (1-based for display)
-    String currentIndex = String(configStorage.getCurrentImageIndex() + 1);
-    mqttClient->publish(buildStateTopic("current_image_index").c_str(), currentIndex.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/current_image_index/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%d", configStorage.getCurrentImageIndex() + 1);
+    mqttClient->publish(topic, value);
+
     // Cycling mode
-    String cyclingMode = configStorage.getCyclingEnabled() ? "Cycling" : "Single";
-    mqttClient->publish(buildStateTopic("cycling_mode").c_str(), cyclingMode.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/cycling_mode/state", baseTopic.c_str());
+    mqttClient->publish(topic, configStorage.getCyclingEnabled() ? "Cycling" : "Single");
+
     // Random order status
-    String randomOrder = configStorage.getRandomOrder() ? "Enabled" : "Disabled";
-    mqttClient->publish(buildStateTopic("random_order_status").c_str(), randomOrder.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/random_order_status/state", baseTopic.c_str());
+    mqttClient->publish(topic, configStorage.getRandomOrder() ? "Enabled" : "Disabled");
+
     // Cycle interval (in seconds)
-    String cycleIntervalStatus = String(configStorage.getCycleInterval() / 1000);
-    mqttClient->publish(buildStateTopic("cycle_interval_status").c_str(), cycleIntervalStatus.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/cycle_interval_status/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%lu", configStorage.getCycleInterval() / 1000);
+    mqttClient->publish(topic, value);
+
     // Update interval (in seconds)
-    String updateIntervalStatus = String(configStorage.getUpdateInterval() / 1000);
-    mqttClient->publish(buildStateTopic("update_interval_status").c_str(), updateIntervalStatus.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/update_interval_status/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%lu", configStorage.getUpdateInterval() / 1000);
+    mqttClient->publish(topic, value);
+
     // Display dimensions
-    String displayWidth = String(displayManager.getWidth());
-    mqttClient->publish(buildStateTopic("display_width").c_str(), displayWidth.c_str());
-    
-    String displayHeight = String(displayManager.getHeight());
-    mqttClient->publish(buildStateTopic("display_height").c_str(), displayHeight.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/display_width/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%d", displayManager.getWidth());
+    mqttClient->publish(topic, value);
+
+    snprintf(topic, sizeof(topic), "%s/display_height/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%d", displayManager.getHeight());
+    mqttClient->publish(topic, value);
+
     // Auto brightness status
-    String autoBrightness = configStorage.getBrightnessAutoMode() ? "Enabled" : "Disabled";
-    mqttClient->publish(buildStateTopic("auto_brightness_status").c_str(), autoBrightness.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/auto_brightness_status/state", baseTopic.c_str());
+    mqttClient->publish(topic, configStorage.getBrightnessAutoMode() ? "Enabled" : "Disabled");
+
     // Brightness level
-    String brightnessLevel = String(displayManager.getBrightness());
-    mqttClient->publish(buildStateTopic("brightness_level").c_str(), brightnessLevel.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/brightness_level/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%d", displayManager.getBrightness());
+    mqttClient->publish(topic, value);
+
     // Temperature (Celsius)
-    String tempCelsius = String(temperatureRead(), 1);
-    mqttClient->publish(buildStateTopic("temperature_celsius").c_str(), tempCelsius.c_str());
-    
+    float tempC = temperatureRead();
+    snprintf(topic, sizeof(topic), "%s/temperature_celsius/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%.1f", tempC);
+    mqttClient->publish(topic, value);
+
     // Temperature (Fahrenheit)
-    String tempFahrenheit = String(temperatureRead() * 9.0 / 5.0 + 32.0, 1);
-    mqttClient->publish(buildStateTopic("temperature_fahrenheit").c_str(), tempFahrenheit.c_str());
-    
+    snprintf(topic, sizeof(topic), "%s/temperature_fahrenheit/state", baseTopic.c_str());
+    snprintf(value, sizeof(value), "%.1f", tempC * 9.0f / 5.0f + 32.0f);
+    mqttClient->publish(topic, value);
+
     return true;
 }
 
@@ -473,10 +465,58 @@ void HADiscovery::update() {
     if (!configStorage.getHADiscoveryEnabled()) {
         return;
     }
-    
+
+    // Drive the non-blocking discovery state machine
+    if (_discoveryInProgress) {
+        if (!mqttClient || !mqttClient->connected()) {
+            LOG_WARNING("[HA] Discovery aborted - MQTT disconnected");
+            _discoveryInProgress = false;
+            _discoveryFailed = true;
+            return;
+        }
+
+        unsigned long now = millis();
+        if (now - _lastDiscoveryPublish < 50) {
+            return;  // Rate limit: wait 50ms between publishes
+        }
+
+        LOG_DEBUG_F("[HA] Discovery step %d/%d\n", _discoveryStep + 1, HA_DISCOVERY_TOTAL_STEPS);
+        bool result = publishDiscoveryStep(_discoveryStep);
+        _lastDiscoveryPublish = millis();
+
+        if (!result) {
+            LOG_ERROR_F("[HA] Discovery step %d failed\n", _discoveryStep);
+            _discoveryFailed = true;
+            _discoveryInProgress = false;
+            return;
+        }
+
+        _discoveryStep++;
+        if (_discoveryStep >= HA_DISCOVERY_TOTAL_STEPS) {
+            _discoveryInProgress = false;
+            LOG_INFO("[HA] All discovery messages published successfully");
+
+            // Subscribe to command topics now that discovery is complete
+            String commandFilter = getCommandTopicFilter();
+            LOG_DEBUG_F("[HA] Subscribing to HA commands: %s\n", commandFilter.c_str());
+            if (!mqttClient->subscribe(commandFilter.c_str())) {
+                LOG_ERROR_F("[HA] FAILED to subscribe to HA command topics! MQTT state: %d\n", mqttClient->state());
+            } else {
+                LOG_DEBUG("[HA] Subscribed to HA command topics");
+            }
+
+            // Publish initial state
+            esp_task_wdt_reset();
+            LOG_DEBUG("[HA] Publishing initial state to HA");
+            publishState();
+        }
+        return;  // Only do one discovery step per update() call
+    }
+
+    // Normal periodic sensor updates
     unsigned long now = millis();
     unsigned long interval = configStorage.getHASensorUpdateInterval() * 1000; // Convert to milliseconds
-    
+
     if (now - lastSensorUpdate >= interval) {
         lastSensorUpdate = now;
         publishSensors();
@@ -494,7 +534,13 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
     String entity = topic.substring(secondLastSlash + 1, lastSlash);
     
     LOG_INFO_F("[HA] Command received - Entity: %s, Payload: %s\n", entity.c_str(), payload.c_str());
-    
+
+    // Validate payload length to prevent buffer overflows from malicious messages
+    if (payload.length() > 256) {
+        LOG_WARNING_F("[HA] Payload too long (%d bytes), ignoring command\n", payload.length());
+        return;
+    }
+
     // Handle brightness
     if (entity == "brightness") {
         // Ignore MQTT brightness commands when HA REST control is active
@@ -540,15 +586,25 @@ void HADiscovery::handleCommand(const String& topic, const String& payload) {
         configStorage.saveConfig();
         mqttClient->publish(buildStateTopic("auto_brightness").c_str(), payload.c_str());
     }
-    // Handle numbers
+    // Handle numbers (with range validation)
     else if (entity == "cycle_interval") {
-        unsigned long interval = payload.toInt() * 1000; // Convert seconds to milliseconds
+        long rawValue = payload.toInt();
+        if (rawValue < 1 || rawValue > 86400) {  // 1 second to 24 hours
+            LOG_WARNING_F("[HA] Invalid cycle_interval: %ld (must be 1-86400 seconds)\n", rawValue);
+            return;
+        }
+        unsigned long interval = (unsigned long)rawValue * 1000; // Convert seconds to milliseconds
         configStorage.setCycleInterval(interval);
         configStorage.saveConfig();
         mqttClient->publish(buildStateTopic("cycle_interval").c_str(), payload.c_str());
     }
     else if (entity == "update_interval") {
-        unsigned long interval = payload.toInt() * 1000; // Convert seconds to milliseconds
+        long rawValue = payload.toInt();
+        if (rawValue < 5 || rawValue > 86400) {  // 5 seconds to 24 hours
+            LOG_WARNING_F("[HA] Invalid update_interval: %ld (must be 5-86400 seconds)\n", rawValue);
+            return;
+        }
+        unsigned long interval = (unsigned long)rawValue * 1000; // Convert seconds to milliseconds
         configStorage.setUpdateInterval(interval);
         configStorage.saveConfig();
         mqttClient->publish(buildStateTopic("update_interval").c_str(), payload.c_str());

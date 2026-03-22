@@ -10,7 +10,7 @@
 HARestClient haRestClient;
 
 // FreeRTOS task configuration
-#define HA_REST_TASK_STACK_SIZE 8192
+#define HA_REST_TASK_STACK_SIZE 16384  // 16KB for TLS
 #define HA_REST_TASK_PRIORITY 1
 #define HA_REST_TASK_CORE 0  // Network Core
 
