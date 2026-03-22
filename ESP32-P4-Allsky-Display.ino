@@ -2043,8 +2043,17 @@ void loop() {
     if (!imageProcessing && !imageDownloadPending && !webConfig.isOTAInProgress() && shouldUpdate) {
         // Pre-download system health check
         if (!wifiManager.isConnected()) {
-            Serial.println("WARNING: WiFi disconnected, skipping image download");
-            lastUpdate = currentTime; // Update timestamp to prevent immediate retry
+            // Rate-limit this log so it doesn't spam every 50ms loop
+            static unsigned long lastWifiSkipLog = 0;
+            if (currentTime - lastWifiSkipLog > 5000) {
+                Serial.println("WARNING: WiFi disconnected, skipping image download");
+                lastWifiSkipLog = currentTime;
+            }
+            // Do NOT update lastUpdate here — leave it at 0 (or stale) so the
+            // download triggers immediately once WiFi connects.  The old code
+            // set lastUpdate = currentTime which forced a full updateInterval
+            // (2 min) wait after WiFi came up, leaving the display stuck on
+            // the "Connecting to WiFi..." screen.
             systemMonitor.forceResetWatchdog();
         } else {
             Serial.printf("DEBUG: Triggering async image download (last update: %lu ms ago)\n", 
