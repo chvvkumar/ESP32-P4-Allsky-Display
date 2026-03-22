@@ -9,8 +9,8 @@
 #define BUILD_TIME __TIME__
 
 // Git information (updated by compile script)
-#define GIT_COMMIT_HASH "3a50825"
-#define GIT_COMMIT_FULL "3a5082528a301ed8bb70758e3629946a8d3a06f5"
+#define GIT_COMMIT_HASH "3c63259"
+#define GIT_COMMIT_FULL "3c632593726059ee497de5aeb289ceb69c05c406"
 #define GIT_BRANCH "snd"
 
 #endif // BUILD_INFO_H

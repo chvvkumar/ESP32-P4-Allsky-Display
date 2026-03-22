@@ -570,31 +570,31 @@ jobs:
           README.md
           OTA_GUIDE.md
         body: |
-          ${{ needs.build.outputs.release_type == 'test' && '## 🧪 Test Release' || '## 📦 ESP32-P4 AllSky Display' }} ${{ needs.build.outputs.tag }}
-          
-          ${{ needs.build.outputs.release_type == 'test' && format('⚠️ **This is a pre-release test build from the `{0}` branch.**', needs.build.outputs.branch) || '' }}
-          ${{ needs.build.outputs.release_type == 'test' && '**Use for testing purposes only. For stable releases, use builds from the main branch.**' || '' }}
-          
-          ### 📦 Binary Files
-          
-          **Two binary files are included in this release:**
-          
-          - **`*-Factory.bin`** - For initial USB installation (includes bootloader + partitions + app)
+          ${{ needs.build.outputs.release_type == 'test' && format('## Test Release {0}', needs.build.outputs.tag) || format('## ESP32-P4 AllSky Display {0}', needs.build.outputs.tag) }}
+
+          ${{ needs.build.outputs.release_type == 'test' && format('> **This is a pre-release test build from the `{0}` branch.**', needs.build.outputs.branch) || '' }}
+          ${{ needs.build.outputs.release_type == 'test' && '> For stable releases, use builds from the main branch.' || '' }}
+
+          ### Binary Files
+
+          Two binary files are included in this release:
+
+          - **`*-Factory.bin`** — For initial USB installation (includes bootloader + partitions + app)
             - Use this file for fresh installs via esptool or Flash Download Tool
             - Flash to address `0x0`
-          
-          - **`*-OTA.bin`** - For wireless OTA updates only (app only)
+
+          - **`*-OTA.bin`** — For wireless OTA updates only (app only)
             - Use this file for web-based updates via ElegantOTA at `http://[device-ip]:8080/update`
-            - ⚠️ **DO NOT flash this to address 0x0** - will cause boot loop
-          
-          ### 🖥️ Display Compatibility
-          
-          **Universal Support:** Pre-compiled firmware works with both display sizes:
-          - ✅ **3.4" Waveshare Display** (800×800) - Default on first boot
-          - ✅ **4.0" Waveshare Display** (720×720) - Select in Web UI System settings after flashing
-          
+            - **DO NOT flash this to address 0x0** — will cause boot loop
+
+          ### Display Compatibility
+
+          Pre-compiled firmware works with both display sizes:
+          - **3.4" Waveshare Display** (800x800) — Default on first boot
+          - **4.0" Waveshare Display** (720x720) — Select in Web UI System settings after flashing
+
           Display type can be changed at runtime without recompilation.
-          
+
           ### Changes in This Release
           ${{ steps.changelog.outputs.changelog || '_No commits found_' }}
       env:
@@ -685,20 +685,39 @@ jobs:
           %FILES%
 
           ## Your Task
-          Provide ONLY the following section in clean markdown format:
+          Provide a clear, professional summary in clean markdown format. Do NOT use emojis anywhere.
 
-          ### 🔄 Changes by Category
-          Group the changes into relevant categories such as:
-          - **Features**: New functionality added
-          - **Bug Fixes**: Issues resolved
-          - **Refactoring**: Code improvements without behavior changes
-          - **Documentation**: README, comments, docs updates
-          - **Tests**: Test additions or modifications
-          - **Dependencies**: Package or dependency changes
-          - **Configuration**: Config file changes
+          **First line of your response must be a concise PR title** (under 60 characters) that summarizes the overall theme of the changes. Do not include any prefix, label, or formatting — just the plain title text on its own line, followed by a blank line.
 
-          Only include categories that apply. Use bullet points for each change.
-          Do NOT include any other sections, headers, or conclusions.
+          Then use a separate H3 header (###) for each category that applies:
+
+          ### Features
+          New functionality added
+
+          ### Bug Fixes
+          Issues resolved
+
+          ### Refactoring
+          Code improvements without behavior changes
+
+          ### Performance
+          Optimizations and speed improvements
+
+          ### Documentation
+          README, comments, docs updates
+
+          ### Tests
+          Test additions or modifications
+
+          ### Dependencies
+          Package or dependency changes
+
+          ### Configuration
+          Config file changes
+
+          Only include category sections that have actual changes. Use bullet points under each header.
+          Do NOT include any other sections, preamble, or conclusions.
+          Do NOT use emojis in any part of your response.
           EOF
           
           # Replace placeholders (remove jq quotes)
@@ -746,8 +765,10 @@ jobs:
             exit 1
           fi
           
-          # Extract summary
-          echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' > summary.md
+          # Extract summary - first non-empty line is the title, rest is body
+          FULL_RESPONSE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+          echo "$FULL_RESPONSE" | head -n 1 > pr_title.txt
+          echo "$FULL_RESPONSE" | tail -n +2 | sed '/./,$!d' > summary.md
 
       - name: Update PR title and body with summary
         if: steps.collect.outputs.skip_summary == 'false'
@@ -756,47 +777,17 @@ jobs:
           script: |
             const fs = require('fs');
             
-            // Read the generated summary
+            // Read the generated title and summary
+            const newTitle = fs.readFileSync('pr_title.txt', 'utf8').trim();
             const summary = fs.readFileSync('summary.md', 'utf8');
             const commitCount = '${{ steps.collect.outputs.commit_count }}';
             const timestamp = new Date().toISOString();
-            
-            // Get current PR details
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number,
-            });
-            
-            // Create PR body with only Changes by Category section
+
+            // Create PR body with categorized changes
             const newBody = `${summary}
-            
+
             ---
-            <sub>📊 Analyzed **${commitCount}** commit(s) | 🕐 Updated: ${timestamp} | Generated by GitHub Actions</sub>`;
-            
-            // Generate title with emoji prefix (replace existing)
-            const titleLower = pr.title.toLowerCase();
-            let emoji = '✨'; // Default: sparkles for feature
-            
-            if (titleLower.includes('fix') || titleLower.includes('bug')) {
-              emoji = '🐛';
-            } else if (titleLower.includes('doc')) {
-              emoji = '📚';
-            } else if (titleLower.includes('refactor') || titleLower.includes('cleanup')) {
-              emoji = '♻️';
-            } else if (titleLower.includes('test')) {
-              emoji = '✅';
-            } else if (titleLower.includes('config') || titleLower.includes('setting')) {
-              emoji = '⚙️';
-            } else if (titleLower.includes('security')) {
-              emoji = '🔒';
-            } else if (titleLower.includes('performance') || titleLower.includes('optim')) {
-              emoji = '⚡';
-            }
-            
-            // Remove any existing emoji prefix and add new one
-            const cleanTitle = pr.title.replace(/^[\u{1F300}-\u{1F9FF}]\s*/u, '');
-            const newTitle = `${emoji} ${cleanTitle}`;
+            <sub>Analyzed **${commitCount}** commit(s) | Updated: ${timestamp} | Generated by GitHub Actions</sub>`;
             
             // Update the PR
             await github.rest.pulls.update({
