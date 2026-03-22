@@ -949,6 +949,7 @@ void WebConfig::handleGetAllInfo() {
         json += "\"dns\":\"" + WiFi.dnsIP().toString() + "\",";
         json += "\"mac\":\"" + WiFi.macAddress() + "\",";
         json += "\"rssi\":" + String(WiFi.RSSI()) + ",";
+        json += "\"bssid\":\"" + WiFi.BSSIDstr() + "\",";
         json += "\"hostname\":\"" + String(WiFi.getHostname()) + "\"";
     } else {
         json += "\"ssid\":null,";
@@ -957,6 +958,7 @@ void WebConfig::handleGetAllInfo() {
         json += "\"dns\":null,";
         json += "\"mac\":\"" + WiFi.macAddress() + "\",";
         json += "\"rssi\":0,";
+        json += "\"bssid\":null,";
         json += "\"hostname\":null";
     }
     json += "},";

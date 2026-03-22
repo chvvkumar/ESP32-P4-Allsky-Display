@@ -58,6 +58,10 @@ extern const char* WIFI_PASSWORD;
 #define WIFI_MAX_WAIT_TIME 12000         // 12 seconds maximum wait time
 #define WIFI_RETRY_DELAY 400             // Delay between connection attempts
 
+// WiFi AP roaming (mesh network support)
+#define WIFI_ROAM_CHECK_INTERVAL  60000  // ms between roam scans (60 seconds)
+#define WIFI_ROAM_RSSI_THRESHOLD  8      // minimum dB improvement to trigger AP switch
+
 // =============================================================================
 // MQTT CONFIGURATION
 // =============================================================================

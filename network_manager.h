@@ -19,6 +19,14 @@ private:
     static constexpr unsigned long RECONNECT_BACKOFF_MIN = 2000;
     static constexpr unsigned long RECONNECT_BACKOFF_MAX = 60000;
 
+    // AP roaming state (mesh WiFi support)
+    bool roamScanPending;
+    bool roamInProgress;
+    unsigned long lastRoamScanTime;
+    unsigned long roamStartTime;
+    uint8_t roamTargetBSSID[6];
+    int roamTargetChannel;
+
     // Non-blocking NTP state
     bool ntpSyncInProgress;
     unsigned long ntpSyncStartTime;
@@ -29,6 +37,7 @@ private:
     // Debug display function pointer
     void (*debugPrintFunc)(const char* message, uint16_t color);
     void (*debugPrintfFunc)(uint16_t color, const char* format, ...);
+    void checkForBetterAP();
     bool firstImageLoaded;
 
 public:

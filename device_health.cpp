@@ -15,6 +15,9 @@ DeviceHealthAnalyzer deviceHealth;
 unsigned long DeviceHealthAnalyzer::networkDisconnectCount = 0;
 unsigned long DeviceHealthAnalyzer::mqttReconnectCount = 0;
 unsigned long DeviceHealthAnalyzer::watchdogResetCount = 0;
+unsigned long DeviceHealthAnalyzer::roamCount = 0;
+unsigned long DeviceHealthAnalyzer::roamScanCount = 0;
+unsigned long DeviceHealthAnalyzer::lastRoamTime = 0;
 
 DeviceHealthAnalyzer::DeviceHealthAnalyzer() {
 }
@@ -104,7 +107,11 @@ NetworkHealth DeviceHealthAnalyzer::analyzeNetwork() {
     health.rssi = WiFi.RSSI();
     health.uptime = millis();
     health.disconnectCount = networkDisconnectCount;
-    
+    health.bssid = WiFi.BSSIDstr();
+    health.roamCount = roamCount;
+    health.roamScanCount = roamScanCount;
+    health.lastRoamTime = lastRoamTime;
+
     if (!health.connected) {
         health.status = HEALTH_FAILING;
         health.message = "Critical: WiFi disconnected";
@@ -365,7 +372,9 @@ void DeviceHealthAnalyzer::printReport(const DeviceHealthReport& report) {
     LOG_INFO_F("  Connected: %s | RSSI: %d dBm | Disconnects: %lu\n",
                report.network.connected ? "Yes" : "No",
                report.network.rssi, report.network.disconnectCount);
-    
+    LOG_INFO_F("  BSSID: %s | Roams: %lu | Roam Scans: %lu\n",
+               report.network.bssid.c_str(), report.network.roamCount, report.network.roamScanCount);
+
     // MQTT
     LOG_INFO_F("[MQTT] %s - %s\n", healthStatusToString(report.mqtt.status), report.mqtt.message.c_str());
     LOG_INFO_F("  Connected: %s | Reconnects: %lu\n",
@@ -429,9 +438,13 @@ String DeviceHealthAnalyzer::getReportJSON(const DeviceHealthReport& report) {
     json += "\"message\":\"" + escapeJsonString(report.network.message) + "\",";
     json += "\"connected\":" + String(report.network.connected ? "true" : "false") + ",";
     json += "\"rssi\":" + String(report.network.rssi) + ",";
-    json += "\"disconnect_count\":" + String(report.network.disconnectCount);
+    json += "\"disconnect_count\":" + String(report.network.disconnectCount) + ",";
+    json += "\"bssid\":\"" + escapeJsonString(report.network.bssid) + "\",";
+    json += "\"roam_count\":" + String(report.network.roamCount) + ",";
+    json += "\"roam_scan_count\":" + String(report.network.roamScanCount) + ",";
+    json += "\"last_roam_time_ms\":" + String(report.network.lastRoamTime);
     json += "},";
-    
+
     // MQTT health
     json += "\"mqtt\":{";
     json += "\"status\":\"" + String(healthStatusToString(report.mqtt.status)) + "\",";
@@ -486,6 +499,16 @@ void DeviceHealthAnalyzer::recordMQTTReconnect() {
 void DeviceHealthAnalyzer::recordWatchdogReset() {
     watchdogResetCount++;
     LOG_DEBUG_F("[HealthTracker] Watchdog reset count: %lu\n", watchdogResetCount);
+}
+
+void DeviceHealthAnalyzer::recordRoam() {
+    roamCount++;
+    lastRoamTime = millis();
+    LOG_DEBUG_F("[HealthTracker] Roam count: %lu\n", roamCount);
+}
+
+void DeviceHealthAnalyzer::recordRoamScan() {
+    roamScanCount++;
 }
 
 bool DeviceHealthAnalyzer::isMemoryHealthy() {
