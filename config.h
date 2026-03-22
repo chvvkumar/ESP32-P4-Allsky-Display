@@ -38,7 +38,7 @@ enum LogSeverity {
 #define WATCHDOG_RESET_INTERVAL 1000     // Reset watchdog every 1 second
 #define MEMORY_CHECK_INTERVAL 30000      // Check memory every 30 seconds
 #define SERIAL_FLUSH_INTERVAL 5000       // Flush serial every 5 seconds
-#define IMAGE_PROCESS_TIMEOUT 5000       // 5 second timeout for image processing
+#define IMAGE_PROCESS_TIMEOUT 100000     // 100 second timeout for image processing (must exceed TOTAL_DOWNLOAD_TIMEOUT)
 #define MQTT_RECONNECT_INTERVAL 5000     // 5 seconds between MQTT reconnect attempts
 
 // Memory thresholds
