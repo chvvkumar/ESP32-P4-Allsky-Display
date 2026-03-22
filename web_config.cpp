@@ -177,21 +177,49 @@ void WebConfig::stop() {
     }
 }
 
+// Helper to start a chunked HTML response - sends header, nav, then returns for page content
+// Sends CSS/JS from PROGMEM as separate chunks to avoid copying large strings into heap
+void WebConfig::beginChunkedHtmlResponse(const String& title, const String& navPage) {
+    server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+    server->send(200, "text/html", "");
+    // Send the HTML doctype and head opening separately from CSS to reduce peak heap usage
+    String headStart = "<!DOCTYPE html><html lang='en'><head>";
+    headStart += "<meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
+    headStart += "<title>" + title + "</title><style>";
+    server->sendContent(headStart);
+    // Send CSS directly from PROGMEM as its own chunk (~5KB) - avoids copying into a larger String
+    server->sendContent(FPSTR(HTML_CSS));
+    // Send the rest of the header (status badges, nav bar, etc.)
+    server->sendContent(generateHeaderBody(title));
+    server->sendContent(generateNavigation(navPage));
+}
+
+// Helper to finish a chunked HTML response - sends JS/modals from PROGMEM as separate chunks, then footer
+void WebConfig::endChunkedHtmlResponse() {
+    // Send JavaScript from PROGMEM as its own chunk to avoid copying into a large String
+    server->sendContent("<script>");
+    server->sendContent(FPSTR(HTML_JAVASCRIPT));
+    server->sendContent("</script>");
+    // Send modals from PROGMEM as its own chunk
+    server->sendContent(FPSTR(HTML_MODALS));
+    // Send the footer bar (small, dynamic content)
+    server->sendContent(generateFooterBody());
+    server->sendContent("");  // End chunked transfer
+}
+
 // Route handlers - these call the page generators from web_config_pages.cpp
 void WebConfig::handleRoot() {
     size_t heapBefore = ESP.getFreeHeap();
     LOG_DEBUG_F("[WebServer] Dashboard page accessed (heap before: %d bytes)\n", heapBefore);
-    
-    String html = generateHeader("Dashboard");
-    html += generateNavigation("dashboard");
-    html += generateMainPage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
-    
+
+    beginChunkedHtmlResponse("Dashboard", "dashboard");
+    server->sendContent(generateMainPage());
+    endChunkedHtmlResponse();
+
     size_t heapAfter = ESP.getFreeHeap();
     int heapDelta = (int)heapBefore - (int)heapAfter;
     if (heapDelta > 0) {
-        LOG_WARNING_F("[WebServer] Dashboard request used %d bytes heap (before: %d, after: %d)\n", 
+        LOG_WARNING_F("[WebServer] Dashboard request used %d bytes heap (before: %d, after: %d)\n",
                       heapDelta, heapBefore, heapAfter);
     } else {
         LOG_DEBUG_F("[WebServer] Dashboard completed (heap after: %d bytes)\n", heapAfter);
@@ -200,62 +228,48 @@ void WebConfig::handleRoot() {
 
 void WebConfig::handleConsole() {
     LOG_DEBUG("[WebServer] Serial console page accessed");
-    String html = generateHeader("Serial Console");
-    html += generateNavigation("console");
-    html += generateConsolePage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
+    beginChunkedHtmlResponse("Serial Console", "console");
+    server->sendContent(generateConsolePage());
+    endChunkedHtmlResponse();
 }
 
 void WebConfig::handleNetworkConfig() {
     LOG_DEBUG("[WebServer] Network configuration page accessed");
-    String html = generateHeader("Network Configuration");
-    html += generateNavigation("network");
-    html += generateNetworkPage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
+    beginChunkedHtmlResponse("Network Configuration", "network");
+    server->sendContent(generateNetworkPage());
+    endChunkedHtmlResponse();
 }
 
 void WebConfig::handleMQTTConfig() {
     LOG_DEBUG("[WebServer] MQTT configuration page accessed");
-    String html = generateHeader("MQTT Configuration");
-    html += generateNavigation("mqtt");
-    html += generateMQTTPage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
+    beginChunkedHtmlResponse("MQTT Configuration", "mqtt");
+    server->sendContent(generateMQTTPage());
+    endChunkedHtmlResponse();
 }
 
 void WebConfig::handleImageConfig() {
     LOG_DEBUG("[WebServer] Image sources page accessed");
-    String html = generateHeader("Image Sources");
-    html += generateNavigation("images");
-    html += generateImagePage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
+    beginChunkedHtmlResponse("Image Sources", "images");
+    server->sendContent(generateImagePage());
+    endChunkedHtmlResponse();
 }
 
 void WebConfig::handleDisplayConfig() {
-    String html = generateHeader("Display Configuration");
-    html += generateNavigation("display");
-    html += generateDisplayPage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
+    beginChunkedHtmlResponse("Display Configuration", "display");
+    server->sendContent(generateDisplayPage());
+    endChunkedHtmlResponse();
 }
 
 void WebConfig::handleAdvancedConfig() {
-    String html = generateHeader("System Configuration");
-    html += generateNavigation("system");
-    html += generateAdvancedPage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
+    beginChunkedHtmlResponse("System Configuration", "system");
+    server->sendContent(generateAdvancedPage());
+    endChunkedHtmlResponse();
 }
 
 void WebConfig::handleSerialCommands() {
-    String html = generateHeader("Serial Commands");
-    html += generateNavigation("commands");
-    html += generateSerialCommandsPage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
+    beginChunkedHtmlResponse("Serial Commands", "commands");
+    server->sendContent(generateSerialCommandsPage());
+    endChunkedHtmlResponse();
 }
 
 void WebConfig::handleStatus() {
@@ -264,36 +278,38 @@ void WebConfig::handleStatus() {
 }
 
 void WebConfig::handleAPIReference() {
-    String html = generateHeader("API Reference");
-    html += generateNavigation("api");
-    html += generateAPIReferencePage();
-    html += generateFooter();
-    sendResponse(200, "text/html", html);
+    beginChunkedHtmlResponse("API Reference", "api");
+    server->sendContent(generateAPIReferencePage());
+    endChunkedHtmlResponse();
 }
 
 void WebConfig::handleNotFound() {
     String uri = server->uri();
     LOG_WARNING_F("[WebServer] 404 Not Found: %s\n", uri.c_str());
-    String html = generateHeader("Page Not Found");
-    html += "<div class='container'><div class='card error'>";
-    html += "<h2>🚫 Page Not Found</h2>";
-    html += "<p>The requested page could not be found.</p>";
-    html += "<a href='/' class='btn btn-primary'>Return to Dashboard</a>";
-    html += "</div></div>";
-    html += generateFooter();
-    sendResponse(404, "text/html", html);
+    server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+    server->send(404, "text/html", "");
+    server->sendContent(generateHeader("Page Not Found"));
+    server->sendContent("<div class='container'><div class='card error'>");
+    server->sendContent("<h2>Page Not Found</h2>");
+    server->sendContent("<p>The requested page could not be found.</p>");
+    server->sendContent("<a href='/' class='btn btn-primary'>Return to Dashboard</a>");
+    server->sendContent("</div></div>");
+    server->sendContent(generateFooter());
+    server->sendContent("");  // End chunked transfer
 }
 
 // HTML template generation functions
+
+// generateHeader - returns full header including CSS (used by handleNotFound which doesn't use chunked helpers)
 String WebConfig::generateHeader(const String& title) {
     String html;
-    html.reserve(2000);  // Pre-allocate ~2KB for header HTML
+    html.reserve(2000);  // Pre-allocate ~2KB for header HTML (excluding CSS which is large)
     html = "<!DOCTYPE html><html lang='en'><head>";
     html += "<meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>";
     html += "<title>" + title + "</title>";
     html += "<style>" + String(FPSTR(HTML_CSS)) + "</style></head><body>";
-    
-    // Header
+
+    // Header bar
     html += "<div class='header'><div class='container'>";
     html += "<div class='header-content'>";
     html += "<div class='logo'><i class='fas fa-satellite'></i> " + configStorage.getDeviceName() + "</div>";
@@ -306,7 +322,31 @@ String WebConfig::generateHeader(const String& title) {
     html += "<button class='github-link' style='cursor:pointer;border:none;background:#3b82f6;border-color:#2563eb' onclick='restart()'><i class='fas fa-sync-alt' style='margin-right:6px'></i> Restart</button>";
     html += "<button class='github-link' style='cursor:pointer;border:none;background:#ef4444;border-color:#dc2626' onclick='factoryReset()'><i class='fas fa-trash-alt' style='margin-right:6px'></i> Reset</button>";
     html += "</div></div></div></div>";
-    
+
+    return html;
+}
+
+// generateHeaderBody - returns only the </style></head><body> + header bar HTML
+// Used by beginChunkedHtmlResponse which sends CSS as a separate chunk from PROGMEM
+String WebConfig::generateHeaderBody(const String& title) {
+    String html;
+    html.reserve(1500);
+    html = "</style></head><body>";
+
+    // Header bar
+    html += "<div class='header'><div class='container'>";
+    html += "<div class='header-content'>";
+    html += "<div class='logo'><i class='fas fa-satellite'></i> " + configStorage.getDeviceName() + "</div>";
+    html += "<div class='status-badges'>";
+    html += "<a href='https://github.com/chvvkumar/ESP32-P4-Allsky-Display' target='_blank' class='github-link'><i class='github-icon fa-github'></i> GitHub</a>";
+    html += getConnectionStatus();
+    if (configStorage.getImageSourceCount() > 1) {
+        html += "<button type='button' class='github-link' style='cursor:pointer;border:none' onclick='nextImage(this)'><i class='fas fa-forward' style='margin-right:6px'></i> Next</button>";
+    }
+    html += "<button class='github-link' style='cursor:pointer;border:none;background:#3b82f6;border-color:#2563eb' onclick='restart()'><i class='fas fa-sync-alt' style='margin-right:6px'></i> Restart</button>";
+    html += "<button class='github-link' style='cursor:pointer;border:none;background:#ef4444;border-color:#dc2626' onclick='factoryReset()'><i class='fas fa-trash-alt' style='margin-right:6px'></i> Reset</button>";
+    html += "</div></div></div></div>";
+
     return html;
 }
 
@@ -330,13 +370,34 @@ String WebConfig::generateNavigation(const String& currentPage) {
     return html;
 }
 
+// generateFooter - returns full footer including JS/modals (used by handleNotFound)
 String WebConfig::generateFooter() {
     String html;
     html.reserve(1000);  // Pre-allocate ~1KB for footer HTML
     html = "<script>" + String(FPSTR(HTML_JAVASCRIPT)) + "</script>";
     html += String(FPSTR(HTML_MODALS));
-    
+
     html += "<div class='footer'><div class='container'>";
+    html += "<p style='margin-bottom:0.5rem'>" + configStorage.getDeviceName() + " Configuration Portal</p>";
+    html += "<p style='font-size:0.8rem;color:#64748b;margin:0.25rem 0'>";
+    html += "MD5: " + String(ESP.getSketchMD5().substring(0, 8)) + " | ";
+    html += "Build: " + formatBytes(ESP.getSketchSize()) + " | ";
+    html += "Free: " + formatBytes(ESP.getFreeSketchSpace());
+    html += "</p>";
+    html += "<p style='font-size:0.75rem;color:#475569;margin:0.25rem 0'>";
+    html += "Built: " + String(BUILD_DATE) + " " + String(BUILD_TIME) + " | ";
+    html += "Commit: <span style='font-family:monospace'>" + String(GIT_COMMIT_HASH) + "</span> (" + String(GIT_BRANCH) + ")";
+    html += "</p></div></div>";
+    html += "</body></html>";
+    return html;
+}
+
+// generateFooterBody - returns only the footer bar HTML (no JS/modals)
+// Used by endChunkedHtmlResponse which sends JS/modals from PROGMEM as separate chunks
+String WebConfig::generateFooterBody() {
+    String html;
+    html.reserve(512);
+    html = "<div class='footer'><div class='container'>";
     html += "<p style='margin-bottom:0.5rem'>" + configStorage.getDeviceName() + " Configuration Portal</p>";
     html += "<p style='font-size:0.8rem;color:#64748b;margin:0.25rem 0'>";
     html += "MD5: " + String(ESP.getSketchMD5().substring(0, 8)) + " | ";
