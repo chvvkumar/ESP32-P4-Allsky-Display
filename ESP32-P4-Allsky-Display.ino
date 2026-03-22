@@ -20,6 +20,7 @@
 #include "ha_rest_client.h"  // Home Assistant REST brightness control
 
 // Additional required libraries
+#include <atomic>
 #include <HTTPClient.h>
 #include <JPEGDEC.h>
 #include <PubSubClient.h>
@@ -63,7 +64,7 @@ int16_t fullImageHeight = 0;
 uint16_t* pendingFullImageBuffer = nullptr;
 int16_t pendingImageWidth = 0;
 int16_t pendingImageHeight = 0;
-bool imageReadyToDisplay = false;  // Flag: new image fully prepared and ready to show
+std::atomic<bool> imageReadyToDisplay{false};  // Flag: new image fully prepared and ready to show
 
 // Scaling buffer for transformed images
 uint16_t* scaledBuffer = nullptr;
@@ -87,7 +88,7 @@ int16_t qrCodeHeight = 0;
 uint16_t* scratchBuffer = nullptr;
 
 // Image processing control
-bool imageProcessing = false;
+std::atomic<bool> imageProcessing{false};
 unsigned long lastImageProcessTime = 0;
 
 // Touch control variables
@@ -1540,37 +1541,44 @@ void downloadAndDisplayImage() {
         
         if (requiredSize <= fullImageBufferSize) {
             Serial.println("DEBUG: Image fits in buffer, proceeding with decode...");
+
+            // Take mutex to protect pendingFullImageBuffer during decode
+            if (xSemaphoreTake(imageBufferMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+                Serial.println("ERROR: Failed to acquire image buffer mutex for decode");
+                jpeg.close();
+                imageProcessing = false;
+                return;
+            }
+
             // Clear the PENDING image buffer
             memset(pendingFullImageBuffer, 0, pendingImageWidth * pendingImageHeight * sizeof(uint16_t));
-            
+
             // Decode the full image into PENDING buffer with watchdog protection
             systemMonitor.forceResetWatchdog();
-            
+
             unsigned long decodeStart = millis();
-            
+
             // JPEG decode with timeout monitoring
 
             unsigned long decodeStartTime = millis();
-            
-            // Pause display during decode to prevent LCD underrun from memory contention
-            displayManager.pauseDisplay();
-            
+
             Serial.println("[Image] Decoding JPEG to RGB565...");
             if (jpeg.decode(0, 0, 0)) {
-                // Resume display after decode completes
-                displayManager.resumeDisplay();
-                
                 unsigned long decodeTime = millis() - decodeStart;
                 Serial.printf("[Image] ✓ Decode complete in %lu ms\n", decodeTime);
-                Serial.printf("[Image] Decoded %dx%d pixels (%d bytes RGB565)\n", 
-                             pendingImageWidth, pendingImageHeight, 
+                Serial.printf("[Image] Decoded %dx%d pixels (%d bytes RGB565)\n",
+                             pendingImageWidth, pendingImageHeight,
                              pendingImageWidth * pendingImageHeight * 2);
-                
+
                 // Reset watchdog after decode
                 systemMonitor.forceResetWatchdog();
-                
+
                 // Mark image as ready to display (but don't display yet - let loop handle it)
                 imageReadyToDisplay = true;
+
+                // Release mutex after marking image ready
+                xSemaphoreGive(imageBufferMutex);
+
                 if (cyclingEnabled && imageSourceCount > 1) {
                     Serial.printf("[Image] Image %d/%d ready to display - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
                     debugPrintf(COLOR_GREEN, "Image %d/%d ready", currentImageIndex + 1, imageSourceCount);
@@ -1579,7 +1587,7 @@ void downloadAndDisplayImage() {
                     debugPrintf(COLOR_GREEN, "Image ready");
                 }
                 Serial.println("Image fully decoded and ready for display");
-                
+
                 // Mark first image as loaded (only once) - happens before actual display
                 if (!firstImageLoaded) {
                     firstImageLoaded = true;
@@ -1590,19 +1598,19 @@ void downloadAndDisplayImage() {
                     Serial.println("Image prepared successfully - ready for seamless display");
                 }
             } else {
-                // Resume display even on error
-                displayManager.resumeDisplay();
-                
+                // Release mutex on decode failure
+                xSemaphoreGive(imageBufferMutex);
+
                 unsigned long decodeAttemptTime = millis() - decodeStart;
                 Serial.printf("[Image] ✗ JPEG decode failed after %lu ms\n", decodeAttemptTime);
-                Serial.printf("[Image] Image was: %dx%d pixels, %d bytes\n", 
+                Serial.printf("[Image] Image was: %dx%d pixels, %d bytes\n",
                              pendingImageWidth, pendingImageHeight, bytesRead);
                 Serial.println("[Image] Possible causes:");
                 Serial.println("  - Corrupted JPEG data");
                 Serial.println("  - Unsupported JPEG format/encoding");
                 Serial.println("  - Progressive JPEG (not supported)");
                 Serial.println("  - Memory allocation failure during decode");
-                
+
                 debugPrint("ERROR: JPEG decode() function failed!", COLOR_RED);
                 Serial.println("ERROR: JPEG decode() function failed!");
             }
@@ -2077,39 +2085,46 @@ void loop() {
     // Check if new image is ready to display - swap buffers for seamless transition (NO FLICKER!)
     // Skip image rendering during OTA to prevent display interference
     if (imageReadyToDisplay && !webConfig.isOTAInProgress()) {
-        imageReadyToDisplay = false;  // Clear the flag immediately
-        
-        Serial.println("=== SWAPPING IMAGE BUFFERS FOR SEAMLESS DISPLAY ===");
-        systemMonitor.forceResetWatchdog();
-        
-        // Swap the buffers: move pending->active
-        uint16_t* tempBuffer = fullImageBuffer;
-        fullImageBuffer = pendingFullImageBuffer;
-        pendingFullImageBuffer = tempBuffer;
-        
-        int16_t tempWidth = fullImageWidth;
-        fullImageWidth = pendingImageWidth;
-        pendingImageWidth = tempWidth;
-        
-        int16_t tempHeight = fullImageHeight;
-        fullImageHeight = pendingImageHeight;
-        pendingImageHeight = tempHeight;
-        
-        Serial.printf("Buffer swap complete: %dx%d image now active\n", fullImageWidth, fullImageHeight);
-        systemMonitor.forceResetWatchdog();
-        
-        // Now render the new image to display (single seamless update, no clearing artifacts)
-        if (cyclingEnabled && imageSourceCount > 1) {
-            Serial.printf("[Image] Rendering image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
-            debugPrintf(COLOR_GREEN, "Rendering image %d/%d", currentImageIndex + 1, imageSourceCount);
+        // Take mutex to protect buffer swap from concurrent decode writes
+        if (xSemaphoreTake(imageBufferMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+            imageReadyToDisplay = false;  // Clear the flag under mutex protection
+
+            Serial.println("=== SWAPPING IMAGE BUFFERS FOR SEAMLESS DISPLAY ===");
+            systemMonitor.forceResetWatchdog();
+
+            // Swap the buffers: move pending->active
+            uint16_t* tempBuffer = fullImageBuffer;
+            fullImageBuffer = pendingFullImageBuffer;
+            pendingFullImageBuffer = tempBuffer;
+
+            int16_t tempWidth = fullImageWidth;
+            fullImageWidth = pendingImageWidth;
+            pendingImageWidth = tempWidth;
+
+            int16_t tempHeight = fullImageHeight;
+            fullImageHeight = pendingImageHeight;
+            pendingImageHeight = tempHeight;
+
+            xSemaphoreGive(imageBufferMutex);
+
+            Serial.printf("Buffer swap complete: %dx%d image now active\n", fullImageWidth, fullImageHeight);
+            systemMonitor.forceResetWatchdog();
+
+            // Now render the new image to display (single seamless update, no clearing artifacts)
+            if (cyclingEnabled && imageSourceCount > 1) {
+                Serial.printf("[Image] Rendering image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+                debugPrintf(COLOR_GREEN, "Rendering image %d/%d", currentImageIndex + 1, imageSourceCount);
+            } else {
+                Serial.printf("[Image] Rendering image - %s\n", currentImageURL);
+                debugPrintf(COLOR_GREEN, "Rendering image");
+            }
+            renderFullImage();
+            systemMonitor.forceResetWatchdog();
+
+            Serial.println("Image display completed - no flicker!");
         } else {
-            Serial.printf("[Image] Rendering image - %s\n", currentImageURL);
-            debugPrintf(COLOR_GREEN, "Rendering image");
+            Serial.println("WARNING: Could not acquire mutex for buffer swap, will retry next loop");
         }
-        renderFullImage();
-        systemMonitor.forceResetWatchdog();
-        
-        Serial.println("Image display completed - no flicker!");
     }
     
     // Check total loop time for performance monitoring
