@@ -16,9 +16,14 @@ void logPrintf(LogSeverity severity, const char* format, ...);
 // Convenience macros for logging to both Serial and WebSocket with severity levels
 // Use these instead of Serial.println() / Serial.printf() to enable remote console visibility
 
-// LOG_DEBUG: Detailed diagnostic information (hidden by default in production)
+// LOG_DEBUG: Detailed diagnostic information (stripped entirely when NDEBUG is defined)
+#ifndef NDEBUG
 #define LOG_DEBUG(msg) do { logPrint(msg, LOG_DEBUG); logPrint("\n", LOG_DEBUG); } while(0)
 #define LOG_DEBUG_F(...) logPrintf(LOG_DEBUG, __VA_ARGS__)
+#else
+#define LOG_DEBUG(msg) ((void)0)
+#define LOG_DEBUG_F(...) ((void)0)
+#endif
 
 // LOG_INFO: General informational messages (default visibility level)
 #define LOG_INFO(msg) do { logPrint(msg, LOG_INFO); logPrint("\n", LOG_INFO); } while(0)

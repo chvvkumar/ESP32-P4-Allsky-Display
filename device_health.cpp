@@ -21,9 +21,22 @@ DeviceHealthAnalyzer::DeviceHealthAnalyzer() {
 
 // Helper function to escape strings for JSON
 static String escapeJsonString(const String& input) {
+    // Fast-path: scan for characters that need escaping; if none, return input as-is
+    bool needsEscape = false;
+    for (unsigned int i = 0; i < input.length(); i++) {
+        char c = input.charAt(i);
+        if (c == '"' || c == '\\' || c == '/' || c < 0x20) {
+            needsEscape = true;
+            break;
+        }
+    }
+    if (!needsEscape) {
+        return input;
+    }
+
     String output;
     output.reserve(input.length() + 10); // Reserve some extra space for escapes
-    
+
     for (unsigned int i = 0; i < input.length(); i++) {
         char c = input.charAt(i);
         switch (c) {
@@ -385,6 +398,7 @@ void DeviceHealthAnalyzer::printReport(const DeviceHealthReport& report) {
 
 String DeviceHealthAnalyzer::getReportJSON(const DeviceHealthReport& report) {
     String json = "{";
+    json.reserve(2048);
     
     // Overall status
     json += "\"overall\":{";
@@ -485,6 +499,76 @@ bool DeviceHealthAnalyzer::isSystemHealthy() {
 }
 
 HealthStatus DeviceHealthAnalyzer::getQuickStatus() {
-    DeviceHealthReport report = generateReport();
-    return report.overallStatus;
+    // Lightweight status check — evaluates the same conditions as the full
+    // analysis methods but without building any String objects or a full report.
+    HealthStatus worst = HEALTH_EXCELLENT;
+
+    // --- Memory checks ---
+    size_t freeHeap = systemMonitor.getCurrentFreeHeap();
+    size_t freePsram = systemMonitor.getCurrentFreePsram();
+    size_t minFreeHeap = systemMonitor.getMinFreeHeap();
+    size_t minFreePsram = systemMonitor.getMinFreePsram();
+    size_t totalHeap = ESP.getHeapSize();
+    size_t totalPsram = ESP.getPsramSize();
+
+    if (freeHeap < configStorage.getCriticalHeapThreshold() ||
+        freePsram < configStorage.getCriticalPSRAMThreshold()) {
+        worst = HEALTH_CRITICAL;
+    } else if (minFreeHeap < (size_t)(configStorage.getCriticalHeapThreshold() * 1.5) ||
+               minFreePsram < (size_t)(configStorage.getCriticalPSRAMThreshold() * 1.5)) {
+        if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+    } else {
+        float heapUsage = 100.0f - ((float)freeHeap / (float)totalHeap * 100.0f);
+        float psramUsage = 100.0f - ((float)freePsram / (float)totalPsram * 100.0f);
+        if (heapUsage > 80.0f || psramUsage > 80.0f) {
+            if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+        }
+    }
+
+    // --- Network checks ---
+    if (!wifiManager.isConnected()) {
+        if (HEALTH_FAILING > worst) worst = HEALTH_FAILING;
+    } else {
+        int rssi = WiFi.RSSI();
+        if (rssi < -80) {
+            if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+        } else if (rssi < -70) {
+            if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+        } else if (networkDisconnectCount > 10) {
+            if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+        } else if (networkDisconnectCount > 5) {
+            if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+        }
+    }
+
+    // --- MQTT checks ---
+    if (!configStorage.getMQTTServer().isEmpty()) {
+        if (!mqttManager.isConnected()) {
+            if (HEALTH_CRITICAL > worst) worst = HEALTH_CRITICAL;
+        } else if (mqttReconnectCount > 20) {
+            if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+        } else if (mqttReconnectCount > 10) {
+            if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+        }
+    }
+
+    // --- System checks ---
+    if (!systemMonitor.isSystemHealthy()) {
+        if (HEALTH_CRITICAL > worst) worst = HEALTH_CRITICAL;
+    } else if (crashLogger.wasLastBootCrash()) {
+        if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+    } else if (temperatureRead() > 80.0f) {
+        if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+    } else if (crashLogger.getBootCount() > 50) {
+        if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+    } else if (watchdogResetCount > 5) {
+        if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+    }
+
+    // --- Display checks ---
+    if (displayManager.getBrightness() < 10) {
+        if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+    }
+
+    return worst;
 }

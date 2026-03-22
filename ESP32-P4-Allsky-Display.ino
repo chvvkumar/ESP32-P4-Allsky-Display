@@ -182,29 +182,33 @@ void logPrintf(LogSeverity severity, const char* format, ...) {
 
 // Debug output wrapper functions (also show on display)
 // Note: broadcastLog() adds timestamps and severity prefixes automatically
+// Detect log severity from message content using C-string case-insensitive search.
+// Avoids allocating a String object and calling toLowerCase() on every call.
+static LogSeverity detectSeverity(const char* msg) {
+    if (strcasestr(msg, "critical") || strcasestr(msg, "fatal") || strcasestr(msg, "panic")) {
+        return LOG_CRITICAL;
+    }
+    if (strcasestr(msg, "error") || strcasestr(msg, "fail")) {
+        return LOG_ERROR;
+    }
+    if (strcasestr(msg, "warning") || strcasestr(msg, "warn")) {
+        return LOG_WARNING;
+    }
+    if (strcasestr(msg, "info")) {
+        return LOG_INFO;
+    }
+    return LOG_DEBUG;
+}
+
 void debugPrint(const char* message, uint16_t color) {
     displayManager.debugPrint(message, color);
-    
+
     // Log to crash logger (survives reboot)
     crashLogger.log(message);
     crashLogger.log("\n");
-    
-    // Intelligently detect severity from message content
-    LogSeverity severity = LOG_DEBUG;  // Default to DEBUG for debugPrint calls
-    String msg = String(message);
-    msg.toLowerCase();
-    
-    if (msg.indexOf("info") >= 0 || msg.indexOf("✓") >= 0) {
-        severity = LOG_INFO;
-    } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
-        severity = LOG_ERROR;
-    } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
-        severity = LOG_WARNING;
-    } else if (msg.indexOf("critical") >= 0 || msg.indexOf("fatal") >= 0 || msg.indexOf("panic") >= 0) {
-        severity = LOG_CRITICAL;
-    }
-    
-    // Send to WebSocket console clients with detected severity (broadcastLog adds timestamp)
+
+    // Detect severity from message content and send to WebSocket console clients
+    LogSeverity severity = detectSeverity(message);
     webConfig.broadcastLog(message, color, severity);
 }
 
@@ -214,29 +218,15 @@ void debugPrintf(uint16_t color, const char* format, ...) {
     va_start(args, format);
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
-    
+
     displayManager.debugPrint(buffer, color);
-    
+
     // Log to crash logger (survives reboot)
     crashLogger.log(buffer);
     crashLogger.log("\n");
-    
-    // Intelligently detect severity from message content
-    LogSeverity severity = LOG_DEBUG;  // Default to DEBUG for debugPrintf calls
-    String msg = String(buffer);
-    msg.toLowerCase();
-    
-    if (msg.indexOf("info") >= 0 || msg.indexOf("✓") >= 0) {
-        severity = LOG_INFO;
-    } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
-        severity = LOG_ERROR;
-    } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
-        severity = LOG_WARNING;
-    } else if (msg.indexOf("critical") >= 0 || msg.indexOf("fatal") >= 0 || msg.indexOf("panic") >= 0) {
-        severity = LOG_CRITICAL;
-    }
-    
-    // Send to WebSocket console clients with detected severity (broadcastLog adds timestamp)
+
+    // Detect severity from message content and send to WebSocket console clients
+    LogSeverity severity = detectSeverity(buffer);
     webConfig.broadcastLog(buffer, color, severity);
 }
 
@@ -1089,33 +1079,8 @@ void downloadAndDisplayImage() {
         return;
     }
     
-    // Additional network health check - ping gateway or DNS
-    Serial.println("DEBUG: Performing network health check...");
-    Serial.flush();
-    
-    // Test network connectivity with a simple ping-like operation
-    WiFiClient testClient;
-    testClient.setTimeout(NETWORK_CHECK_TIMEOUT);
-    
-    bool networkHealthy = false;
-    unsigned long networkTestStart = millis();
-    
-    // Try to connect to a reliable server to test network health
-    if (testClient.connect("8.8.8.8", 53)) {  // Google DNS
-        testClient.stop();
-        networkHealthy = true;
-        Serial.println("DEBUG: Network health check passed");
-    } else {
-        Serial.printf("DEBUG: Network health check failed after %lu ms\n", millis() - networkTestStart);
-    }
-    
-    systemMonitor.forceResetWatchdog();
-    
-    if (!networkHealthy) {
-        Serial.println("WARNING: Network appears unhealthy, proceeding with caution");
-        debugPrint("WARNING: Network connectivity issues detected", COLOR_YELLOW);
-    }
-    
+    // Network health check removed — the HTTP request itself has a timeout,
+    // and the TCP probe to 8.8.8.8:53 was useless on isolated LANs.
     Serial.println("DEBUG: WiFi connection check passed");
     Serial.flush();
     
