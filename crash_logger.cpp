@@ -290,9 +290,9 @@ String CrashLogger::getRAMLogs() {
     char* buffer = (char*)malloc(RAM_BUFFER_SIZE);
     if (!buffer) return String("[CrashLogger] Memory allocation failed\n");
     
-    size_t len = readFromRingBuffer(ramLogBuffer, ramWritePos, ramLength, 
-                                     RAM_BUFFER_SIZE, buffer, RAM_BUFFER_SIZE);
-    
+    readFromRingBuffer(ramLogBuffer, ramWritePos, ramLength,
+                       RAM_BUFFER_SIZE, buffer, RAM_BUFFER_SIZE);
+
     String result(buffer);
     free(buffer);
     
@@ -307,9 +307,9 @@ String CrashLogger::getRTCLogs() {
     char* buffer = (char*)malloc(RTC_BUFFER_SIZE);
     if (!buffer) return String("[CrashLogger] Memory allocation failed\n");
     
-    size_t len = readFromRingBuffer(rtcLogBuffer, rtcWritePos, rtcLength, 
-                                     RTC_BUFFER_SIZE, buffer, RTC_BUFFER_SIZE);
-    
+    readFromRingBuffer(rtcLogBuffer, rtcWritePos, rtcLength,
+                       RTC_BUFFER_SIZE, buffer, RTC_BUFFER_SIZE);
+
     String result(buffer);
     free(buffer);
     

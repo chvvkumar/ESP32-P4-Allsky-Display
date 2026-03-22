@@ -357,13 +357,19 @@ String WebConfig::generateNavigation(const String& currentPage) {
     html += "<button class='nav-toggle' onclick='toggleNav()' aria-label='Toggle navigation'><i class='fas fa-bars'></i></button>";
     html += "<div class='nav-content'>";
     
-    String pages[] = {"dashboard", "images", "display", "network", "mqtt", "console", "system", "commands", "api"};
-    String labels[] = {"🏠 Dashboard", "🖼️ Images", "💡 Display", "📡 Network", "🔗 MQTT", "🖥️ Console", "⚙️ System", "📟 Commands", "📚 API"};
-    String urls[] = {"/", "/config/images", "/config/display", "/config/network", "/config/mqtt", "/console", "/config/system", "/config/commands", "/api-reference"};
+    static const char* const pages[] = {"dashboard", "images", "display", "network", "mqtt", "console", "system", "commands", "api"};
+    static const char* const labels[] = {"\xF0\x9F\x8F\xA0 Dashboard", "\xF0\x9F\x96\xBC\xEF\xB8\x8F Images", "\xF0\x9F\x92\xA1 Display", "\xF0\x9F\x93\xA1 Network", "\xF0\x9F\x94\x97 MQTT", "\xF0\x9F\x96\xA5\xEF\xB8\x8F Console", "\xE2\x9A\x99\xEF\xB8\x8F System", "\xF0\x9F\x93\x9F Commands", "\xF0\x9F\x93\x9A API"};
+    static const char* const urls[] = {"/", "/config/images", "/config/display", "/config/network", "/config/mqtt", "/console", "/config/system", "/config/commands", "/api-reference"};
     
     for (int i = 0; i < 9; i++) {
-        String activeClass = (currentPage == pages[i]) ? " active" : "";
-        html += "<a href='" + urls[i] + "' class='nav-item" + activeClass + "'>" + labels[i] + "</a>";
+        const char* activeClass = (currentPage == pages[i]) ? " active" : "";
+        html += "<a href='";
+        html += urls[i];
+        html += "' class='nav-item";
+        html += activeClass;
+        html += "'>";
+        html += labels[i];
+        html += "</a>";
     }
     
     html += "</div></div></div>";
@@ -418,8 +424,8 @@ String WebConfig::getSystemStatus() {
     json.reserve(512);  // Pre-allocate ~512 bytes for system status JSON
     json = "{";
     json += "\"wifi_connected\":" + String(wifiManager.isConnected() ? "true" : "false") + ",";
-    json += "\"wifi_ssid\":\"" + (wifiManager.isConnected() ? String(WiFi.SSID()) : "Not connected") + "\",";
-    json += "\"wifi_ip\":\"" + (wifiManager.isConnected() ? WiFi.localIP().toString() : "0.0.0.0") + "\",";
+    json += "\"wifi_ssid\":\"" + escapeJson(wifiManager.isConnected() ? String(WiFi.SSID()) : String("Not connected")) + "\",";
+    json += "\"wifi_ip\":\"" + (wifiManager.isConnected() ? WiFi.localIP().toString() : String("0.0.0.0")) + "\",";
     json += "\"wifi_rssi\":" + String(WiFi.RSSI()) + ",";
     json += "\"mqtt_connected\":" + String(mqttManager.isConnected() ? "true" : "false") + ",";
     json += "\"free_heap\":" + String(systemMonitor.getCurrentFreeHeap()) + ",";
@@ -475,12 +481,30 @@ String WebConfig::escapeHtml(const String& input) {
 }
 
 String WebConfig::escapeJson(const String& input) {
-    String output = input;
-    output.replace("\\", "\\\\");
-    output.replace("\"", "\\\"");
-    output.replace("\n", "\\n");
-    output.replace("\r", "\\r");
-    output.replace("\t", "\\t");
+    String output;
+    output.reserve(input.length() + 16);
+    for (unsigned int i = 0; i < input.length(); i++) {
+        char c = input[i];
+        switch (c) {
+            case '\\': output += "\\\\"; break;
+            case '"':  output += "\\\""; break;
+            case '\n': output += "\\n"; break;
+            case '\r': output += "\\r"; break;
+            case '\t': output += "\\t"; break;
+            case '\b': output += "\\b"; break;
+            case '\f': output += "\\f"; break;
+            default:
+                if (c < 0x20) {
+                    // Escape other control characters as \u00XX
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)c);
+                    output += buf;
+                } else {
+                    output += c;
+                }
+                break;
+        }
+    }
     return output;
 }
 
