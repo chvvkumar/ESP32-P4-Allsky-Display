@@ -26,7 +26,12 @@ void HARestClient::begin() {
     }
     
     LOG_INFO("[HARestClient] Starting HA REST client task on Core 0");
-    
+
+    // Create exit semaphore so stop() can wait for clean task shutdown
+    if (_taskExitSemaphore == nullptr) {
+        _taskExitSemaphore = xSemaphoreCreateBinary();
+    }
+
     // Create FreeRTOS task pinned to Core 0
     BaseType_t result = xTaskCreatePinnedToCore(
         taskLoop,                    // Task function
@@ -50,14 +55,22 @@ void HARestClient::stop() {
     if (!_taskRunning) {
         return;
     }
-    
+
     LOG_INFO("[HARestClient] Stopping task");
     _taskRunning = false;
-    
-    if (_taskHandle != nullptr) {
-        vTaskDelete(_taskHandle);
-        _taskHandle = nullptr;
+
+    // Wait for the task to exit on its own (up to 15s to allow HTTP request to finish)
+    if (_taskExitSemaphore != nullptr) {
+        if (xSemaphoreTake(_taskExitSemaphore, pdMS_TO_TICKS(15000)) == pdTRUE) {
+            LOG_INFO("[HARestClient] Task exited cleanly");
+        } else {
+            LOG_WARNING("[HARestClient] Timed out waiting for task to exit");
+        }
+        vSemaphoreDelete(_taskExitSemaphore);
+        _taskExitSemaphore = nullptr;
     }
+
+    _taskHandle = nullptr;
 }
 
 void HARestClient::taskLoop(void* parameter) {
@@ -80,6 +93,12 @@ void HARestClient::taskLoop(void* parameter) {
     }
     
     LOG_INFO("[HARestClient] Task loop ended");
+
+    // Signal stop() that we are about to exit
+    if (instance->_taskExitSemaphore != nullptr) {
+        xSemaphoreGive(instance->_taskExitSemaphore);
+    }
+
     vTaskDelete(nullptr);
 }
 
@@ -109,7 +128,7 @@ void HARestClient::performCheck() {
     http.begin(url);
     http.addHeader("Authorization", "Bearer " + token);
     http.addHeader("Content-Type", "application/json");
-    http.setTimeout(10000);  // 10 second timeout
+    http.setTimeout(5000);  // 5 second timeout
     
     int httpCode = http.GET();
     
