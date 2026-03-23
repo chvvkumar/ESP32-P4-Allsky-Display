@@ -20,6 +20,7 @@
 #include "ha_rest_client.h"  // Home Assistant REST brightness control
 
 // Additional required libraries
+#include <atomic>
 #include <HTTPClient.h>
 #include <JPEGDEC.h>
 #include <PubSubClient.h>
@@ -63,7 +64,7 @@ int16_t fullImageHeight = 0;
 uint16_t* pendingFullImageBuffer = nullptr;
 int16_t pendingImageWidth = 0;
 int16_t pendingImageHeight = 0;
-bool imageReadyToDisplay = false;  // Flag: new image fully prepared and ready to show
+std::atomic<bool> imageReadyToDisplay{false};  // Flag: new image fully prepared and ready to show
 
 // Scaling buffer for transformed images
 uint16_t* scaledBuffer = nullptr;
@@ -87,7 +88,7 @@ int16_t qrCodeHeight = 0;
 uint16_t* scratchBuffer = nullptr;
 
 // Image processing control
-bool imageProcessing = false;
+std::atomic<bool> imageProcessing{false};
 unsigned long lastImageProcessTime = 0;
 
 // Touch control variables
@@ -150,9 +151,6 @@ void downloadTask(void* params);
 // Touch function declarations
 void initializeTouchController();
 void updateTouchState();
-void processTouchGestures();
-void handleSingleTap();
-void handleDoubleTap();
 
 // Universal logging function - sends to Serial AND WebSocket console
 // Default parameter defined in logging.h
@@ -181,29 +179,33 @@ void logPrintf(LogSeverity severity, const char* format, ...) {
 
 // Debug output wrapper functions (also show on display)
 // Note: broadcastLog() adds timestamps and severity prefixes automatically
+// Detect log severity from message content using C-string case-insensitive search.
+// Avoids allocating a String object and calling toLowerCase() on every call.
+static LogSeverity detectSeverity(const char* msg) {
+    if (strcasestr(msg, "critical") || strcasestr(msg, "fatal") || strcasestr(msg, "panic")) {
+        return LOG_CRITICAL;
+    }
+    if (strcasestr(msg, "error") || strcasestr(msg, "fail")) {
+        return LOG_ERROR;
+    }
+    if (strcasestr(msg, "warning") || strcasestr(msg, "warn")) {
+        return LOG_WARNING;
+    }
+    if (strcasestr(msg, "info")) {
+        return LOG_INFO;
+    }
+    return LOG_DEBUG;
+}
+
 void debugPrint(const char* message, uint16_t color) {
     displayManager.debugPrint(message, color);
-    
+
     // Log to crash logger (survives reboot)
     crashLogger.log(message);
     crashLogger.log("\n");
-    
-    // Intelligently detect severity from message content
-    LogSeverity severity = LOG_DEBUG;  // Default to DEBUG for debugPrint calls
-    String msg = String(message);
-    msg.toLowerCase();
-    
-    if (msg.indexOf("info") >= 0 || msg.indexOf("✓") >= 0) {
-        severity = LOG_INFO;
-    } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
-        severity = LOG_ERROR;
-    } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
-        severity = LOG_WARNING;
-    } else if (msg.indexOf("critical") >= 0 || msg.indexOf("fatal") >= 0 || msg.indexOf("panic") >= 0) {
-        severity = LOG_CRITICAL;
-    }
-    
-    // Send to WebSocket console clients with detected severity (broadcastLog adds timestamp)
+
+    // Detect severity from message content and send to WebSocket console clients
+    LogSeverity severity = detectSeverity(message);
     webConfig.broadcastLog(message, color, severity);
 }
 
@@ -213,29 +215,15 @@ void debugPrintf(uint16_t color, const char* format, ...) {
     va_start(args, format);
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
-    
+
     displayManager.debugPrint(buffer, color);
-    
+
     // Log to crash logger (survives reboot)
     crashLogger.log(buffer);
     crashLogger.log("\n");
-    
-    // Intelligently detect severity from message content
-    LogSeverity severity = LOG_DEBUG;  // Default to DEBUG for debugPrintf calls
-    String msg = String(buffer);
-    msg.toLowerCase();
-    
-    if (msg.indexOf("info") >= 0 || msg.indexOf("✓") >= 0) {
-        severity = LOG_INFO;
-    } else if (msg.indexOf("error") >= 0 || msg.indexOf("fail") >= 0 || msg.indexOf("✗") >= 0) {
-        severity = LOG_ERROR;
-    } else if (msg.indexOf("warning") >= 0 || msg.indexOf("warn") >= 0) {
-        severity = LOG_WARNING;
-    } else if (msg.indexOf("critical") >= 0 || msg.indexOf("fatal") >= 0 || msg.indexOf("panic") >= 0) {
-        severity = LOG_CRITICAL;
-    }
-    
-    // Send to WebSocket console clients with detected severity (broadcastLog adds timestamp)
+
+    // Detect severity from message content and send to WebSocket console clients
+    LogSeverity severity = detectSeverity(buffer);
     webConfig.broadcastLog(buffer, color, severity);
 }
 
@@ -501,7 +489,7 @@ void setup() {
     // We need to disable it so we can reconfigure with proper timeout for heavy initialization
     esp_err_t wdt_status = esp_task_wdt_deinit();
     
-    Serial.begin(9600);
+    Serial.begin(115200);
     
     // Small delay for serial stability (reduced from 1000ms to minimize boot time)
     delay(500);
@@ -548,9 +536,9 @@ void setup() {
     
     // Clean up any existing allocations (safety check for repeated setup calls)
     if (imageBuffer) { free(imageBuffer); imageBuffer = nullptr; }
-    if (fullImageBuffer) { free(fullImageBuffer); fullImageBuffer = nullptr; }
-    if (pendingFullImageBuffer) { free(pendingFullImageBuffer); pendingFullImageBuffer = nullptr; }
-    if (scaledBuffer) { free(scaledBuffer); scaledBuffer = nullptr; }
+    if (fullImageBuffer) { heap_caps_free(fullImageBuffer); fullImageBuffer = nullptr; }
+    if (pendingFullImageBuffer) { heap_caps_free(pendingFullImageBuffer); pendingFullImageBuffer = nullptr; }
+    if (scaledBuffer) { heap_caps_free(scaledBuffer); scaledBuffer = nullptr; }
     
     imageBufferSize = w * h * IMAGE_BUFFER_MULTIPLIER * 2;
     LOG_DEBUG_F("[Memory] Allocating image buffer: %d bytes (%.1f KB)\n", 
@@ -572,7 +560,7 @@ void setup() {
     fullImageBufferSize = FULL_IMAGE_BUFFER_SIZE;
     LOG_DEBUG_F("[Memory] Allocating full image buffer: %d bytes (%.1f KB, max 512x512)\n", 
                  fullImageBufferSize, fullImageBufferSize / 1024.0);
-    fullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
+    fullImageBuffer = (uint16_t*)heap_caps_aligned_alloc(64, fullImageBufferSize, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
     if (!fullImageBuffer) {
         LOG_CRITICAL("[Memory] ✗ CRITICAL: Full image buffer allocation failed!\n");
         LOG_CRITICAL_F("CRITICAL: Full image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
@@ -587,7 +575,7 @@ void setup() {
     
     LOG_DEBUG_F("[Memory] Allocating pending buffer: %d bytes (double-buffer for flicker-free)\n", 
                  fullImageBufferSize);
-    pendingFullImageBuffer = (uint16_t*)ps_malloc(fullImageBufferSize);
+    pendingFullImageBuffer = (uint16_t*)heap_caps_aligned_alloc(64, fullImageBufferSize, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
     if (!pendingFullImageBuffer) {
         LOG_CRITICAL("[Memory] ✗ CRITICAL: Pending buffer allocation failed!\n");
         LOG_CRITICAL_F("CRITICAL: Pending image buffer pre-allocation failed! Size: %d bytes\n", fullImageBufferSize);
@@ -603,7 +591,7 @@ void setup() {
     scaledBufferSize = w * h * SCALED_BUFFER_MULTIPLIER * 2;
     LOG_DEBUG_F("[Memory] Allocating scaled buffer: %d bytes (%.1f KB, 4x display for PPA)\n", 
                  scaledBufferSize, scaledBufferSize / 1024.0);
-    scaledBuffer = (uint16_t*)ps_malloc(scaledBufferSize);
+    scaledBuffer = (uint16_t*)heap_caps_aligned_alloc(64, scaledBufferSize, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
     if (!scaledBuffer) {
         LOG_CRITICAL("[Memory] ✗ CRITICAL: Scaled buffer allocation failed!\n");
         LOG_CRITICAL_F("CRITICAL: Scaled buffer pre-allocation failed! Size: %d bytes\n", scaledBufferSize);
@@ -898,20 +886,31 @@ void renderFullImage() {
     systemMonitor.forceResetWatchdog();
     
     if (scaleX == 1.0 && scaleY == 1.0 && rotationAngle == 0.0) {
-        // No scaling or rotation needed, apply color temp directly to full image buffer
+        // No scaling or rotation needed
         int currentTemp = configStorage.getColorTemp();
         if (currentTemp != 6500) {
-            ImageUtils::adjustColorTemperature(fullImageBuffer, fullImageWidth, fullImageHeight, currentTemp);
+            // Copy to scaledBuffer first, then apply color temp to the copy.
+            // This prevents compounding color shifts when the same image is re-rendered.
+            size_t imageSize = fullImageWidth * fullImageHeight * sizeof(uint16_t);
+            if (imageSize <= scaledBufferSize) {
+                memcpy(scaledBuffer, fullImageBuffer, imageSize);
+                ImageUtils::adjustColorTemperature(scaledBuffer, fullImageWidth, fullImageHeight, currentTemp);
+                displayManager.drawBitmap(finalX, finalY, scaledBuffer, fullImageWidth, fullImageHeight);
+            } else {
+                // Fallback: buffer too small, apply in-place (legacy behavior)
+                ImageUtils::adjustColorTemperature(fullImageBuffer, fullImageWidth, fullImageHeight, currentTemp);
+                displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
+            }
+        } else {
+            displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
         }
-        
-        displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
-        
+
         // Flush to display
         Arduino_DSI_Display* gfx = displayManager.getGFX();
         if (gfx) gfx->flush();
-        
+
         systemMonitor.forceResetWatchdog();
-        
+
         // Update tracking variables for next transition
         prevImageX = finalX;
         prevImageY = finalY;
@@ -936,11 +935,11 @@ void renderFullImage() {
             // Pause display during heavy PPA operations to prevent LCD underrun
             displayManager.pauseDisplay();
             
-            Serial.printf("[PPA] Attempting hardware scale+rotate: %dx%d -> %dx%d (%.0f°)\n",
+            Serial.printf("[PPA] Attempting zero-copy hardware scale+rotate: %dx%d -> %dx%d (%.0f°)\n",
                          fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, rotationAngle);
-            
-            if (ppaAccelerator.scaleRotateImage(fullImageBuffer, fullImageWidth, fullImageHeight,
-                                              scaledBuffer, scaledWidth, scaledHeight, rotationAngle)) {
+
+            if (ppaAccelerator.scaleRotateImageZeroCopy(fullImageBuffer, fullImageWidth, fullImageHeight,
+                                              scaledBuffer, scaledBufferSize, scaledWidth, scaledHeight, rotationAngle)) {
                 // Resume display after heavy operation
                 displayManager.resumeDisplay();
                 
@@ -1071,68 +1070,35 @@ void downloadAndDisplayImage() {
     
     // Immediate debug output with Serial.println to ensure it shows up
     Serial.println("=== DOWNLOADANDDISPLAYIMAGE FUNCTION START ===");
-    Serial.flush();
-    
+
     // Reset watchdog at function start
     systemMonitor.forceResetWatchdog();
-    
+
     Serial.println("DEBUG: Watchdog reset complete");
-    Serial.flush();
-    
+
     // Enhanced network connectivity check
     if (!wifiManager.isConnected()) {
         Serial.println("ERROR: No WiFi connection");
-        Serial.flush();
         systemMonitor.forceResetWatchdog();
         imageProcessing = false;  // Clear mutex before return
         return;
     }
-    
-    // Additional network health check - ping gateway or DNS
-    Serial.println("DEBUG: Performing network health check...");
-    Serial.flush();
-    
-    // Test network connectivity with a simple ping-like operation
-    WiFiClient testClient;
-    testClient.setTimeout(NETWORK_CHECK_TIMEOUT);
-    
-    bool networkHealthy = false;
-    unsigned long networkTestStart = millis();
-    
-    // Try to connect to a reliable server to test network health
-    if (testClient.connect("8.8.8.8", 53)) {  // Google DNS
-        testClient.stop();
-        networkHealthy = true;
-        Serial.println("DEBUG: Network health check passed");
-    } else {
-        Serial.printf("DEBUG: Network health check failed after %lu ms\n", millis() - networkTestStart);
-    }
-    
-    systemMonitor.forceResetWatchdog();
-    
-    if (!networkHealthy) {
-        Serial.println("WARNING: Network appears unhealthy, proceeding with caution");
-        debugPrint("WARNING: Network connectivity issues detected", COLOR_YELLOW);
-    }
-    
+
+    // Network health check removed — the HTTP request itself has a timeout,
+    // and the TCP probe to 8.8.8.8:53 was useless on isolated LANs.
     Serial.println("DEBUG: WiFi connection check passed");
-    Serial.flush();
-    
+
     // Get current image URL based on cycling configuration
     String imageURL = getCurrentImageURL();
-    
-    Serial.println("DEBUG: About to get current image URL");
-    Serial.flush();
-    Serial.printf("DEBUG: Current image URL: %s\n", imageURL.c_str());
-    Serial.flush();
 
-    Serial.flush();
+    Serial.println("DEBUG: About to get current image URL");
+    Serial.printf("DEBUG: Current image URL: %s\n", imageURL.c_str());
     
     // Reset watchdog before HTTP operations
     systemMonitor.forceResetWatchdog();
     
     Serial.println("[Image] ===== Starting Image Download =====");
-    Serial.printf("[Image] URL: %s\n", imageURL);
+    Serial.printf("[Image] URL: %s\n", imageURL.c_str());
     Serial.printf("[Image] Buffer size: %d bytes\n", imageBufferSize);
     Serial.printf("[Image] Free heap: %d bytes, Free PSRAM: %d bytes\n", ESP.getFreeHeap(), ESP.getFreePsram());
     
@@ -1283,10 +1249,10 @@ void downloadAndDisplayImage() {
     
     Serial.printf("[Image] Content-Length: %d bytes\n", size);
     if (cyclingEnabled && imageSourceCount > 1) {
-        Serial.printf("[Image] Source: Image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+        Serial.printf("[Image] Source: Image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL.c_str());
         debugPrintf(COLOR_WHITE, "Image %d/%d: %d bytes", currentImageIndex + 1, imageSourceCount, size);
     } else {
-        Serial.printf("[Image] Source: %s\n", currentImageURL);
+        Serial.printf("[Image] Source: %s\n", currentImageURL.c_str());
         debugPrintf(COLOR_WHITE, "Image: %d bytes", size);
     }
     
@@ -1327,7 +1293,7 @@ void downloadAndDisplayImage() {
     unsigned long readStart = millis();
     
     // Use configuration values for better consistency
-    const size_t ULTRA_CHUNK_SIZE = 1024;  // 1KB chunks for good performance
+    const size_t ULTRA_CHUNK_SIZE = 8192;  // 8KB chunks for better throughput
 
     const unsigned long NO_DATA_TIMEOUT = 5000;  // 5 seconds with no data before giving up (increased for slow connections)
     
@@ -1540,46 +1506,53 @@ void downloadAndDisplayImage() {
         
         if (requiredSize <= fullImageBufferSize) {
             Serial.println("DEBUG: Image fits in buffer, proceeding with decode...");
+
+            // Take mutex to protect pendingFullImageBuffer during decode
+            if (xSemaphoreTake(imageBufferMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+                Serial.println("ERROR: Failed to acquire image buffer mutex for decode");
+                jpeg.close();
+                imageProcessing = false;
+                return;
+            }
+
             // Clear the PENDING image buffer
             memset(pendingFullImageBuffer, 0, pendingImageWidth * pendingImageHeight * sizeof(uint16_t));
-            
+
             // Decode the full image into PENDING buffer with watchdog protection
             systemMonitor.forceResetWatchdog();
-            
+
             unsigned long decodeStart = millis();
-            
+
             // JPEG decode with timeout monitoring
 
             unsigned long decodeStartTime = millis();
-            
-            // Pause display during decode to prevent LCD underrun from memory contention
-            displayManager.pauseDisplay();
-            
+
             Serial.println("[Image] Decoding JPEG to RGB565...");
             if (jpeg.decode(0, 0, 0)) {
-                // Resume display after decode completes
-                displayManager.resumeDisplay();
-                
                 unsigned long decodeTime = millis() - decodeStart;
                 Serial.printf("[Image] ✓ Decode complete in %lu ms\n", decodeTime);
-                Serial.printf("[Image] Decoded %dx%d pixels (%d bytes RGB565)\n", 
-                             pendingImageWidth, pendingImageHeight, 
+                Serial.printf("[Image] Decoded %dx%d pixels (%d bytes RGB565)\n",
+                             pendingImageWidth, pendingImageHeight,
                              pendingImageWidth * pendingImageHeight * 2);
-                
+
                 // Reset watchdog after decode
                 systemMonitor.forceResetWatchdog();
-                
+
                 // Mark image as ready to display (but don't display yet - let loop handle it)
                 imageReadyToDisplay = true;
+
+                // Release mutex after marking image ready
+                xSemaphoreGive(imageBufferMutex);
+
                 if (cyclingEnabled && imageSourceCount > 1) {
-                    Serial.printf("[Image] Image %d/%d ready to display - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
+                    Serial.printf("[Image] Image %d/%d ready to display - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL.c_str());
                     debugPrintf(COLOR_GREEN, "Image %d/%d ready", currentImageIndex + 1, imageSourceCount);
                 } else {
-                    Serial.printf("[Image] Image ready to display - %s\n", currentImageURL);
+                    Serial.printf("[Image] Image ready to display - %s\n", currentImageURL.c_str());
                     debugPrintf(COLOR_GREEN, "Image ready");
                 }
                 Serial.println("Image fully decoded and ready for display");
-                
+
                 // Mark first image as loaded (only once) - happens before actual display
                 if (!firstImageLoaded) {
                     firstImageLoaded = true;
@@ -1590,19 +1563,19 @@ void downloadAndDisplayImage() {
                     Serial.println("Image prepared successfully - ready for seamless display");
                 }
             } else {
-                // Resume display even on error
-                displayManager.resumeDisplay();
-                
+                // Release mutex on decode failure
+                xSemaphoreGive(imageBufferMutex);
+
                 unsigned long decodeAttemptTime = millis() - decodeStart;
                 Serial.printf("[Image] ✗ JPEG decode failed after %lu ms\n", decodeAttemptTime);
-                Serial.printf("[Image] Image was: %dx%d pixels, %d bytes\n", 
+                Serial.printf("[Image] Image was: %dx%d pixels, %d bytes\n",
                              pendingImageWidth, pendingImageHeight, bytesRead);
                 Serial.println("[Image] Possible causes:");
                 Serial.println("  - Corrupted JPEG data");
                 Serial.println("  - Unsupported JPEG format/encoding");
                 Serial.println("  - Progressive JPEG (not supported)");
                 Serial.println("  - Memory allocation failure during decode");
-                
+
                 debugPrint("ERROR: JPEG decode() function failed!", COLOR_RED);
                 Serial.println("ERROR: JPEG decode() function failed!");
             }
@@ -1850,7 +1823,10 @@ void loop() {
     }
     
     // Process background retry tasks (handles network, MQTT, and image download failures)
-    taskRetryHandler.process();
+    // Skip during OTA to free network bandwidth and reduce PSRAM contention
+    if (!webConfig.isOTAInProgress()) {
+        taskRetryHandler.process();
+    }
     systemMonitor.forceResetWatchdog();
     
     // Handle web server first for maximum responsiveness
@@ -1865,9 +1841,28 @@ void loop() {
             Serial.printf("DEBUG: Web server handling took %lu ms (potential request processed)\n", webHandleTime);
         }
     }
-    
+
     unsigned long loopStartTime = millis();
-    
+
+    // Cache NVS configuration reads — refresh every 5 seconds to reduce flash wear
+    static unsigned long lastConfigRefresh = 0;
+    static unsigned long cachedUpdateInterval = 0;
+    static int cachedImageUpdateMode = 0;
+    static unsigned long cachedImageDuration = 0;
+    static int cachedImageDurationIndex = -1;  // Track which index was cached
+    if (loopStartTime - lastConfigRefresh > 5000 || lastConfigRefresh == 0) {
+        cachedUpdateInterval = configStorage.getUpdateInterval();
+        cachedImageUpdateMode = configStorage.getImageUpdateMode();
+        cachedImageDuration = configStorage.getImageDuration(currentImageIndex);
+        cachedImageDurationIndex = currentImageIndex;
+        lastConfigRefresh = loopStartTime;
+    }
+    // If image index changed since last cache, refresh duration immediately
+    if (cachedImageDurationIndex != currentImageIndex) {
+        cachedImageDuration = configStorage.getImageDuration(currentImageIndex);
+        cachedImageDurationIndex = currentImageIndex;
+    }
+
     // Update all system modules with watchdog protection
     systemMonitor.update();
     systemMonitor.forceResetWatchdog();
@@ -1897,8 +1892,8 @@ void loop() {
             if (webHandleTime > 5000) {
                 Serial.printf("WARNING: Web client handling took %lu ms\n", webHandleTime);
             }
-        } else {
-            // Try to start web server if not running
+        } else if (!webConfig.isOTAInProgress()) {
+            // Try to start web server if not running (skip during OTA)
             Serial.println("DEBUG: Web server not running, attempting to restart...");
             systemMonitor.forceResetWatchdog();  // Reset before webConfig.begin
             if (webConfig.begin(8080)) {
@@ -1912,21 +1907,21 @@ void loop() {
     }
     
     // Update MQTT manager (connect to MQTT after WiFi is established) with protection
-    if (wifiManager.isConnected()) {
+    // Skip during OTA to free network bandwidth
+    if (wifiManager.isConnected() && !webConfig.isOTAInProgress()) {
         unsigned long mqttStartTime = millis();
         mqttManager.update();
-        
+
         // Check if MQTT update took too long
         if (millis() - mqttStartTime > 2000) {
             Serial.printf("WARNING: MQTT update took %lu ms\n", millis() - mqttStartTime);
         }
         systemMonitor.forceResetWatchdog();
     }
-    
-    // Additional web server handling to prevent empty responses
-    if (wifiManager.isConnected() && webConfig.isRunning()) {
-        webConfig.handleClient();
-        webConfig.loopWebSocket();  // Handle WebSocket events
+
+    // Handle WebSocket events — skip during OTA to free network bandwidth
+    if (wifiManager.isConnected() && webConfig.isRunning() && !webConfig.isOTAInProgress()) {
+        webConfig.loopWebSocket();
     }
     
     // Periodically save crash logs to NVS (every hour to reduce flash wear)
@@ -1952,16 +1947,10 @@ void loop() {
     commandInterpreter.processCommands();
     systemMonitor.forceResetWatchdog();
     
-    // Update touch state and process gestures
+    // Update touch state
     if (touchEnabled) {
         updateTouchState();
-        processTouchGestures();
         systemMonitor.forceResetWatchdog();
-    }
-    
-    // Handle web server again after serial processing
-    if (wifiManager.isConnected() && webConfig.isRunning()) {
-        webConfig.handleClient();
     }
     
     // Enhanced stuck image processing detection
@@ -1977,8 +1966,8 @@ void loop() {
                      systemMonitor.getCurrentFreeHeap(), systemMonitor.getCurrentFreePsram());
     }
     
-    // Update dynamic configuration
-    currentUpdateInterval = configStorage.getUpdateInterval();
+    // Update dynamic configuration from cached NVS values
+    currentUpdateInterval = cachedUpdateInterval;
     systemMonitor.forceResetWatchdog();
     
     // Check for touch-triggered actions
@@ -2031,10 +2020,11 @@ void loop() {
     }
     
     // Only auto-cycle if in automatic mode, not paused, and multiple images available
-    int imageUpdateMode = configStorage.getImageUpdateMode();
-    if (imageUpdateMode == 0 && cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode && !cyclingPausedForEditing) {
-        // Use per-image duration instead of global cycle interval
-        unsigned long currentImageDuration = configStorage.getImageDuration(currentImageIndex) * 1000;  // Convert seconds to milliseconds
+    // Skip during OTA — no point cycling images while firmware is being written
+    int imageUpdateMode = cachedImageUpdateMode;
+    if (imageUpdateMode == 0 && cyclingEnabled && imageSourceCount > 1 && !imageProcessing && !singleImageRefreshMode && !cyclingPausedForEditing && !webConfig.isOTAInProgress()) {
+        // Use per-image duration instead of global cycle interval (from cached NVS value)
+        unsigned long currentImageDuration = cachedImageDuration * 1000;  // Convert seconds to milliseconds
         if (currentTime - lastCycleTime >= currentImageDuration || lastCycleTime == 0) {
             shouldCycle = true;
             lastCycleTime = currentTime;
@@ -2058,8 +2048,17 @@ void loop() {
     if (!imageProcessing && !imageDownloadPending && !webConfig.isOTAInProgress() && shouldUpdate) {
         // Pre-download system health check
         if (!wifiManager.isConnected()) {
-            Serial.println("WARNING: WiFi disconnected, skipping image download");
-            lastUpdate = currentTime; // Update timestamp to prevent immediate retry
+            // Rate-limit this log so it doesn't spam every 50ms loop
+            static unsigned long lastWifiSkipLog = 0;
+            if (currentTime - lastWifiSkipLog > 5000) {
+                Serial.println("WARNING: WiFi disconnected, skipping image download");
+                lastWifiSkipLog = currentTime;
+            }
+            // Do NOT update lastUpdate here — leave it at 0 (or stale) so the
+            // download triggers immediately once WiFi connects.  The old code
+            // set lastUpdate = currentTime which forced a full updateInterval
+            // (2 min) wait after WiFi came up, leaving the display stuck on
+            // the "Connecting to WiFi..." screen.
             systemMonitor.forceResetWatchdog();
         } else {
             Serial.printf("DEBUG: Triggering async image download (last update: %lu ms ago)\n", 
@@ -2077,39 +2076,46 @@ void loop() {
     // Check if new image is ready to display - swap buffers for seamless transition (NO FLICKER!)
     // Skip image rendering during OTA to prevent display interference
     if (imageReadyToDisplay && !webConfig.isOTAInProgress()) {
-        imageReadyToDisplay = false;  // Clear the flag immediately
-        
-        Serial.println("=== SWAPPING IMAGE BUFFERS FOR SEAMLESS DISPLAY ===");
-        systemMonitor.forceResetWatchdog();
-        
-        // Swap the buffers: move pending->active
-        uint16_t* tempBuffer = fullImageBuffer;
-        fullImageBuffer = pendingFullImageBuffer;
-        pendingFullImageBuffer = tempBuffer;
-        
-        int16_t tempWidth = fullImageWidth;
-        fullImageWidth = pendingImageWidth;
-        pendingImageWidth = tempWidth;
-        
-        int16_t tempHeight = fullImageHeight;
-        fullImageHeight = pendingImageHeight;
-        pendingImageHeight = tempHeight;
-        
-        Serial.printf("Buffer swap complete: %dx%d image now active\n", fullImageWidth, fullImageHeight);
-        systemMonitor.forceResetWatchdog();
-        
-        // Now render the new image to display (single seamless update, no clearing artifacts)
-        if (cyclingEnabled && imageSourceCount > 1) {
-            Serial.printf("[Image] Rendering image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL);
-            debugPrintf(COLOR_GREEN, "Rendering image %d/%d", currentImageIndex + 1, imageSourceCount);
+        // Take mutex to protect buffer swap from concurrent decode writes
+        if (xSemaphoreTake(imageBufferMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+            imageReadyToDisplay = false;  // Clear the flag under mutex protection
+
+            Serial.println("=== SWAPPING IMAGE BUFFERS FOR SEAMLESS DISPLAY ===");
+            systemMonitor.forceResetWatchdog();
+
+            // Swap the buffers: move pending->active
+            uint16_t* tempBuffer = fullImageBuffer;
+            fullImageBuffer = pendingFullImageBuffer;
+            pendingFullImageBuffer = tempBuffer;
+
+            int16_t tempWidth = fullImageWidth;
+            fullImageWidth = pendingImageWidth;
+            pendingImageWidth = tempWidth;
+
+            int16_t tempHeight = fullImageHeight;
+            fullImageHeight = pendingImageHeight;
+            pendingImageHeight = tempHeight;
+
+            xSemaphoreGive(imageBufferMutex);
+
+            Serial.printf("Buffer swap complete: %dx%d image now active\n", fullImageWidth, fullImageHeight);
+            systemMonitor.forceResetWatchdog();
+
+            // Now render the new image to display (single seamless update, no clearing artifacts)
+            if (cyclingEnabled && imageSourceCount > 1) {
+                Serial.printf("[Image] Rendering image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL.c_str());
+                debugPrintf(COLOR_GREEN, "Rendering image %d/%d", currentImageIndex + 1, imageSourceCount);
+            } else {
+                Serial.printf("[Image] Rendering image - %s\n", currentImageURL.c_str());
+                debugPrintf(COLOR_GREEN, "Rendering image");
+            }
+            renderFullImage();
+            systemMonitor.forceResetWatchdog();
+
+            Serial.println("Image display completed - no flicker!");
         } else {
-            Serial.printf("[Image] Rendering image - %s\n", currentImageURL);
-            debugPrintf(COLOR_GREEN, "Rendering image");
+            Serial.println("WARNING: Could not acquire mutex for buffer swap, will retry next loop");
         }
-        renderFullImage();
-        systemMonitor.forceResetWatchdog();
-        
-        Serial.println("Image display completed - no flicker!");
     }
     
     // Check total loop time for performance monitoring
@@ -2185,7 +2191,7 @@ void updateTouchState() {
     
     // Debouncing: ignore rapid state changes
     if (currentlyPressed != touchPressed) {
-        if (currentTime - touchReleaseTime < TOUCH_DEBOUNCE_MS && 
+        if (currentTime - touchReleaseTime < TOUCH_DEBOUNCE_MS ||
             currentTime - touchPressTime < TOUCH_DEBOUNCE_MS) {
             return; // Too soon since last state change
         }
@@ -2238,9 +2244,9 @@ void updateTouchState() {
                         // Valid double tap - toggle mode
                         touchTriggeredModeToggle = true;
                         touchState = TOUCH_IDLE;
-                        firstTapTime = 0;
-                        Serial.printf("Touch: Double-tap detected! (total time: %lu ms)\n", 
+                        Serial.printf("Touch: Double-tap detected! (total time: %lu ms)\n",
                                      currentTime - firstTapTime);
+                        firstTapTime = 0;
                     } else {
                         // Timeout exceeded, treat as single tap
                         touchTriggeredNextImage = true;
@@ -2269,28 +2275,6 @@ void updateTouchState() {
             Serial.printf("Touch: Double-tap timeout - triggering single tap action\n");
         }
     }
-}
-
-void processTouchGestures() {
-    // This function is called from the main loop
-    // The actual gesture processing is handled in updateTouchState()
-    // Touch-triggered actions are processed in the main loop via flags
-}
-
-void handleSingleTap() {
-    Serial.println("Touch: Single tap - advancing to next image");
-    debugPrint("Touch: Single tap detected", COLOR_GREEN);
-    
-    // Set flag to trigger next image in main loop
-    touchTriggeredNextImage = true;
-}
-
-void handleDoubleTap() {
-    Serial.println("Touch: Double tap - toggling mode");
-    debugPrint("Touch: Double tap detected", COLOR_GREEN);
-    
-    // Set flag to trigger mode toggle in main loop
-    touchTriggeredModeToggle = true;
 }
 
 

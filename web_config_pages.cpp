@@ -207,7 +207,7 @@ String WebConfig::generateNetworkPage() {
     html += "<div class='form-group'><label for='wifi_ssid'>Network Name (SSID)</label>";
     html += "<input type='text' id='wifi_ssid' name='wifi_ssid' class='form-control' value='" + escapeHtml(configStorage.getWiFiSSID()) + "' required></div>";
     html += "<div class='form-group'><label for='wifi_password'>Password</label>";
-    html += "<input type='password' id='wifi_password' name='wifi_password' class='form-control' value='" + escapeHtml(configStorage.getWiFiPassword()) + "'></div>";
+    html += "<input type='password' id='wifi_password' name='wifi_password' class='form-control' placeholder='(unchanged)'></div>";
     html += "<button type='submit' class='btn btn-primary'>💾 Save Network Settings</button>";
     html += "</div></form>";
     
@@ -278,7 +278,7 @@ String WebConfig::generateMQTTPage() {
     html += "<div class='form-group'><label for='mqtt_user'>Username (optional)</label>";
     html += "<input type='text' id='mqtt_user' name='mqtt_user' class='form-control' value='" + escapeHtml(configStorage.getMQTTUser()) + "'></div>";
     html += "<div class='form-group'><label for='mqtt_password'>Password (optional)</label>";
-    html += "<input type='password' id='mqtt_password' name='mqtt_password' class='form-control' value='" + escapeHtml(configStorage.getMQTTPassword()) + "'></div></div>";
+    html += "<input type='password' id='mqtt_password' name='mqtt_password' class='form-control' placeholder='(unchanged)'></div></div>";
     
     html += "<div class='card'><h2>🏠 Home Assistant Discovery " + generateDocLink("docs/03_configuration.md", "mqtt-configuration") + "</h2>";
     html += "<div class='form-group'><div style='display:flex;align-items:center;margin-bottom:1rem'>";
@@ -606,8 +606,8 @@ String WebConfig::generateDisplayPage() {
     html += "<div style='background:#0f172a;padding:1rem;border-radius:6px;border:1px solid #334155;margin-bottom:1rem'>";
     html += "<div class='grid' style='grid-template-columns:2fr 1fr'>";
     html += "<div class='form-group' style='margin:0'><label for='ha_base_url'>HA URL</label>";
-    html += "<input type='text' id='ha_base_url' name='ha_base_url' class='form-control' value='" + 
-            configStorage.getHABaseUrl() + "' placeholder='http://homeassistant.local:8123' onchange='autoSaveDisplaySetting(\"ha_base_url\",this.value)'></div>";
+    html += "<input type='text' id='ha_base_url' name='ha_base_url' class='form-control' value='" +
+            escapeHtml(configStorage.getHABaseUrl()) + "' placeholder='http://homeassistant.local:8123' onchange='autoSaveDisplaySetting(\"ha_base_url\",this.value)'></div>";
     html += "<div class='form-group' style='margin:0'><label for='ha_poll_interval'>Poll (s)</label>";
     html += "<input type='number' id='ha_poll_interval' name='ha_poll_interval' class='form-control' value='" + 
             String(configStorage.getHAPollInterval()) + "' min='10' max='3600' onchange='autoSaveDisplaySetting(\"ha_poll_interval\",this.value)'></div>";
@@ -618,8 +618,8 @@ String WebConfig::generateDisplayPage() {
     html += "<p style='color:#64748b;font-size:0.75rem;margin:0.3rem 0 0 0'>Profile → Long-Lived Access Tokens</p></div>";
     
     html += "<div class='form-group' style='margin:1rem 0 0 0'><label for='ha_light_sensor_entity'>Sensor Entity</label>";
-    html += "<input type='text' id='ha_light_sensor_entity' name='ha_light_sensor_entity' class='form-control' value='" + 
-            configStorage.getHALightSensorEntity() + "' placeholder='sensor.living_room_illuminance' onchange='autoSaveDisplaySetting(\"ha_light_sensor_entity\",this.value)'></div>";
+    html += "<input type='text' id='ha_light_sensor_entity' name='ha_light_sensor_entity' class='form-control' value='" +
+            escapeHtml(configStorage.getHALightSensorEntity()) + "' placeholder='sensor.living_room_illuminance' onchange='autoSaveDisplaySetting(\"ha_light_sensor_entity\",this.value)'></div>";
     html += "</div>";
     
     // Mapping Section
@@ -672,7 +672,7 @@ String WebConfig::generateAdvancedPage() {
     html += "<div class='form-group'><label><input type='checkbox' id='ntp_enabled' name='ntp_enabled' " + String(configStorage.getNTPEnabled() ? "checked" : "") + "> Enable NTP Time Sync</label>";
     html += "<input type='hidden' name='ntp_enabled_present' value='1'></div>";
     html += "<div class='form-group'><label for='ntp_server'>NTP Server</label>";
-    html += "<input type='text' id='ntp_server' name='ntp_server' class='form-control' value='" + configStorage.getNTPServer() + "' placeholder='pool.ntp.org'></div>";
+    html += "<input type='text' id='ntp_server' name='ntp_server' class='form-control' value='" + escapeHtml(configStorage.getNTPServer()) + "' placeholder='pool.ntp.org'></div>";
     html += "<div class='form-group'><label for='timezone'>Timezone</label>";
     html += "<select id='timezone' name='timezone' class='form-control'>";
     

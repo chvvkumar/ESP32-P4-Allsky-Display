@@ -32,6 +32,10 @@ struct NetworkHealth {
     int rssi;
     unsigned long uptime;
     unsigned long disconnectCount;
+    String bssid;
+    unsigned long roamCount;
+    unsigned long roamScanCount;
+    unsigned long lastRoamTime;
     HealthStatus status;
     String message;
 };
@@ -88,7 +92,10 @@ private:
     static unsigned long networkDisconnectCount;
     static unsigned long mqttReconnectCount;
     static unsigned long watchdogResetCount;
-    
+    static unsigned long roamCount;
+    static unsigned long roamScanCount;
+    static unsigned long lastRoamTime;
+
     // Analysis methods
     MemoryHealth analyzeMemory();
     NetworkHealth analyzeNetwork();
@@ -118,7 +125,9 @@ public:
     static void recordNetworkDisconnect();
     static void recordMQTTReconnect();
     static void recordWatchdogReset();
-    
+    static void recordRoam();
+    static void recordRoamScan();
+
     // Quick health checks
     bool isMemoryHealthy();
     bool isSystemHealthy();

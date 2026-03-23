@@ -22,10 +22,22 @@ WiFiManager::WiFiManager() :
     wifiConnected(false),
     lastConnectionAttempt(0),
     connectionAttempts(0),
+    connectionInProgress(false),
+    connectionStartTime(0),
+    reconnectBackoff(RECONNECT_BACKOFF_MIN),
+    ntpSyncInProgress(false),
+    ntpSyncStartTime(0),
+    ntpRetries(0),
     debugPrintFunc(nullptr),
     debugPrintfFunc(nullptr),
-    firstImageLoaded(false)
+    firstImageLoaded(false),
+    roamScanPending(false),
+    roamInProgress(false),
+    lastRoamScanTime(0),
+    roamStartTime(0),
+    roamTargetChannel(0)
 {
+    memset(roamTargetBSSID, 0, sizeof(roamTargetBSSID));
 }
 
 bool WiFiManager::begin() {
@@ -42,66 +54,72 @@ bool WiFiManager::begin() {
 
 void WiFiManager::connectToWiFi() {
     unsigned long now = millis();
-    
-    // Don't attempt reconnection too frequently
-    if (now - lastConnectionAttempt < WIFI_RETRY_DELAY * 4) {
+
+    // If a connection attempt is already in progress, poll its status
+    if (connectionInProgress) {
+        // Check for timeout
+        if (now - connectionStartTime > WIFI_MAX_WAIT_TIME) {
+            LOG_INFO_F("[WiFi] Connection timeout after %lu ms (max: %d ms)\n",
+                       now - connectionStartTime, WIFI_MAX_WAIT_TIME);
+            if (debugPrintFunc) debugPrintFunc("WiFi connection timeout!", COLOR_RED);
+            connectionInProgress = false;
+            wifiConnected = false;
+
+            // Exponential backoff for next attempt
+            reconnectBackoff = min(reconnectBackoff * 2, RECONNECT_BACKOFF_MAX);
+            LOG_INFO_F("[WiFi] Next reconnect backoff: %lu ms\n", reconnectBackoff);
+
+            WiFi.disconnect();
+            return;
+        }
+
+        // Poll connection status (non-blocking)
+        if (WiFi.status() == WL_CONNECTED) {
+            connectionInProgress = false;
+            wifiConnected = true;
+            reconnectBackoff = RECONNECT_BACKOFF_MIN;  // Reset backoff on success
+
+            LOG_INFO_F("WiFi connected - IP: %s\n", WiFi.localIP().toString().c_str());
+            if (debugPrintFunc && debugPrintfFunc) {
+                debugPrintfFunc(COLOR_GREEN, "%s :: %s", WIFI_SSID, WiFi.localIP().toString().c_str());
+                debugPrintfFunc(COLOR_WHITE, " ");  // Group spacing
+            }
+            LOG_DEBUG_F("[WiFi] Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+            LOG_DEBUG_F("[WiFi] DNS: %s\n", WiFi.dnsIP().toString().c_str());
+            LOG_DEBUG_F("[WiFi] Signal Strength (RSSI): %d dBm\n", WiFi.RSSI());
+            LOG_DEBUG_F("[WiFi] Connection took %lu ms\n", now - connectionStartTime);
+
+            // Start NTP time sync (non-blocking)
+            syncNTPTime();
+        } else if (WiFi.status() == WL_CONNECT_FAILED || WiFi.status() == WL_NO_SSID_AVAIL) {
+            // Definite failure — stop waiting
+            connectionInProgress = false;
+            wifiConnected = false;
+            LOG_ERROR_F("[WiFi] Connection failed, status: %d\n", WiFi.status());
+
+            reconnectBackoff = min(reconnectBackoff * 2, RECONNECT_BACKOFF_MAX);
+            WiFi.disconnect();
+        }
+        // Otherwise still connecting — just return and check next loop iteration
         return;
     }
-    
+
+    // Rate-limit new connection attempts using exponential backoff
+    if (now - lastConnectionAttempt < reconnectBackoff) {
+        return;
+    }
+
+    // Start a new non-blocking connection attempt
     lastConnectionAttempt = now;
+    connectionStartTime = now;
+    connectionInProgress = true;
+
     LOG_INFO_F("Connecting to WiFi: %s\n", WIFI_SSID);
     if (debugPrintFunc) debugPrintFunc("Connecting to WiFi...", COLOR_YELLOW);
     LOG_DEBUG_F("[WiFi] MAC Address: %s\n", WiFi.macAddress().c_str());
+
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    
-    connectionAttempts = 0;
-    unsigned long startTime = millis();
-    
-    while (WiFi.status() != WL_CONNECTED && connectionAttempts < WIFI_MAX_ATTEMPTS) {
-        // Check for timeout to prevent infinite hanging
-        if (millis() - startTime > WIFI_MAX_WAIT_TIME) {
-            LOG_INFO_F("[WiFi] Connection timeout after %lu ms (max: %d ms)\n", millis() - startTime, WIFI_MAX_WAIT_TIME);
-            if (debugPrintFunc) debugPrintFunc("WiFi connection timeout!", COLOR_RED);
-            break;
-        }
-        
-        systemMonitor.safeDelay(WIFI_RETRY_DELAY);
-        systemMonitor.resetWatchdog(); // Explicitly reset watchdog during connection attempts
-        connectionAttempts++;
-        
-        if (connectionAttempts % 4 == 0) {
-            systemMonitor.resetWatchdog(); // Additional watchdog reset
-        }
-        
-        // Allow other tasks to run
-        yield();
-    }
-    
-    if (WiFi.status() == WL_CONNECTED) {
-        wifiConnected = true;
-        LOG_INFO_F("✓ WiFi connected - IP: %s\n", WiFi.localIP().toString().c_str());
-        if (debugPrintFunc && debugPrintfFunc) {
-            debugPrintfFunc(COLOR_GREEN, "%s :: %s", WIFI_SSID, WiFi.localIP().toString().c_str());
-            debugPrintfFunc(COLOR_WHITE, " ");  // Group spacing
-        }
-        LOG_DEBUG_F("[WiFi] Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
-        LOG_DEBUG_F("[WiFi] DNS: %s\n", WiFi.dnsIP().toString().c_str());
-        LOG_DEBUG_F("[WiFi] Signal Strength (RSSI): %d dBm\n", WiFi.RSSI());
-        LOG_DEBUG_F("[WiFi] Connection took %d attempts, %lu ms\n", connectionAttempts, millis() - startTime);
-        
-        // Sync NTP time after successful connection
-        syncNTPTime();
-    } else {
-        wifiConnected = false;
-        LOG_ERROR_F("[WiFi] Connection failed after %d attempts\n", connectionAttempts);
-        LOG_INFO_F("[WiFi] WiFi status code: %d\n", WiFi.status());
-        LOG_ERROR_F("[WiFi] Status meanings: 0=IDLE, 1=NO_SSID_AVAIL, 3=CONNECTED, 4=CONNECT_FAILED, 6=DISCONNECTED\n");
-        
-        // Disconnect to clean up any partial connection state
-        LOG_INFO("[WiFi] Cleaning up connection state...");
-        WiFi.disconnect();
-        systemMonitor.safeDelay(1000);
-    }
+    // Return immediately — status will be polled on subsequent update() calls
 }
 
 bool WiFiManager::isConnected() const {
@@ -154,12 +172,162 @@ void WiFiManager::setDebugFunctions(void (*debugPrint)(const char*, uint16_t),
     }
 }
 
+void WiFiManager::checkForBetterAP() {
+    unsigned long now = millis();
+
+    // --- State: Roam in progress (polling reconnection to target AP) ---
+    if (roamInProgress) {
+        if (WiFi.status() == WL_CONNECTED) {
+            // Roam succeeded
+            roamInProgress = false;
+            wifiConnected = true;
+            LOG_INFO_F("[WiFi] Roam successful - connected to %s (RSSI: %d dBm, ch: %d) in %lu ms\n",
+                       WiFi.BSSIDstr().c_str(), WiFi.RSSI(), WiFi.channel(),
+                       now - roamStartTime);
+            DeviceHealthAnalyzer::recordRoam();
+            syncNTPTime();
+        } else if (now - roamStartTime > WIFI_MAX_WAIT_TIME) {
+            // Roam timed out — fall back to normal reconnection
+            LOG_WARNING_F("[WiFi] Roam failed (timeout after %lu ms) - falling back to auto-connect\n",
+                          now - roamStartTime);
+            roamInProgress = false;
+            wifiConnected = false;
+            WiFi.disconnect();
+            // Next update() cycle will call connectToWiFi() without BSSID lock
+        } else if (WiFi.status() == WL_CONNECT_FAILED || WiFi.status() == WL_NO_SSID_AVAIL) {
+            LOG_WARNING_F("[WiFi] Roam failed (status: %d) - falling back to auto-connect\n",
+                          WiFi.status());
+            roamInProgress = false;
+            wifiConnected = false;
+            WiFi.disconnect();
+        }
+        return;
+    }
+
+    // Don't start roam logic if not connected or if NTP sync is in progress
+    if (!isConnected() || ntpSyncInProgress) {
+        return;
+    }
+
+    // --- State: Scan pending (poll for async scan completion) ---
+    if (roamScanPending) {
+        int scanResult = WiFi.scanComplete();
+
+        if (scanResult == WIFI_SCAN_RUNNING) {
+            return;  // Still scanning
+        }
+
+        roamScanPending = false;
+
+        if (scanResult == WIFI_SCAN_FAILED || scanResult < 0) {
+            LOG_WARNING("[WiFi] Roam scan failed");
+            WiFi.scanDelete();
+            return;
+        }
+
+        // Get current connection info for comparison
+        int currentRSSI = WiFi.RSSI();
+        String currentBSSID = WiFi.BSSIDstr();
+        String currentSSID = String(WIFI_SSID);
+
+        // Find the strongest AP with the same SSID but different BSSID
+        int bestIndex = -1;
+        int bestRSSI = currentRSSI;
+
+        for (int i = 0; i < scanResult; i++) {
+            String scanSSID = WiFi.SSID(i);
+            String scanBSSID = WiFi.BSSIDstr(i);
+            int scanRSSI = WiFi.RSSI(i);
+
+            if (scanSSID == currentSSID && scanBSSID != currentBSSID) {
+                if (scanRSSI > bestRSSI + WIFI_ROAM_RSSI_THRESHOLD) {
+                    bestRSSI = scanRSSI;
+                    bestIndex = i;
+                }
+            }
+        }
+
+        if (bestIndex >= 0) {
+            // Found a significantly stronger AP — initiate roam
+            LOG_INFO_F("[WiFi] Roaming from %s (%d dBm) to %s (%d dBm, ch: %d)\n",
+                       currentBSSID.c_str(), currentRSSI,
+                       WiFi.BSSIDstr(bestIndex).c_str(), bestRSSI, WiFi.channel(bestIndex));
+
+            // Save target BSSID and channel before scanDelete clears them
+            memcpy(roamTargetBSSID, WiFi.BSSID(bestIndex), 6);
+            roamTargetChannel = WiFi.channel(bestIndex);
+
+            WiFi.scanDelete();
+
+            // Disconnect and reconnect to the stronger AP
+            WiFi.disconnect();
+            roamInProgress = true;
+            roamStartTime = now;
+            WiFi.begin(WIFI_SSID, WIFI_PASSWORD, roamTargetChannel, roamTargetBSSID);
+        } else {
+            LOG_DEBUG_F("[WiFi] Roam scan: no better AP found (current: %s, %d dBm, %d candidates)\n",
+                        currentBSSID.c_str(), currentRSSI, scanResult);
+            WiFi.scanDelete();
+        }
+
+        return;
+    }
+
+    // --- State: Idle (check if it's time to start a new roam scan) ---
+    if (now - lastRoamScanTime >= WIFI_ROAM_CHECK_INTERVAL) {
+        // Don't start a scan if one is already running (e.g., web API scan)
+        if (WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+            return;
+        }
+
+        lastRoamScanTime = now;
+        roamScanPending = true;
+        DeviceHealthAnalyzer::recordRoamScan();
+        WiFi.scanNetworks(true, false);  // async=true, show_hidden=false
+        LOG_DEBUG("[WiFi] Roam scan started (async)");
+    }
+}
+
 void WiFiManager::update() {
+    // During a roam, skip checkConnection/connectToWiFi to prevent interference
+    if (roamInProgress) {
+        checkForBetterAP();  // Poll roam connection status
+        return;
+    }
+
     checkConnection();
-    
-    // Attempt reconnection if disconnected
-    if (!isConnected()) {
+
+    if (isConnected()) {
+        checkForBetterAP();  // Scan for better APs / evaluate results
+    } else {
+        // Attempt reconnection if disconnected (non-blocking)
         connectToWiFi();
+    }
+
+    // Poll non-blocking NTP sync
+    if (ntpSyncInProgress) {
+        unsigned long now = millis();
+        if (now - ntpSyncStartTime >= ntpRetries * NTP_POLL_INTERVAL) {
+            struct tm timeinfo;
+            if (getLocalTime(&timeinfo, 0)) {
+                // NTP sync succeeded
+                ntpSyncInProgress = false;
+                char timeStr[64];
+                strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S %Z", &timeinfo);
+                LOG_INFO_F("Time synced: %s\n", timeStr);
+                if (debugPrintfFunc && !firstImageLoaded) {
+                    debugPrintfFunc(COLOR_CYAN, "%s", timeStr);
+                    debugPrintfFunc(COLOR_WHITE, " ");  // Group spacing
+                }
+            } else {
+                ntpRetries++;
+                if (ntpRetries >= NTP_MAX_RETRIES) {
+                    ntpSyncInProgress = false;
+                    LOG_ERROR("[NTP] Failed to synchronize time");
+                    if (debugPrintFunc) debugPrintFunc("NTP sync failed", COLOR_RED);
+                }
+            }
+        }
     }
 }
 
@@ -295,52 +463,37 @@ void WiFiManager::syncNTPTime() {
         LOG_WARNING("[NTP] Cannot sync time - WiFi not connected");
         return;
     }
-    
+
     if (!configStorage.getNTPEnabled()) {
         LOG_INFO("[NTP] Time synchronization disabled in config");
         return;
     }
-    
+
+    // If already syncing, don't restart
+    if (ntpSyncInProgress) {
+        return;
+    }
+
     String ntpServer = configStorage.getNTPServer();
     String timezone = configStorage.getTimezone();
-    
+
     LOG_DEBUG_F("[NTP] Synchronizing time from %s...\n", ntpServer.c_str());
     LOG_DEBUG_F("[NTP] Timezone: %s\n", timezone.c_str());
-    
+
     // Show NTP start message on display
     if (debugPrintFunc && !firstImageLoaded) {
         debugPrintFunc("Updating NTP...", COLOR_YELLOW);
     }
-    
+
     // Configure time with NTP server and timezone
-    // GMT offset and daylight offset are handled by the timezone string
     configTime(0, 0, ntpServer.c_str());
     setenv("TZ", timezone.c_str(), 1);
     tzset();
-    
-    // Wait for time to be set (up to 5 seconds)
-    int retries = 0;
-    const int maxRetries = 10;
-    struct tm timeinfo;
-    
-    while (!getLocalTime(&timeinfo, 500) && retries < maxRetries) {
-        LOG_DEBUG("[NTP] Waiting for time sync...");
-        retries++;
-        systemMonitor.resetWatchdog();
-    }
-    
-    if (retries >= maxRetries) {
-        LOG_ERROR("[NTP] Failed to synchronize time");
-        if (debugPrintFunc) debugPrintFunc("NTP sync failed", COLOR_RED);
-    } else {
-        char timeStr[64];
-        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S %Z", &timeinfo);
-        LOG_INFO_F("✓ Time synced: %s\n", timeStr);
-        if (debugPrintfFunc && !firstImageLoaded) {
-            debugPrintfFunc(COLOR_CYAN, "%s", timeStr);
-            debugPrintfFunc(COLOR_WHITE, " ");  // Group spacing
-        }
-    }
+
+    // Start non-blocking NTP poll
+    ntpSyncInProgress = true;
+    ntpSyncStartTime = millis();
+    ntpRetries = 0;
 }
 
 bool WiFiManager::isTimeValid() {
@@ -396,8 +549,11 @@ String WiFiManager::getScanResultsJSON() {
     }
     
     // Build JSON response with only 2.4GHz networks
-    String json = "{\"status\":\"success\",\"networks\":[";
-    
+    // Pre-reserve ~128 bytes per network to reduce heap fragmentation
+    String json;
+    json.reserve(128 * n + 64);
+    json = "{\"status\":\"success\",\"networks\":[";
+
     int count = 0;
     for (int i = 0; i < n; i++) {
         uint8_t channel = WiFi.channel(i);

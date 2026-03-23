@@ -15,12 +15,14 @@ RTC_DATA_ATTR uint32_t CrashLogger::crashMarker = 0;
 // Global instance
 CrashLogger crashLogger;
 
-CrashLogger::CrashLogger() : 
+CrashLogger::CrashLogger() :
     ramLogBuffer(nullptr),
     ramWritePos(0),
     ramLength(0),
     initialized(false),
-    sessionStartTime(0) {
+    sessionStartTime(0),
+    _lastBootWasCrash(false),
+    _spinlock(portMUX_INITIALIZER_UNLOCKED) {
 }
 
 CrashLogger::~CrashLogger() {
@@ -86,8 +88,11 @@ void CrashLogger::begin() {
     }
     log(bootMsg);
     
+    // Remember crash state before clearing the marker
+    _lastBootWasCrash = (crashMarker != 0 || wasCrash);
+
     // Check for crash
-    if (crashMarker != 0 || wasCrash) {
+    if (_lastBootWasCrash) {
         const char* resetReasonStr = "UNKNOWN";
         switch (reset_reason) {
             case ESP_RST_POWERON: resetReasonStr = "POWERON"; break;
@@ -232,11 +237,16 @@ void CrashLogger::log(const char* message) {
         }
     }
     
+    // Protect ring buffer writes from concurrent access across cores/ISRs
+    portENTER_CRITICAL_SAFE(&_spinlock);
+
     // Write to RTC buffer (survives reboot)
     writeToRingBuffer(rtcLogBuffer, rtcWritePos, rtcLength, RTC_BUFFER_SIZE, msgToWrite, msgLen);
-    
+
     // Write to RAM buffer (current session)
     writeToRingBuffer(ramLogBuffer, ramWritePos, ramLength, RAM_BUFFER_SIZE, msgToWrite, msgLen);
+
+    portEXIT_CRITICAL_SAFE(&_spinlock);
 }
 
 void CrashLogger::logf(const char* format, ...) {
@@ -269,7 +279,7 @@ void CrashLogger::saveBeforeReboot() {
 }
 
 bool CrashLogger::wasLastBootCrash() {
-    return (crashMarker == 0xDEADBEEF);
+    return _lastBootWasCrash;
 }
 
 String CrashLogger::getRAMLogs() {
@@ -280,9 +290,9 @@ String CrashLogger::getRAMLogs() {
     char* buffer = (char*)malloc(RAM_BUFFER_SIZE);
     if (!buffer) return String("[CrashLogger] Memory allocation failed\n");
     
-    size_t len = readFromRingBuffer(ramLogBuffer, ramWritePos, ramLength, 
-                                     RAM_BUFFER_SIZE, buffer, RAM_BUFFER_SIZE);
-    
+    readFromRingBuffer(ramLogBuffer, ramWritePos, ramLength,
+                       RAM_BUFFER_SIZE, buffer, RAM_BUFFER_SIZE);
+
     String result(buffer);
     free(buffer);
     
@@ -297,9 +307,9 @@ String CrashLogger::getRTCLogs() {
     char* buffer = (char*)malloc(RTC_BUFFER_SIZE);
     if (!buffer) return String("[CrashLogger] Memory allocation failed\n");
     
-    size_t len = readFromRingBuffer(rtcLogBuffer, rtcWritePos, rtcLength, 
-                                     RTC_BUFFER_SIZE, buffer, RTC_BUFFER_SIZE);
-    
+    readFromRingBuffer(rtcLogBuffer, rtcWritePos, rtcLength,
+                       RTC_BUFFER_SIZE, buffer, RTC_BUFFER_SIZE);
+
     String result(buffer);
     free(buffer);
     
@@ -369,7 +379,7 @@ String CrashLogger::getRecentLogs(size_t maxBytes) {
     
     result += "Boot Count: " + String(bootCount) + "\n";
     result += "Session Uptime: " + String(millis() - sessionStartTime) + " ms\n";
-    result += "Last Boot Crash: " + String(crashMarker == 0xDEADBEEF ? "YES" : "NO") + "\n";
+    result += "Last Boot Crash: " + String(_lastBootWasCrash ? "YES" : "NO") + "\n";
     
     // Show logs in chronological order: oldest (NVS) → middle (RTC) → newest (RAM)
     // Check if we have NVS logs from previous boot (oldest)

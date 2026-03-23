@@ -38,7 +38,7 @@ enum LogSeverity {
 #define WATCHDOG_RESET_INTERVAL 1000     // Reset watchdog every 1 second
 #define MEMORY_CHECK_INTERVAL 30000      // Check memory every 30 seconds
 #define SERIAL_FLUSH_INTERVAL 5000       // Flush serial every 5 seconds
-#define IMAGE_PROCESS_TIMEOUT 5000       // 5 second timeout for image processing
+#define IMAGE_PROCESS_TIMEOUT 100000     // 100 second timeout for image processing (must exceed TOTAL_DOWNLOAD_TIMEOUT)
 #define MQTT_RECONNECT_INTERVAL 5000     // 5 seconds between MQTT reconnect attempts
 
 // Memory thresholds
@@ -57,6 +57,10 @@ extern const char* WIFI_PASSWORD;
 #define WIFI_MAX_ATTEMPTS 15             // Maximum connection attempts
 #define WIFI_MAX_WAIT_TIME 12000         // 12 seconds maximum wait time
 #define WIFI_RETRY_DELAY 400             // Delay between connection attempts
+
+// WiFi AP roaming (mesh network support)
+#define WIFI_ROAM_CHECK_INTERVAL  60000  // ms between roam scans (60 seconds)
+#define WIFI_ROAM_RSSI_THRESHOLD  8      // minimum dB improvement to trigger AP switch
 
 // =============================================================================
 // MQTT CONFIGURATION
@@ -159,7 +163,7 @@ extern const bool DEFAULT_RANDOM_ORDER;
 // ASYNC DOWNLOAD TASK CONFIGURATION
 // =============================================================================
 
-#define DOWNLOAD_TASK_STACK_SIZE 8192    // Stack size for async download task
+#define DOWNLOAD_TASK_STACK_SIZE 16384   // Stack size for async download task (16KB for TLS)
 #define DOWNLOAD_TASK_PRIORITY 2         // Priority for download task (Core 0)
 
 // =============================================================================

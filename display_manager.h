@@ -31,6 +31,9 @@ private:
     bool otaScreenInitialized;
     uint8_t lastOTAPercent;
 
+    // Pause flag to prevent rendering during heavy PSRAM operations
+    bool _paused;
+
 public:
     DisplayManager();
     ~DisplayManager();

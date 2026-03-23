@@ -79,6 +79,10 @@ private:
     
     // Task control
     volatile bool _taskRunning = false;
+
+    // Semaphore signaled by the task just before it self-deletes,
+    // so stop() can wait for a clean exit instead of calling vTaskDelete() externally.
+    SemaphoreHandle_t _taskExitSemaphore = nullptr;
 };
 
 // Global instance

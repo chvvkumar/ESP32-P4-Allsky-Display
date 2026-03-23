@@ -139,6 +139,29 @@ Comprehensive troubleshooting guide for the ESP32-P4 AllSky Display, covering co
 
 ---
 
+### Issue: WiFi Connects Then All Network Requests Fail (ESP-Hosted Version Mismatch)
+
+**Symptoms:**
+- WiFi connects initially but image downloads, MQTT, and HTTP requests all fail with code `-1`
+- Serial shows `Version on Host is NEWER than version on co-processor`
+- `E (xxxx) rpc_core: Response not received` errors
+- MQTT repeatedly fails with `MQTT_CONNECT_FAILED - Network error`
+
+**Cause:** ESP-Hosted firmware version mismatch between the ESP32-P4 host and ESP32-C6 WiFi co-processor.
+
+**Solution:** Update the C6 co-processor firmware. The easiest method is to flash the pre-built image included in this repository:
+
+```powershell
+esptool.py --chip esp32p4 -p COM3 -b 460800 \
+  --before=default_reset --after=hard_reset \
+  write_flash --flash_mode dio --flash_freq 80m --flash_size 8MB \
+  0x0 firmware_esphosted/merged-flash.bin
+```
+
+Then re-flash your AllSky Display firmware. See [OTA Updates - Co-Processor Updates](05_ota_updates.md#appendix-esp32-c6-co-processor-updates) for details.
+
+---
+
 ### Issue: Device Reboots Every 30 Seconds (Watchdog Timeout)
 
 **Symptoms:**

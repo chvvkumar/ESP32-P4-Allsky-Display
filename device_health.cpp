@@ -15,15 +15,31 @@ DeviceHealthAnalyzer deviceHealth;
 unsigned long DeviceHealthAnalyzer::networkDisconnectCount = 0;
 unsigned long DeviceHealthAnalyzer::mqttReconnectCount = 0;
 unsigned long DeviceHealthAnalyzer::watchdogResetCount = 0;
+unsigned long DeviceHealthAnalyzer::roamCount = 0;
+unsigned long DeviceHealthAnalyzer::roamScanCount = 0;
+unsigned long DeviceHealthAnalyzer::lastRoamTime = 0;
 
 DeviceHealthAnalyzer::DeviceHealthAnalyzer() {
 }
 
 // Helper function to escape strings for JSON
 static String escapeJsonString(const String& input) {
+    // Fast-path: scan for characters that need escaping; if none, return input as-is
+    bool needsEscape = false;
+    for (unsigned int i = 0; i < input.length(); i++) {
+        char c = input.charAt(i);
+        if (c == '"' || c == '\\' || c == '/' || c < 0x20) {
+            needsEscape = true;
+            break;
+        }
+    }
+    if (!needsEscape) {
+        return input;
+    }
+
     String output;
     output.reserve(input.length() + 10); // Reserve some extra space for escapes
-    
+
     for (unsigned int i = 0; i < input.length(); i++) {
         char c = input.charAt(i);
         switch (c) {
@@ -91,7 +107,11 @@ NetworkHealth DeviceHealthAnalyzer::analyzeNetwork() {
     health.rssi = WiFi.RSSI();
     health.uptime = millis();
     health.disconnectCount = networkDisconnectCount;
-    
+    health.bssid = WiFi.BSSIDstr();
+    health.roamCount = roamCount;
+    health.roamScanCount = roamScanCount;
+    health.lastRoamTime = lastRoamTime;
+
     if (!health.connected) {
         health.status = HEALTH_FAILING;
         health.message = "Critical: WiFi disconnected";
@@ -352,7 +372,9 @@ void DeviceHealthAnalyzer::printReport(const DeviceHealthReport& report) {
     LOG_INFO_F("  Connected: %s | RSSI: %d dBm | Disconnects: %lu\n",
                report.network.connected ? "Yes" : "No",
                report.network.rssi, report.network.disconnectCount);
-    
+    LOG_INFO_F("  BSSID: %s | Roams: %lu | Roam Scans: %lu\n",
+               report.network.bssid.c_str(), report.network.roamCount, report.network.roamScanCount);
+
     // MQTT
     LOG_INFO_F("[MQTT] %s - %s\n", healthStatusToString(report.mqtt.status), report.mqtt.message.c_str());
     LOG_INFO_F("  Connected: %s | Reconnects: %lu\n",
@@ -385,6 +407,7 @@ void DeviceHealthAnalyzer::printReport(const DeviceHealthReport& report) {
 
 String DeviceHealthAnalyzer::getReportJSON(const DeviceHealthReport& report) {
     String json = "{";
+    json.reserve(2048);
     
     // Overall status
     json += "\"overall\":{";
@@ -415,9 +438,13 @@ String DeviceHealthAnalyzer::getReportJSON(const DeviceHealthReport& report) {
     json += "\"message\":\"" + escapeJsonString(report.network.message) + "\",";
     json += "\"connected\":" + String(report.network.connected ? "true" : "false") + ",";
     json += "\"rssi\":" + String(report.network.rssi) + ",";
-    json += "\"disconnect_count\":" + String(report.network.disconnectCount);
+    json += "\"disconnect_count\":" + String(report.network.disconnectCount) + ",";
+    json += "\"bssid\":\"" + escapeJsonString(report.network.bssid) + "\",";
+    json += "\"roam_count\":" + String(report.network.roamCount) + ",";
+    json += "\"roam_scan_count\":" + String(report.network.roamScanCount) + ",";
+    json += "\"last_roam_time_ms\":" + String(report.network.lastRoamTime);
     json += "},";
-    
+
     // MQTT health
     json += "\"mqtt\":{";
     json += "\"status\":\"" + String(healthStatusToString(report.mqtt.status)) + "\",";
@@ -474,6 +501,16 @@ void DeviceHealthAnalyzer::recordWatchdogReset() {
     LOG_DEBUG_F("[HealthTracker] Watchdog reset count: %lu\n", watchdogResetCount);
 }
 
+void DeviceHealthAnalyzer::recordRoam() {
+    roamCount++;
+    lastRoamTime = millis();
+    LOG_DEBUG_F("[HealthTracker] Roam count: %lu\n", roamCount);
+}
+
+void DeviceHealthAnalyzer::recordRoamScan() {
+    roamScanCount++;
+}
+
 bool DeviceHealthAnalyzer::isMemoryHealthy() {
     MemoryHealth health = analyzeMemory();
     return health.status <= HEALTH_GOOD;
@@ -485,6 +522,76 @@ bool DeviceHealthAnalyzer::isSystemHealthy() {
 }
 
 HealthStatus DeviceHealthAnalyzer::getQuickStatus() {
-    DeviceHealthReport report = generateReport();
-    return report.overallStatus;
+    // Lightweight status check — evaluates the same conditions as the full
+    // analysis methods but without building any String objects or a full report.
+    HealthStatus worst = HEALTH_EXCELLENT;
+
+    // --- Memory checks ---
+    size_t freeHeap = systemMonitor.getCurrentFreeHeap();
+    size_t freePsram = systemMonitor.getCurrentFreePsram();
+    size_t minFreeHeap = systemMonitor.getMinFreeHeap();
+    size_t minFreePsram = systemMonitor.getMinFreePsram();
+    size_t totalHeap = ESP.getHeapSize();
+    size_t totalPsram = ESP.getPsramSize();
+
+    if (freeHeap < configStorage.getCriticalHeapThreshold() ||
+        freePsram < configStorage.getCriticalPSRAMThreshold()) {
+        worst = HEALTH_CRITICAL;
+    } else if (minFreeHeap < (size_t)(configStorage.getCriticalHeapThreshold() * 1.5) ||
+               minFreePsram < (size_t)(configStorage.getCriticalPSRAMThreshold() * 1.5)) {
+        if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+    } else {
+        float heapUsage = 100.0f - ((float)freeHeap / (float)totalHeap * 100.0f);
+        float psramUsage = 100.0f - ((float)freePsram / (float)totalPsram * 100.0f);
+        if (heapUsage > 80.0f || psramUsage > 80.0f) {
+            if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+        }
+    }
+
+    // --- Network checks ---
+    if (!wifiManager.isConnected()) {
+        if (HEALTH_FAILING > worst) worst = HEALTH_FAILING;
+    } else {
+        int rssi = WiFi.RSSI();
+        if (rssi < -80) {
+            if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+        } else if (rssi < -70) {
+            if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+        } else if (networkDisconnectCount > 10) {
+            if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+        } else if (networkDisconnectCount > 5) {
+            if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+        }
+    }
+
+    // --- MQTT checks ---
+    if (!configStorage.getMQTTServer().isEmpty()) {
+        if (!mqttManager.isConnected()) {
+            if (HEALTH_CRITICAL > worst) worst = HEALTH_CRITICAL;
+        } else if (mqttReconnectCount > 20) {
+            if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+        } else if (mqttReconnectCount > 10) {
+            if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+        }
+    }
+
+    // --- System checks ---
+    if (!systemMonitor.isSystemHealthy()) {
+        if (HEALTH_CRITICAL > worst) worst = HEALTH_CRITICAL;
+    } else if (crashLogger.wasLastBootCrash()) {
+        if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+    } else if (temperatureRead() > 80.0f) {
+        if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+    } else if (crashLogger.getBootCount() > 50) {
+        if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+    } else if (watchdogResetCount > 5) {
+        if (HEALTH_GOOD > worst) worst = HEALTH_GOOD;
+    }
+
+    // --- Display checks ---
+    if (displayManager.getBrightness() < 10) {
+        if (HEALTH_WARNING > worst) worst = HEALTH_WARNING;
+    }
+
+    return worst;
 }

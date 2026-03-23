@@ -42,24 +42,30 @@ private:
     };
     std::vector<WiFiNetwork> scannedNetworks;
     
+    // Async scan state
+    bool scanInProgress;
+
     // Route handlers
     void handleRoot();
     void handleScan();
+    void handleScanResults();
     void handleConnect();
     void handleNotFound();
-    
-    // HTML generators (matching current theme)
-    String generateHeader(const String& title);
-    String generateFooter();
-    String generateCSS();
-    String generateJavaScript();
-    String generateMainPage();
-    String generateNetworkList();
-    
+
+    // Chunked HTML helpers — send parts directly to avoid huge String
+    void sendHeader(const String& title);
+    void sendCSS();
+    void sendMainPage();
+    void sendNetworkList();
+    void sendJavaScript();
+    void sendFooter();
+
     // Utility functions
-    void scanNetworks();
+    void startAsyncScan();
+    void collectScanResults();
     String encryptionTypeToString(wifi_auth_mode_t encryptionType);
     String escapeHtml(const String& input);
+    String escapeJson(const String& input);
 };
 
 // Global instance

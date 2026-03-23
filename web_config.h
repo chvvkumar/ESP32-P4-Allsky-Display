@@ -90,8 +90,14 @@ private:
     
     // HTML generators
     String generateHeader(const String& title);
+    String generateHeaderBody(const String& title);
     String generateFooter();
+    String generateFooterBody();
     String generateNavigation(const String& currentPage = "");
+
+    // Chunked response helpers - send HTML in pieces to reduce peak heap usage
+    void beginChunkedHtmlResponse(const String& title, const String& navPage);
+    void endChunkedHtmlResponse();
     String generateMainPage();
     String generateNetworkPage();
     String generateConsolePage();
