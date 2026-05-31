@@ -1,4 +1,5 @@
 #include "moon_render.h"
+#include "moon_texture_data.h"
 #include "esp_heap_caps.h"
 #include <Arduino.h>
 #include <math.h>
@@ -19,10 +20,14 @@ static inline uint16_t rgb565c(int r, int g, int b) {
     return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
 }
 
-// Flat fallback: no surface texture yet (Task 10 replaces this).
+// Sample the baked lunar surface (luminance,alpha) at normalized disc
+// coords nx,ny in [-1,1]. Outside the texture returns alpha 0.
 static inline void sampleTex(float nx, float ny, int* lum, int* alpha) {
-    (void)nx; (void)ny;
-    *lum = 200; *alpha = 255;
+    int tx = (int)((nx * 0.5f + 0.5f) * (MOON_TEX_SIZE - 1) + 0.5f);
+    int ty = (int)((ny * 0.5f + 0.5f) * (MOON_TEX_SIZE - 1) + 0.5f);
+    if (tx < 0 || tx >= MOON_TEX_SIZE || ty < 0 || ty >= MOON_TEX_SIZE) { *lum = 0; *alpha = 0; return; }
+    const uint8_t* p = &MOON_TEX_LA[((size_t)ty * MOON_TEX_SIZE + tx) * 2];
+    *lum = p[0]; *alpha = p[1];
 }
 
 uint16_t* moonRender(int w, int h, const moon_state_t* st, uint8_t bg_style) {
