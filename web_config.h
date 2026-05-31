@@ -48,6 +48,8 @@ private:
     void handleSaveConfig();
     void handleAddImageSource();
     void handleAddPreset();
+    void handleSetMoon();
+    void handleGetMoon();
     void handleRemoveImageSource();
     void handleUpdateImageSource();
     void handleClearImageSources();

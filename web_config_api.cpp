@@ -369,6 +369,29 @@ void WebConfig::handleAddPreset() {
         sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"id parameter required\"}");
         return;
     }
+
+    if (server->arg("id") == "__moon__") {
+        int newIndex = configStorage.getImageSourceCount();
+        if (newIndex >= MAX_IMAGE_SOURCES) {
+            sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Maximum image sources reached\"}");
+            return;
+        }
+        configStorage.addImageSource("moon://default");
+        int displaySize = displayManager.getWidth();
+        float fit = (float)displaySize / 600.0f;     // moon renders at 600px
+        if (fit < MIN_SCALE) fit = MIN_SCALE;
+        if (fit > MAX_SCALE) fit = MAX_SCALE;
+        configStorage.setImageScaleX(newIndex, fit);
+        configStorage.setImageScaleY(newIndex, fit);
+        configStorage.setImageOffsetX(newIndex, 0);
+        configStorage.setImageOffsetY(newIndex, 0);
+        configStorage.setImageRotation(newIndex, 0.0f);
+        configStorage.saveConfig();
+        LOG_INFO_F("[WebAPI] Added moon source at index %d (fit scale %.2f)\n", newIndex, fit);
+        sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Moon source added\"}");
+        return;
+    }
+
     const ImagePreset* p = findImagePreset(server->arg("id").c_str());
     if (!p) {
         sendResponse(404, "application/json", "{\"status\":\"error\",\"message\":\"Unknown preset id\"}");
@@ -399,6 +422,23 @@ void WebConfig::handleAddPreset() {
 
     LOG_INFO_F("[WebAPI] Added preset %s as source %d (fit scale %.2f)\n", p->id, newIndex, fit);
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Preset added\"}");
+}
+
+void WebConfig::handleSetMoon() {
+    if (server->hasArg("lat")) configStorage.setMoonLat(server->arg("lat").toFloat());
+    if (server->hasArg("lon")) configStorage.setMoonLon(server->arg("lon").toFloat());
+    if (server->hasArg("bg"))  configStorage.setMoonBgStyle(server->arg("bg").toInt());
+    configStorage.saveConfig();
+    LOG_INFO_F("[WebAPI] Moon settings saved (lat %.4f lon %.4f bg %d)\n",
+               configStorage.getMoonLat(), configStorage.getMoonLon(), configStorage.getMoonBgStyle());
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Moon settings saved\"}");
+}
+
+void WebConfig::handleGetMoon() {
+    char json[96];
+    snprintf(json, sizeof(json), "{\"lat\":%.4f,\"lon\":%.4f,\"bg\":%d}",
+             configStorage.getMoonLat(), configStorage.getMoonLon(), configStorage.getMoonBgStyle());
+    sendResponse(200, "application/json", json);
 }
 
 void WebConfig::handleRemoveImageSource() {

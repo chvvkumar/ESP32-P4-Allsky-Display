@@ -44,6 +44,8 @@ bool WebConfig::begin(int port) {
         server->on("/api/save", HTTP_POST, [this]() { handleSaveConfig(); });
         server->on("/api/add-source", HTTP_POST, [this]() { handleAddImageSource(); });
         server->on("/api/addPreset", HTTP_POST, [this]() { handleAddPreset(); });
+        server->on("/api/setMoon", HTTP_POST, [this]() { handleSetMoon(); });
+        server->on("/api/getMoon", HTTP_GET,  [this]() { handleGetMoon(); });
         server->on("/api/remove-source", HTTP_POST, [this]() { handleRemoveImageSource(); });
         server->on("/api/update-source", HTTP_POST, [this]() { handleUpdateImageSource(); });
     server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
