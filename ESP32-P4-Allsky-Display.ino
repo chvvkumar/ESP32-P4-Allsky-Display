@@ -18,9 +18,12 @@
 #include "command_interpreter.h"
 #include "image_utils.h"  // Software image scaling fallback
 #include "ha_rest_client.h"  // Home Assistant REST brightness control
+#include "moon_ephemeris.h"
+#include "moon_render.h"
 
 // Additional required libraries
 #include <atomic>
+#include <time.h>
 #include <HTTPClient.h>
 #include <JPEGDEC.h>
 #include <PubSubClient.h>
@@ -141,6 +144,7 @@ int JPEGDrawQR(JPEGDRAW *pDraw);
 int16_t displayWiFiQRCode();
 void downloadAndDisplayImage();
 void renderFullImage();
+void renderMoonToPendingBuffer();
 void loadCyclingConfiguration();
 void advanceToNextImage();
 String getCurrentImageURL();
@@ -1058,6 +1062,44 @@ void renderFullImage() {
     systemMonitor.forceResetWatchdog();
 }
 
+void renderMoonToPendingBuffer() {
+    const int MOON_SIZE = 600;
+
+    // Require a real wall-clock time (NTP). epoch < 2020-01-01 means unsynced.
+    time_t now = time(nullptr);
+    if (now < 1577836800) {
+        Serial.println("[Moon] Clock not synced yet; skipping moon render this cycle");
+        return;
+    }
+
+    moon_state_t st;
+    moon_compute(now, (double)configStorage.getMoonLat(),
+                      (double)configStorage.getMoonLon(), &st);
+    Serial.printf("[Moon] %s illum=%.2f waxing=%d orient=%.2f\n",
+                  st.phase_name, st.illum, st.waxing, st.orient_rad);
+
+    uint8_t bg = (uint8_t)configStorage.getMoonBgStyle();
+    uint16_t* moon = moonRender(MOON_SIZE, MOON_SIZE, &st, bg);
+    if (!moon) { Serial.println("[Moon] render failed"); return; }
+
+    size_t bytes = (size_t)MOON_SIZE * MOON_SIZE * 2;
+    if (xSemaphoreTake(imageBufferMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
+        if (pendingFullImageBuffer && bytes <= fullImageBufferSize) {
+            memcpy(pendingFullImageBuffer, moon, bytes);
+            pendingImageWidth  = MOON_SIZE;
+            pendingImageHeight = MOON_SIZE;
+            imageReadyToDisplay = true;
+            Serial.println("[Moon] pending buffer filled, ready to display");
+        } else {
+            Serial.println("[Moon] pending buffer unavailable or too small");
+        }
+        xSemaphoreGive(imageBufferMutex);
+    } else {
+        Serial.println("[Moon] could not acquire image buffer mutex");
+    }
+    heap_caps_free(moon);
+}
+
 void downloadAndDisplayImage() {
     // Check if already processing an image (mutex protection)
     if (imageProcessing) {
@@ -1090,6 +1132,14 @@ void downloadAndDisplayImage() {
 
     // Get current image URL based on cycling configuration
     String imageURL = getCurrentImageURL();
+
+    if (imageURL.startsWith("moon://")) {
+        Serial.println("[Moon] Rendering computed moon image");
+        renderMoonToPendingBuffer();
+        systemMonitor.forceResetWatchdog();
+        imageProcessing = false;   // matches the early-return contract used below
+        return;
+    }
 
     Serial.println("DEBUG: About to get current image URL");
     Serial.printf("DEBUG: Current image URL: %s\n", imageURL.c_str());
