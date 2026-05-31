@@ -98,6 +98,11 @@ void ConfigStorage::setDefaults() {
   // Color temperature default
   config.colorTemp = DEFAULT_COLOR_TEMP;  // 6500K neutral white
 
+  // Moon render defaults
+  config.moonLat = DEFAULT_MOON_LAT;
+  config.moonLon = DEFAULT_MOON_LON;
+  config.moonBgStyle = DEFAULT_MOON_BG_STYLE;
+
   config.updateInterval = UPDATE_INTERVAL;
   config.mqttReconnectInterval = MQTT_RECONNECT_INTERVAL;
   config.watchdogTimeout = WATCHDOG_TIMEOUT_MS;
@@ -228,6 +233,10 @@ void ConfigStorage::loadConfig() {
     config.displayType = preferences.getInt("disp_type", config.displayType);
 
     config.colorTemp = preferences.getInt("color_temp", config.colorTemp);
+
+    config.moonLat = preferences.getFloat("moonLat", config.moonLat);
+    config.moonLon = preferences.getFloat("moonLon", config.moonLon);
+    config.moonBgStyle = preferences.getInt("moonBg", config.moonBgStyle);
 
     config.updateInterval =
         preferences.getULong("upd_interval", config.updateInterval);
@@ -367,6 +376,12 @@ void ConfigStorage::saveConfig() {
     preferences.putInt("color_temp", config.colorTemp);
   }
 
+  if (fieldsToSave & DIRTY_MOON) {
+    preferences.putFloat("moonLat", config.moonLat);
+    preferences.putFloat("moonLon", config.moonLon);
+    preferences.putInt("moonBg", config.moonBgStyle);
+  }
+
   if (fieldsToSave & DIRTY_ADVANCED) {
     preferences.putULong("upd_interval", config.updateInterval);
     preferences.putULong("mqtt_recon", config.mqttReconnectInterval);
@@ -479,6 +494,9 @@ void ConfigStorage::resetToDefaults() {
   preferences.putInt("bl_res", config.backlightResolution);
   preferences.putInt("disp_type", config.displayType);
   preferences.putInt("color_temp", config.colorTemp);
+  preferences.putFloat("moonLat", config.moonLat);
+  preferences.putFloat("moonLon", config.moonLon);
+  preferences.putInt("moonBg", config.moonBgStyle);
   preferences.putULong("upd_interval", config.updateInterval);
   preferences.putULong("mqtt_recon", config.mqttReconnectInterval);
   preferences.putULong("wd_timeout", config.watchdogTimeout);
@@ -1344,6 +1362,40 @@ int ConfigStorage::getColorTemp() {
   ConfigLock lock(_mutex);
   return config.colorTemp;
 }
+
+void ConfigStorage::setMoonLat(float lat) {
+  ConfigLock lock(_mutex);
+  config.moonLat = lat;
+  markDirty(DIRTY_MOON);
+}
+
+void ConfigStorage::setMoonLon(float lon) {
+  ConfigLock lock(_mutex);
+  config.moonLon = lon;
+  markDirty(DIRTY_MOON);
+}
+
+void ConfigStorage::setMoonBgStyle(int style) {
+  ConfigLock lock(_mutex);
+  config.moonBgStyle = style;
+  markDirty(DIRTY_MOON);
+}
+
+float ConfigStorage::getMoonLat() {
+  ConfigLock lock(_mutex);
+  return config.moonLat;
+}
+
+float ConfigStorage::getMoonLon() {
+  ConfigLock lock(_mutex);
+  return config.moonLon;
+}
+
+int ConfigStorage::getMoonBgStyle() {
+  ConfigLock lock(_mutex);
+  return config.moonBgStyle;
+}
+
 void ConfigStorage::setDisplayType(int type) {
   ConfigLock lock(_mutex);
   if (config.displayType != type && (type == 1 || type == 2)) {

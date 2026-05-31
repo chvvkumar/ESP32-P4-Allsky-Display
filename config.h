@@ -104,6 +104,11 @@ extern const bool DEFAULT_RANDOM_ORDER;
 #define MIN_COLOR_TEMP 2000              // Warm (candle light)
 #define MAX_COLOR_TEMP 15000             // Cool (deep blue)
 
+// Moon render defaults
+#define DEFAULT_MOON_LAT 0.0f            // 0 => north-up convention
+#define DEFAULT_MOON_LON 0.0f
+#define DEFAULT_MOON_BG_STYLE 1          // starfield
+
 // Image control constants
 #define SCALE_STEP 0.1f                  // Scale increment/decrement
 #define MOVE_STEP 10                     // Movement step in pixels
