@@ -11,6 +11,7 @@
 #include "ha_rest_client.h"
 #include "ha_discovery.h"
 #include "logging.h"
+#include "image_presets.h"
 #include <Update.h>
 
 // External global instances
@@ -361,6 +362,43 @@ void WebConfig::handleAddImageSource() {
         LOG_WARNING("[WebAPI] Add image source called without URL parameter");
         sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"URL parameter required\"}");
     }
+}
+
+void WebConfig::handleAddPreset() {
+    if (!server->hasArg("id")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"id parameter required\"}");
+        return;
+    }
+    const ImagePreset* p = findImagePreset(server->arg("id").c_str());
+    if (!p) {
+        sendResponse(404, "application/json", "{\"status\":\"error\",\"message\":\"Unknown preset id\"}");
+        return;
+    }
+
+    int newIndex = configStorage.getImageSourceCount();      // index the new source will occupy
+    if (newIndex >= MAX_IMAGE_SOURCES) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Maximum image sources reached\"}");
+        return;
+    }
+
+    configStorage.addImageSource(String(p->url));
+
+    // Seed a "fit disc" transform for THIS source only.
+    // Display is square; pick the active panel size and fit the cropped disc to it.
+    int displaySize = displayManager.getWidth();             // 800 or 1448 (square panel)
+    float keptPx = (float)p->nominalPx * (float)p->cropPct / 100.0f;
+    float fit = (keptPx > 0.0f) ? ((float)displaySize / keptPx) : 1.0f;
+    if (fit < MIN_SCALE) fit = MIN_SCALE;
+    if (fit > MAX_SCALE) fit = MAX_SCALE;
+    configStorage.setImageScaleX(newIndex, fit);
+    configStorage.setImageScaleY(newIndex, fit);
+    configStorage.setImageOffsetX(newIndex, 0);
+    configStorage.setImageOffsetY(newIndex, 0);
+    configStorage.setImageRotation(newIndex, 0.0f);
+    configStorage.saveConfig();
+
+    LOG_INFO_F("[WebAPI] Added preset %s as source %d (fit scale %.2f)\n", p->id, newIndex, fit);
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Preset added\"}");
 }
 
 void WebConfig::handleRemoveImageSource() {

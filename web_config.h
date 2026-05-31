@@ -47,6 +47,7 @@ private:
     void handleStatus();
     void handleSaveConfig();
     void handleAddImageSource();
+    void handleAddPreset();
     void handleRemoveImageSource();
     void handleUpdateImageSource();
     void handleClearImageSources();
