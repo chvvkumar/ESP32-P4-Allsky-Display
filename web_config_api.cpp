@@ -439,6 +439,19 @@ void WebConfig::handleSetMoon() {
     if (server->hasArg("spin"))    configStorage.setMoonSpinMode((uint8_t)server->arg("spin").toInt());
     if (server->hasArg("spinret")) configStorage.setMoonSpinReturnS((uint8_t)server->arg("spinret").toInt());
     configStorage.saveConfig();
+
+    // Apply live: if the computed moon is the image currently on the display,
+    // re-render it so background / north-up / orientation changes show at once
+    // rather than waiting for the next refresh cycle. Goes through the normal
+    // moon pipeline, which re-centers the disk.
+    extern int currentImageIndex;
+    int cidx = currentImageIndex;
+    if (cidx >= 0 && cidx < configStorage.getImageSourceCount() &&
+        configStorage.getImageSource(cidx).startsWith("moon://")) {
+        extern volatile bool imageDownloadPending;
+        imageDownloadPending = true;
+    }
+
     LOG_INFO_F("[WebAPI] Moon settings saved (lat %.4f lon %.4f bg %d)\n",
                configStorage.getMoonLat(), configStorage.getMoonLon(), configStorage.getMoonBgStyle());
     sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Moon settings saved\"}");
