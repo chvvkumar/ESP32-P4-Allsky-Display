@@ -162,11 +162,12 @@ jobs:
         install_lib "ElegantOTA"              "3.1.7" "ElegantOTA"
         install_lib "WebSockets"              "2.7.2" "WebSockets"
         install_lib "ArduinoJson"             "7.4.3" "ArduinoJson"
+        install_lib "tgx"                     "1.1.1" "tgx"
 
         # Verify installed versions
         echo ""
         echo "📦 Final installed library versions:"
-        arduino-cli lib list | grep -E "GFX Library|JPEGDEC|PubSubClient|ElegantOTA|WebSockets|ArduinoJson"
+        arduino-cli lib list | grep -E "GFX Library|JPEGDEC|PubSubClient|ElegantOTA|WebSockets|ArduinoJson|tgx"
     
     - name: Patch GFX Library for ESP32-P4 compatibility
       run: |
@@ -295,6 +296,10 @@ jobs:
     - name: Compile sketch
       id: compile
       run: |
+        # pipefail so a non-zero arduino-cli exit fails the step even though the
+        # output is piped through tee (otherwise tee's exit 0 masks build errors
+        # and the failure only surfaces later as a missing release binary).
+        set -o pipefail
         mkdir -p ./build ./release
         arduino-cli compile --fqbn esp32:esp32:esp32p4:FlashSize=32M,PartitionScheme=app13M_data7M_32MB,PSRAM=enabled \
           --output-dir ./build \
