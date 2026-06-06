@@ -111,7 +111,8 @@ extern const bool DEFAULT_RANDOM_ORDER;
 // Moon render defaults
 #define DEFAULT_MOON_LAT 0.0f            // 0 => north-up convention
 #define DEFAULT_MOON_LON 0.0f
-#define DEFAULT_MOON_BG_STYLE 1          // starfield
+#define DEFAULT_MOON_BG_STYLE 3          // stars + glow
+#define DEFAULT_MOON_DISK_SCALE 0.8f     // disk fills 80% of the panel when added
 
 // Image control constants
 #define SCALE_STEP 0.1f                  // Scale increment/decrement

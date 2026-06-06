@@ -378,8 +378,10 @@ void WebConfig::handleAddPreset() {
             return;
         }
         configStorage.addImageSource("moon://default");
-        int displaySize = displayManager.getWidth();
-        float fit = (float)displaySize / 600.0f;     // moon renders at 600px
+        // The moon renders at full panel size with the disk scaled inside it, so
+        // the per-source scale is the disk-fill fraction. Default to 0.8 (80% of
+        // the panel, leaving a small margin).
+        float fit = DEFAULT_MOON_DISK_SCALE;
         if (fit < MIN_SCALE) fit = MIN_SCALE;
         if (fit > MAX_SCALE) fit = MAX_SCALE;
         configStorage.setImageScaleX(newIndex, fit);
@@ -388,7 +390,7 @@ void WebConfig::handleAddPreset() {
         configStorage.setImageOffsetY(newIndex, 0);
         configStorage.setImageRotation(newIndex, 0.0f);
         configStorage.saveConfig();
-        LOG_INFO_F("[WebAPI] Added moon source at index %d (fit scale %.2f)\n", newIndex, fit);
+        LOG_INFO_F("[WebAPI] Added moon source at index %d (disk scale %.2f)\n", newIndex, fit);
         sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Moon source added\"}");
         return;
     }
