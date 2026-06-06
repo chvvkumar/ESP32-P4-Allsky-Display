@@ -34,11 +34,22 @@ private:
     static constexpr int NTP_MAX_RETRIES = 10;
     static constexpr unsigned long NTP_POLL_INTERVAL = 500;  // ms between checks
 
+    // HTTP Date-header time sync (SNTP/UDP does not work on ESP32-P4/ESP-Hosted;
+    // the HTTP path does, so the clock is set from an HTTP Date response header).
+    unsigned long nextHttpTimeSync;
+    int httpTimeTargetIdx;
+    static constexpr unsigned long HTTP_TIME_RETRY_INTERVAL = 20000;        // 20s while clock invalid
+    static constexpr unsigned long HTTP_TIME_RESYNC_INTERVAL = 21600000UL;  // 6h re-sync for drift
+
     // Debug display function pointer
     void (*debugPrintFunc)(const char* message, uint16_t color);
     void (*debugPrintfFunc)(uint16_t color, const char* format, ...);
     void checkForBetterAP();
     bool firstImageLoaded;
+
+    // Set the system clock from an HTTP Date header (returns true on success).
+    bool syncTimeViaHttp();
+    bool fetchHttpDate(const char* url);
 
 public:
     WiFiManager();

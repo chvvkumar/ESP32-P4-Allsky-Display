@@ -11,7 +11,9 @@
 #include "ha_rest_client.h"
 #include "ha_discovery.h"
 #include "logging.h"
+#include "image_presets.h"
 #include <Update.h>
+#include <driver/jpeg_encode.h>  // ESP32-P4 hardware JPEG encoder (screenshot endpoint)
 
 // External global instances
 extern CrashLogger crashLogger;
@@ -363,6 +365,251 @@ void WebConfig::handleAddImageSource() {
     }
 }
 
+void WebConfig::handleAddPreset() {
+    if (!server->hasArg("id")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"id parameter required\"}");
+        return;
+    }
+
+    if (server->arg("id") == "__moon__") {
+        int newIndex = configStorage.getImageSourceCount();
+        if (newIndex >= MAX_IMAGE_SOURCES) {
+            sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Maximum image sources reached\"}");
+            return;
+        }
+        configStorage.addImageSource("moon://default");
+        // The moon renders at full panel size with the disk scaled inside it, so
+        // the per-source scale is the disk-fill fraction. Default to 0.8 (80% of
+        // the panel, leaving a small margin).
+        float fit = DEFAULT_MOON_DISK_SCALE;
+        if (fit < MIN_SCALE) fit = MIN_SCALE;
+        if (fit > MAX_SCALE) fit = MAX_SCALE;
+        configStorage.setImageScaleX(newIndex, fit);
+        configStorage.setImageScaleY(newIndex, fit);
+        configStorage.setImageOffsetX(newIndex, 0);
+        configStorage.setImageOffsetY(newIndex, 0);
+        configStorage.setImageRotation(newIndex, 0.0f);
+        configStorage.saveConfig();
+        LOG_INFO_F("[WebAPI] Added moon source at index %d (disk scale %.2f)\n", newIndex, fit);
+        sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Moon source added\"}");
+        return;
+    }
+
+    const ImagePreset* p = findImagePreset(server->arg("id").c_str());
+    if (!p) {
+        sendResponse(404, "application/json", "{\"status\":\"error\",\"message\":\"Unknown preset id\"}");
+        return;
+    }
+
+    int newIndex = configStorage.getImageSourceCount();      // index the new source will occupy
+    if (newIndex >= MAX_IMAGE_SOURCES) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Maximum image sources reached\"}");
+        return;
+    }
+
+    configStorage.addImageSource(String(p->url));
+
+    // Seed a "fit disc" transform for THIS source only.
+    // Display is square; pick the active panel size and fit the cropped disc to it.
+    int displaySize = displayManager.getWidth();             // 800 or 1448 (square panel)
+    float keptPx = (float)p->nominalPx * (float)p->cropPct / 100.0f;
+    float fit = (keptPx > 0.0f) ? ((float)displaySize / keptPx) : 1.0f;
+    if (fit < MIN_SCALE) fit = MIN_SCALE;
+    if (fit > MAX_SCALE) fit = MAX_SCALE;
+    configStorage.setImageScaleX(newIndex, fit);
+    configStorage.setImageScaleY(newIndex, fit);
+    configStorage.setImageOffsetX(newIndex, 0);
+    configStorage.setImageOffsetY(newIndex, 0);
+    configStorage.setImageRotation(newIndex, 0.0f);
+    configStorage.saveConfig();
+
+    LOG_INFO_F("[WebAPI] Added preset %s as source %d (fit scale %.2f)\n", p->id, newIndex, fit);
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Preset added\"}");
+}
+
+void WebConfig::handleSetMoon() {
+    if (server->hasArg("lat"))     configStorage.setMoonLat(server->arg("lat").toFloat());
+    if (server->hasArg("lon"))     configStorage.setMoonLon(server->arg("lon").toFloat());
+    if (server->hasArg("bg"))      configStorage.setMoonBgStyle(server->arg("bg").toInt());
+    if (server->hasArg("flipu"))   configStorage.setMoonFlipU((uint8_t)server->arg("flipu").toInt());
+    if (server->hasArg("flipv"))   configStorage.setMoonFlipV((uint8_t)server->arg("flipv").toInt());
+    if (server->hasArg("roll"))    configStorage.setMoonRollOffset(server->arg("roll").toFloat());
+    if (server->hasArg("yaw"))     configStorage.setMoonYawOffset(server->arg("yaw").toFloat());
+    if (server->hasArg("pitch"))   configStorage.setMoonPitchOffset(server->arg("pitch").toFloat());
+    if (server->hasArg("northup")) configStorage.setMoonNorthUp((uint8_t)server->arg("northup").toInt());
+    if (server->hasArg("light"))   configStorage.setMoonDragLightMode((uint8_t)server->arg("light").toInt());
+    if (server->hasArg("spin"))    configStorage.setMoonSpinMode((uint8_t)server->arg("spin").toInt());
+    if (server->hasArg("spinret")) configStorage.setMoonSpinReturnS((uint8_t)server->arg("spinret").toInt());
+    configStorage.saveConfig();
+
+    // Apply live: if the computed moon is the image currently on the display,
+    // re-render it so background / north-up / orientation changes show at once
+    // rather than waiting for the next refresh cycle. Goes through the normal
+    // moon pipeline, which re-centers the disk.
+    extern int currentImageIndex;
+    int cidx = currentImageIndex;
+    if (cidx >= 0 && cidx < configStorage.getImageSourceCount() &&
+        configStorage.getImageSource(cidx).startsWith("moon://")) {
+        extern volatile bool imageDownloadPending;
+        imageDownloadPending = true;
+    }
+
+    LOG_INFO_F("[WebAPI] Moon settings saved (lat %.4f lon %.4f bg %d)\n",
+               configStorage.getMoonLat(), configStorage.getMoonLon(), configStorage.getMoonBgStyle());
+    sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Moon settings saved\"}");
+}
+
+void WebConfig::handleGetMoon() {
+    char json[256];
+    snprintf(json, sizeof(json),
+             "{\"lat\":%.4f,\"lon\":%.4f,\"bg\":%d,"
+             "\"flipu\":%d,\"flipv\":%d,"
+             "\"roll\":%.2f,\"yaw\":%.2f,\"pitch\":%.2f,"
+             "\"northup\":%d,\"light\":%d,\"spin\":%d,\"spinret\":%d}",
+             configStorage.getMoonLat(), configStorage.getMoonLon(), configStorage.getMoonBgStyle(),
+             configStorage.getMoonFlipU(), configStorage.getMoonFlipV(),
+             configStorage.getMoonRollOffset(), configStorage.getMoonYawOffset(), configStorage.getMoonPitchOffset(),
+             configStorage.getMoonNorthUp(), configStorage.getMoonDragLightMode(),
+             configStorage.getMoonSpinMode(), configStorage.getMoonSpinReturnS());
+    sendResponse(200, "application/json", json);
+}
+
+// Consolidated state for the client-rendered /config/images app.
+// Returns the shape defined in the shared contract: current index, tuning
+// state, global defaults, moon config, available presets, and every source.
+void WebConfig::handleGetImagesState() {
+    extern bool cyclingPausedForEditing;
+    extern int currentImageIndex;  // live displayed index; tune does not persist to NVS
+
+    String json;
+    json.reserve(8000);  // Pre-allocate to avoid heap fragmentation on large source lists
+    json = "{";
+
+    int currentIndex = currentImageIndex;
+    json += "\"currentIndex\":" + String(currentIndex) + ",";
+
+    // Tuning is active while cycling is paused for live on-device editing.
+    json += "\"tuning\":{";
+    json += "\"active\":" + String(cyclingPausedForEditing ? "true" : "false") + ",";
+    json += "\"index\":" + String(cyclingPausedForEditing ? currentIndex : -1);
+    json += "},";
+
+    json += "\"maxScale\":" + String((float)MAX_SCALE, 4) + ",";
+    json += "\"updateMode\":" + String(configStorage.getImageUpdateMode()) + ",";
+    json += "\"defaultDuration\":" + String(configStorage.getDefaultImageDuration()) + ",";
+    // getUpdateInterval() is in milliseconds; contract wants whole minutes.
+    json += "\"updateInterval\":" + String((unsigned long)(configStorage.getUpdateInterval() / 1000UL / 60UL)) + ",";
+    json += "\"randomOrder\":" + String(configStorage.getRandomOrder() ? "true" : "false") + ",";
+
+    json += "\"defaults\":{";
+    json += "\"scaleX\":" + String(configStorage.getDefaultScaleX(), 4) + ",";
+    json += "\"scaleY\":" + String(configStorage.getDefaultScaleY(), 4) + ",";
+    json += "\"offsetX\":" + String(configStorage.getDefaultOffsetX()) + ",";
+    json += "\"offsetY\":" + String(configStorage.getDefaultOffsetY()) + ",";
+    json += "\"rotation\":" + String((int)configStorage.getDefaultRotation());
+    json += "},";
+
+    json += "\"moon\":{";
+    json += "\"lat\":" + String(configStorage.getMoonLat(), 4) + ",";
+    json += "\"lon\":" + String(configStorage.getMoonLon(), 4) + ",";
+    json += "\"bg\":" + String(configStorage.getMoonBgStyle()) + ",";
+    json += "\"flipu\":" + String(configStorage.getMoonFlipU()) + ",";
+    json += "\"flipv\":" + String(configStorage.getMoonFlipV()) + ",";
+    json += "\"roll\":" + String(configStorage.getMoonRollOffset(), 2) + ",";
+    json += "\"yaw\":" + String(configStorage.getMoonYawOffset(), 2) + ",";
+    json += "\"pitch\":" + String(configStorage.getMoonPitchOffset(), 2) + ",";
+    json += "\"northup\":" + String(configStorage.getMoonNorthUp()) + ",";
+    json += "\"light\":" + String(configStorage.getMoonDragLightMode()) + ",";
+    json += "\"spin\":" + String(configStorage.getMoonSpinMode()) + ",";
+    json += "\"spinret\":" + String(configStorage.getMoonSpinReturnS());
+    json += "},";
+
+    // Static preset catalog (mirrors the shared contract list).
+    json += "\"presets\":[";
+    json += "{\"id\":\"sdo_aia_304\",\"label\":\"Sun SDO/AIA 304A\"},";
+    json += "{\"id\":\"sdo_aia_171\",\"label\":\"Sun SDO/AIA 171A\"},";
+    json += "{\"id\":\"sdo_aia_193\",\"label\":\"Sun SDO/AIA 193A\"},";
+    json += "{\"id\":\"sdo_hmi_igr\",\"label\":\"Sun SDO/HMI Continuum\"},";
+    json += "{\"id\":\"sdo_hmi_mag\",\"label\":\"Sun SDO/HMI Magnetogram\"},";
+    json += "{\"id\":\"soho_c2\",\"label\":\"Sun SOHO LASCO C2\"},";
+    json += "{\"id\":\"soho_c3\",\"label\":\"Sun SOHO LASCO C3\"},";
+    json += "{\"id\":\"goes19_full\",\"label\":\"Earth GOES-19 Full Disc\"},";
+    json += "{\"id\":\"__moon__\",\"label\":\"Moon (computed)\"}";
+    json += "],";
+
+    json += "\"sources\":[";
+    int count = configStorage.getImageSourceCount();
+    for (int i = 0; i < count; i++) {
+        if (i > 0) json += ",";
+        String url = configStorage.getImageSource(i);
+        bool isMoon = url.startsWith("moon://");  // moon:// sentinel = computed moon source
+        json += "{";
+        json += "\"index\":" + String(i) + ",";
+        json += "\"url\":\"" + escapeJson(url) + "\",";
+        json += "\"enabled\":" + String(configStorage.isImageEnabled(i) ? "true" : "false") + ",";
+        json += "\"duration\":" + String(configStorage.getImageDuration(i)) + ",";
+        json += "\"scaleX\":" + String(configStorage.getImageScaleX(i), 4) + ",";
+        json += "\"scaleY\":" + String(configStorage.getImageScaleY(i), 4) + ",";
+        json += "\"offsetX\":" + String(configStorage.getImageOffsetX(i)) + ",";
+        json += "\"offsetY\":" + String(configStorage.getImageOffsetY(i)) + ",";
+        json += "\"rotation\":" + String((int)configStorage.getImageRotation(i)) + ",";
+        json += "\"isMoon\":" + String(isMoon ? "true" : "false");
+        json += "}";
+    }
+    json += "]";
+
+    json += "}";
+    sendResponse(200, "application/json", json);
+}
+
+// Live-tune a source: switch the LCD to show it and pause cycling for editing.
+// Unlike handleSelectImage, this does NOT persist a startup index to NVS; it
+// only performs the live switch plus sets the editing-pause flag.
+void WebConfig::handleTuneImage() {
+    if (!server->hasArg("index")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
+        return;
+    }
+
+    int index = server->arg("index").toInt();
+    if (index < 0 || index >= configStorage.getImageSourceCount()) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+        return;
+    }
+
+    LOG_INFO_F("[WebAPI] Tuning image #%d (live preview on device)\n", index + 1);
+
+    // Pause cycling for editing (explicit-exit model; backstop only in .ino loop)
+    extern bool cyclingPausedForEditing;
+    extern unsigned long lastEditActivity;
+    cyclingPausedForEditing = true;
+    lastEditActivity = millis();
+
+    // Live-switch the displayed image (same mechanism as handleSelectImage),
+    // but without persisting a permanent startup index to NVS.
+    extern int currentImageIndex;
+    currentImageIndex = index;
+
+    extern void updateCurrentImageTransformSettings();
+    updateCurrentImageTransformSettings();
+
+    extern volatile bool imageDownloadPending;
+    imageDownloadPending = true;
+
+    sendResponse(200, "application/json", "{\"status\":\"success\"}");
+}
+
+// Exit tune mode: clear the editing-pause flag and resume cycling.
+// Mirrors handleClearEditingState exactly.
+void WebConfig::handleStopTune() {
+    LOG_INFO("[WebAPI] Stopping tune - resuming auto-cycling");
+
+    extern bool cyclingPausedForEditing;
+    cyclingPausedForEditing = false;
+
+    sendResponse(200, "application/json", "{\"status\":\"success\"}");
+}
+
 void WebConfig::handleRemoveImageSource() {
     if (server->hasArg("index")) {
         int index = server->arg("index").toInt();
@@ -542,12 +789,11 @@ void WebConfig::handleUpdateImageTransform() {
         String property = server->arg("property");
         String value = server->arg("value");
         
-        // Pause cycling when user is actively editing transforms
+        // Editing a transform persists the value but does NOT by itself pause
+        // cycling. The live display changes only while the user is actively
+        // tuning this source on the device (see the guarded render below).
         extern bool cyclingPausedForEditing;
-        extern unsigned long lastEditActivity;
-        cyclingPausedForEditing = true;
-        lastEditActivity = millis();
-        
+
         LOG_DEBUG_F("[WebAPI] Transform update: image %d, %s = %s\n", index, property.c_str(), value.c_str());
         
         bool success = true;
@@ -565,20 +811,45 @@ void WebConfig::handleUpdateImageTransform() {
         
         if (success) {
             configStorage.saveConfig();
-            
-            if (index == configStorage.getCurrentImageIndex()) {
+
+            // Only disturb the live display when the user is actively tuning
+            // this exact source on the device. Editing numbers without tuning
+            // persists the value but leaves the displayed image untouched.
+            extern int currentImageIndex;
+            if (cyclingPausedForEditing && index == currentImageIndex) {
+                // Keep the tune session alive while the user is actively editing.
+                extern unsigned long lastEditActivity;
+                lastEditActivity = millis();
+
                 extern float scaleX, scaleY;
                 extern int16_t offsetX, offsetY;
                 extern float rotationAngle;
                 extern void renderFullImage();
-                
-                if (property == "scaleX") scaleX = configStorage.getImageScaleX(index);
-                else if (property == "scaleY") scaleY = configStorage.getImageScaleY(index);
-                else if (property == "offsetX") offsetX = configStorage.getImageOffsetX(index);
-                else if (property == "offsetY") offsetY = configStorage.getImageOffsetY(index);
-                else if (property == "rotation") rotationAngle = configStorage.getImageRotation(index);
-                
-                renderFullImage();
+                extern void updateCurrentImageTransformSettings();
+                extern volatile bool imageDownloadPending;
+
+                // The computed moon is rendered at full panel size with its disk
+                // scale applied inside the renderer; the displayed bitmap is always
+                // drawn 1:1. So a scale/rotation change must trigger a disk
+                // re-render (the same pipeline the cycle uses, which re-centers via
+                // updateCurrentImageTransformSettings) rather than scaling the
+                // full-panel bitmap here, which pushes the draw origin negative and
+                // makes the moon grow from a corner instead of the center.
+                if (configStorage.getImageSource(index).startsWith("moon://")) {
+                    if (property == "offsetX" || property == "offsetY") {
+                        updateCurrentImageTransformSettings();  // moon-aware: scale=1, offsets from NVS
+                        renderFullImage();                       // pan the existing moon frame
+                    } else {
+                        imageDownloadPending = true;             // re-render the disk at the new scale
+                    }
+                } else {
+                    if (property == "scaleX") scaleX = configStorage.getImageScaleX(index);
+                    else if (property == "scaleY") scaleY = configStorage.getImageScaleY(index);
+                    else if (property == "offsetX") offsetX = configStorage.getImageOffsetX(index);
+                    else if (property == "offsetY") offsetY = configStorage.getImageOffsetY(index);
+                    else if (property == "rotation") rotationAngle = configStorage.getImageRotation(index);
+                    renderFullImage();
+                }
             }
         }
         
@@ -601,18 +872,26 @@ void WebConfig::handleCopyDefaultsToImage() {
         configStorage.saveConfig();
         
         if (index == configStorage.getCurrentImageIndex()) {
-            extern float scaleX, scaleY;
-            extern int16_t offsetX, offsetY;
-            extern float rotationAngle;
-            extern void renderFullImage();
-            
-            scaleX = configStorage.getImageScaleX(index);
-            scaleY = configStorage.getImageScaleY(index);
-            offsetX = configStorage.getImageOffsetX(index);
-            offsetY = configStorage.getImageOffsetY(index);
-            rotationAngle = configStorage.getImageRotation(index);
-            
-            renderFullImage();
+            // For the computed moon, scale is a disk re-render (see
+            // handleUpdateImageTransform); re-run the moon pipeline so the copied
+            // scale is applied centered rather than as a full-panel bitmap scale.
+            if (configStorage.getImageSource(index).startsWith("moon://")) {
+                extern volatile bool imageDownloadPending;
+                imageDownloadPending = true;
+            } else {
+                extern float scaleX, scaleY;
+                extern int16_t offsetX, offsetY;
+                extern float rotationAngle;
+                extern void renderFullImage();
+
+                scaleX = configStorage.getImageScaleX(index);
+                scaleY = configStorage.getImageScaleY(index);
+                offsetX = configStorage.getImageOffsetX(index);
+                offsetY = configStorage.getImageOffsetY(index);
+                rotationAngle = configStorage.getImageRotation(index);
+
+                renderFullImage();
+            }
             Serial.println("Applied global defaults to current image");
         }
         
@@ -643,21 +922,25 @@ void WebConfig::handleApplyTransform() {
 
             extern volatile bool imageDownloadPending;
             imageDownloadPending = true;
+        } else if (configStorage.getImageSource(index).startsWith("moon://")) {
+            // Moon scale is a disk re-render, not a full-panel bitmap scale.
+            extern volatile bool imageDownloadPending;
+            imageDownloadPending = true;
         } else {
             extern float scaleX, scaleY;
             extern int16_t offsetX, offsetY;
             extern float rotationAngle;
             extern void renderFullImage();
-            
+
             scaleX = configStorage.getImageScaleX(index);
             scaleY = configStorage.getImageScaleY(index);
             offsetX = configStorage.getImageOffsetX(index);
             offsetY = configStorage.getImageOffsetY(index);
             rotationAngle = configStorage.getImageRotation(index);
-            
+
             renderFullImage();
         }
-        
+
         sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Transform applied successfully\"}");
     } else {
         sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
@@ -1156,4 +1439,96 @@ void WebConfig::handleWiFiScan() {
     
     LOG_INFO("[WebAPI] WiFi scan completed successfully");
     sendResponse(200, "application/json", json);
+}
+
+// =====================================================================
+// Screenshot capture (GET /api/screenshot)
+// Captures the live DSI panel framebuffer (RGB565) and encodes it to a
+// JPEG using the ESP32-P4 hardware JPEG encoder, then streams the result.
+// =====================================================================
+void WebConfig::handleScreenshot() {
+    LOG_INFO("[WebAPI] Screenshot requested");
+
+    Arduino_DSI_Display* gfx = displayManager.getGFX();
+    uint16_t* fb = gfx ? gfx->getFramebuffer() : nullptr;
+    if (!fb) {
+        LOG_ERROR("[WebAPI] Screenshot failed: framebuffer unavailable");
+        sendResponse(503, "application/json", "{\"status\":\"error\",\"message\":\"Framebuffer not available\"}");
+        return;
+    }
+
+    const uint32_t w = (uint32_t)displayManager.getWidth();
+    const uint32_t h = (uint32_t)displayManager.getHeight();
+    const size_t rawSize = (size_t)w * h * 2;  // RGB565 = 2 bytes/pixel
+
+    LOG_INFO_F("[WebAPI] Capturing %ux%u framebuffer (%u bytes raw)\n", w, h, (unsigned)rawSize);
+
+    // Pause rendering so the frame is stable during capture and to reduce
+    // PSRAM bandwidth contention with the encoder's DMA reads.
+    displayManager.pauseDisplay();
+
+    // Create the hardware JPEG encoder engine.
+    jpeg_encoder_handle_t encoder = nullptr;
+    jpeg_encode_engine_cfg_t engineCfg = {};
+    engineCfg.intr_priority = 0;
+    engineCfg.timeout_ms = 5000;
+    esp_err_t err = jpeg_new_encoder_engine(&engineCfg, &encoder);
+    if (err != ESP_OK) {
+        displayManager.resumeDisplay();
+        LOG_ERROR_F("[WebAPI] JPEG encoder init failed: 0x%x\n", err);
+        sendResponse(500, "application/json", "{\"status\":\"error\",\"message\":\"JPEG encoder init failed\"}");
+        return;
+    }
+
+    // Allocate a DMA-aligned output buffer. Half the raw size is a safe ceiling
+    // for quality 80 on real images; floor at 64 KB for very small panels.
+    size_t outCapacity = rawSize / 2;
+    if (outCapacity < 65536) outCapacity = 65536;
+    jpeg_encode_memory_alloc_cfg_t outMemCfg = {};
+    outMemCfg.buffer_direction = JPEG_ENC_ALLOC_OUTPUT_BUFFER;
+    size_t outAllocated = 0;
+    uint8_t* outBuf = (uint8_t*)jpeg_alloc_encoder_mem(outCapacity, &outMemCfg, &outAllocated);
+    if (!outBuf) {
+        jpeg_del_encoder_engine(encoder);
+        displayManager.resumeDisplay();
+        LOG_ERROR_F("[WebAPI] JPEG output buffer alloc failed (%u bytes)\n", (unsigned)outCapacity);
+        sendResponse(500, "application/json", "{\"status\":\"error\",\"message\":\"Out of memory for screenshot\"}");
+        return;
+    }
+
+    // Encode the framebuffer in place (RGB565 -> JPEG). YUV444 uses an 8x8 MCU,
+    // so every supported panel size (all multiples of 8) is valid without padding.
+    jpeg_encode_cfg_t encCfg = {};
+    encCfg.width = w;
+    encCfg.height = h;
+    encCfg.src_type = JPEG_ENCODE_IN_FORMAT_RGB565;
+    encCfg.sub_sample = JPEG_DOWN_SAMPLING_YUV444;
+    encCfg.image_quality = 80;
+
+    uint32_t jpgSize = 0;
+    err = jpeg_encoder_process(encoder, &encCfg, (const uint8_t*)fb, rawSize,
+                               outBuf, outAllocated, &jpgSize);
+
+    jpeg_del_encoder_engine(encoder);
+    displayManager.resumeDisplay();
+
+    if (err != ESP_OK || jpgSize == 0) {
+        free(outBuf);
+        LOG_ERROR_F("[WebAPI] JPEG encode failed: 0x%x (size=%u)\n", err, (unsigned)jpgSize);
+        sendResponse(500, "application/json", "{\"status\":\"error\",\"message\":\"JPEG encode failed\"}");
+        return;
+    }
+
+    LOG_INFO_F("[WebAPI] Screenshot encoded: %u bytes JPEG\n", (unsigned)jpgSize);
+
+    // Stream the JPEG to the client.
+    if (server) {
+        server->sendHeader("Content-Disposition", "inline; filename=\"screenshot.jpg\"");
+        server->sendHeader("Cache-Control", "no-store");
+        server->setContentLength(jpgSize);
+        server->send(200, "image/jpeg", "");
+        server->sendContent((const char*)outBuf, jpgSize);
+    }
+
+    free(outBuf);
 }

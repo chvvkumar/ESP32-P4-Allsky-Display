@@ -98,6 +98,20 @@ void ConfigStorage::setDefaults() {
   // Color temperature default
   config.colorTemp = DEFAULT_COLOR_TEMP;  // 6500K neutral white
 
+  // Moon render defaults
+  config.moonLat = DEFAULT_MOON_LAT;
+  config.moonLon = DEFAULT_MOON_LON;
+  config.moonBgStyle = DEFAULT_MOON_BG_STYLE;
+  config.moonFlipU = 0;
+  config.moonFlipV = 0;
+  config.moonRollOffset = 0.0f;
+  config.moonYawOffset = 0.0f;
+  config.moonPitchOffset = 0.0f;
+  config.moonNorthUp = 1;
+  config.moonDragLightMode = 0;
+  config.moonSpinMode = 0;
+  config.moonSpinReturnS = 3;
+
   config.updateInterval = UPDATE_INTERVAL;
   config.mqttReconnectInterval = MQTT_RECONNECT_INTERVAL;
   config.watchdogTimeout = WATCHDOG_TIMEOUT_MS;
@@ -228,6 +242,39 @@ void ConfigStorage::loadConfig() {
     config.displayType = preferences.getInt("disp_type", config.displayType);
 
     config.colorTemp = preferences.getInt("color_temp", config.colorTemp);
+
+    config.moonLat = preferences.getFloat("moonLat", config.moonLat);
+    config.moonLon = preferences.getFloat("moonLon", config.moonLon);
+    config.moonBgStyle = preferences.getInt("moonBg", config.moonBgStyle);
+    config.moonFlipU = (uint8_t)preferences.getUChar("mFlipU", config.moonFlipU);
+    config.moonFlipV = (uint8_t)preferences.getUChar("mFlipV", config.moonFlipV);
+    config.moonRollOffset = preferences.getFloat("mRollOff", config.moonRollOffset);
+    config.moonYawOffset = preferences.getFloat("mYawOff", config.moonYawOffset);
+    config.moonPitchOffset = preferences.getFloat("mPitchOff", config.moonPitchOffset);
+    config.moonNorthUp = (uint8_t)preferences.getUChar("mNorthUp", config.moonNorthUp);
+    config.moonDragLightMode = (uint8_t)preferences.getUChar("mDragLM", config.moonDragLightMode);
+    config.moonSpinMode = (uint8_t)preferences.getUChar("mSpinMode", config.moonSpinMode);
+    config.moonSpinReturnS = (uint8_t)preferences.getUChar("mSpinRet", config.moonSpinReturnS);
+
+    // One-time migration: reset scale for moon:// image sources to 1.0
+    bool scaleMigDone = preferences.getBool("mScaleMig", false);
+    if (!scaleMigDone) {
+      preferences.end();
+      preferences.begin(NAMESPACE, false); // reopen read-write to write flag
+      for (int i = 0; i < config.imageSourceCount && i < 10; i++) {
+        if (config.imageSources[i].startsWith("moon://")) {
+          config.imageTransforms[i].scaleX = 1.0f;
+          config.imageTransforms[i].scaleY = 1.0f;
+          String prefix = "img_tf_" + String(i) + "_";
+          preferences.putFloat((prefix + "sx").c_str(), 1.0f);
+          preferences.putFloat((prefix + "sy").c_str(), 1.0f);
+          Serial.printf("ConfigStorage: migration mScaleMig: reset scale for moon:// source at index %d\n", i);
+        }
+      }
+      preferences.putBool("mScaleMig", true);
+      preferences.end();
+      preferences.begin(NAMESPACE, true); // reopen read-only for rest of load
+    }
 
     config.updateInterval =
         preferences.getULong("upd_interval", config.updateInterval);
@@ -367,6 +414,21 @@ void ConfigStorage::saveConfig() {
     preferences.putInt("color_temp", config.colorTemp);
   }
 
+  if (fieldsToSave & DIRTY_MOON) {
+    preferences.putFloat("moonLat", config.moonLat);
+    preferences.putFloat("moonLon", config.moonLon);
+    preferences.putInt("moonBg", config.moonBgStyle);
+    preferences.putUChar("mFlipU", config.moonFlipU);
+    preferences.putUChar("mFlipV", config.moonFlipV);
+    preferences.putFloat("mRollOff", config.moonRollOffset);
+    preferences.putFloat("mYawOff", config.moonYawOffset);
+    preferences.putFloat("mPitchOff", config.moonPitchOffset);
+    preferences.putUChar("mNorthUp", config.moonNorthUp);
+    preferences.putUChar("mDragLM", config.moonDragLightMode);
+    preferences.putUChar("mSpinMode", config.moonSpinMode);
+    preferences.putUChar("mSpinRet", config.moonSpinReturnS);
+  }
+
   if (fieldsToSave & DIRTY_ADVANCED) {
     preferences.putULong("upd_interval", config.updateInterval);
     preferences.putULong("mqtt_recon", config.mqttReconnectInterval);
@@ -479,6 +541,18 @@ void ConfigStorage::resetToDefaults() {
   preferences.putInt("bl_res", config.backlightResolution);
   preferences.putInt("disp_type", config.displayType);
   preferences.putInt("color_temp", config.colorTemp);
+  preferences.putFloat("moonLat", config.moonLat);
+  preferences.putFloat("moonLon", config.moonLon);
+  preferences.putInt("moonBg", config.moonBgStyle);
+  preferences.putUChar("mFlipU", config.moonFlipU);
+  preferences.putUChar("mFlipV", config.moonFlipV);
+  preferences.putFloat("mRollOff", config.moonRollOffset);
+  preferences.putFloat("mYawOff", config.moonYawOffset);
+  preferences.putFloat("mPitchOff", config.moonPitchOffset);
+  preferences.putUChar("mNorthUp", config.moonNorthUp);
+  preferences.putUChar("mDragLM", config.moonDragLightMode);
+  preferences.putUChar("mSpinMode", config.moonSpinMode);
+  preferences.putUChar("mSpinRet", config.moonSpinReturnS);
   preferences.putULong("upd_interval", config.updateInterval);
   preferences.putULong("mqtt_recon", config.mqttReconnectInterval);
   preferences.putULong("wd_timeout", config.watchdogTimeout);
@@ -1344,6 +1418,161 @@ int ConfigStorage::getColorTemp() {
   ConfigLock lock(_mutex);
   return config.colorTemp;
 }
+
+void ConfigStorage::setMoonLat(float lat) {
+  ConfigLock lock(_mutex);
+  config.moonLat = lat;
+  markDirty(DIRTY_MOON);
+}
+
+void ConfigStorage::setMoonLon(float lon) {
+  ConfigLock lock(_mutex);
+  config.moonLon = lon;
+  markDirty(DIRTY_MOON);
+}
+
+void ConfigStorage::setMoonBgStyle(int style) {
+  ConfigLock lock(_mutex);
+  config.moonBgStyle = style;
+  markDirty(DIRTY_MOON);
+}
+
+float ConfigStorage::getMoonLat() {
+  ConfigLock lock(_mutex);
+  return config.moonLat;
+}
+
+float ConfigStorage::getMoonLon() {
+  ConfigLock lock(_mutex);
+  return config.moonLon;
+}
+
+int ConfigStorage::getMoonBgStyle() {
+  ConfigLock lock(_mutex);
+  return config.moonBgStyle;
+}
+
+void ConfigStorage::setMoonFlipU(uint8_t v) {
+  ConfigLock lock(_mutex);
+  if (config.moonFlipU != v) {
+    config.moonFlipU = v;
+    markDirty(DIRTY_MOON);
+  }
+}
+
+uint8_t ConfigStorage::getMoonFlipU() {
+  ConfigLock lock(_mutex);
+  return config.moonFlipU;
+}
+
+void ConfigStorage::setMoonFlipV(uint8_t v) {
+  ConfigLock lock(_mutex);
+  if (config.moonFlipV != v) {
+    config.moonFlipV = v;
+    markDirty(DIRTY_MOON);
+  }
+}
+
+uint8_t ConfigStorage::getMoonFlipV() {
+  ConfigLock lock(_mutex);
+  return config.moonFlipV;
+}
+
+void ConfigStorage::setMoonRollOffset(float v) {
+  ConfigLock lock(_mutex);
+  float newVal = constrain(v, -180.0f, 180.0f);
+  if (config.moonRollOffset != newVal) {
+    config.moonRollOffset = newVal;
+    markDirty(DIRTY_MOON);
+  }
+}
+
+float ConfigStorage::getMoonRollOffset() {
+  ConfigLock lock(_mutex);
+  return config.moonRollOffset;
+}
+
+void ConfigStorage::setMoonYawOffset(float v) {
+  ConfigLock lock(_mutex);
+  float newVal = constrain(v, -180.0f, 180.0f);
+  if (config.moonYawOffset != newVal) {
+    config.moonYawOffset = newVal;
+    markDirty(DIRTY_MOON);
+  }
+}
+
+float ConfigStorage::getMoonYawOffset() {
+  ConfigLock lock(_mutex);
+  return config.moonYawOffset;
+}
+
+void ConfigStorage::setMoonPitchOffset(float v) {
+  ConfigLock lock(_mutex);
+  float newVal = constrain(v, -90.0f, 90.0f);
+  if (config.moonPitchOffset != newVal) {
+    config.moonPitchOffset = newVal;
+    markDirty(DIRTY_MOON);
+  }
+}
+
+float ConfigStorage::getMoonPitchOffset() {
+  ConfigLock lock(_mutex);
+  return config.moonPitchOffset;
+}
+
+void ConfigStorage::setMoonNorthUp(uint8_t v) {
+  ConfigLock lock(_mutex);
+  if (config.moonNorthUp != v) {
+    config.moonNorthUp = v;
+    markDirty(DIRTY_MOON);
+  }
+}
+
+uint8_t ConfigStorage::getMoonNorthUp() {
+  ConfigLock lock(_mutex);
+  return config.moonNorthUp;
+}
+
+void ConfigStorage::setMoonDragLightMode(uint8_t v) {
+  ConfigLock lock(_mutex);
+  if (config.moonDragLightMode != v) {
+    config.moonDragLightMode = v;
+    markDirty(DIRTY_MOON);
+  }
+}
+
+uint8_t ConfigStorage::getMoonDragLightMode() {
+  ConfigLock lock(_mutex);
+  return config.moonDragLightMode;
+}
+
+void ConfigStorage::setMoonSpinMode(uint8_t v) {
+  ConfigLock lock(_mutex);
+  if (config.moonSpinMode != v) {
+    config.moonSpinMode = v;
+    markDirty(DIRTY_MOON);
+  }
+}
+
+uint8_t ConfigStorage::getMoonSpinMode() {
+  ConfigLock lock(_mutex);
+  return config.moonSpinMode;
+}
+
+void ConfigStorage::setMoonSpinReturnS(uint8_t v) {
+  ConfigLock lock(_mutex);
+  uint8_t newVal = (uint8_t)constrain((int)v, 3, 60);
+  if (config.moonSpinReturnS != newVal) {
+    config.moonSpinReturnS = newVal;
+    markDirty(DIRTY_MOON);
+  }
+}
+
+uint8_t ConfigStorage::getMoonSpinReturnS() {
+  ConfigLock lock(_mutex);
+  return config.moonSpinReturnS;
+}
+
 void ConfigStorage::setDisplayType(int type) {
   ConfigLock lock(_mutex);
   if (config.displayType != type && (type == 1 || type == 2)) {
