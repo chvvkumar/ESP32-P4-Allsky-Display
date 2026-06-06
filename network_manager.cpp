@@ -546,22 +546,20 @@ bool WiFiManager::isTimeValid() {
 }
 
 // Set the system clock from an HTTP Date response header. Tries one target per
-// call (round-robin) to bound blocking time: public hosts first for an accurate
-// clock, then the user's own image source(s) as a guaranteed-reachable fallback
-// (works even on a LAN with no public internet). No user infrastructure needed.
+// call (round-robin) to bound blocking time. Uses only Google connectivity-check
+// endpoints: globally reachable and return a *live* (non-cached) Date, so no
+// local/user infrastructure is required and the firmware behaves the same on any
+// network. Do NOT use CDN captive pages (e.g. captive.apple.com) whose long-cached
+// responses carry a stale Date, nor LAN image sources whose clock/availability
+// vary per deployment.
 bool WiFiManager::syncTimeViaHttp() {
-    String targets[6];
-    int nt = 0;
-    targets[nt++] = "http://captive.apple.com";  // tiny, globally reachable, returns Date
-    targets[nt++] = "http://www.bing.com";        // reachable in most regions (incl. where Google is blocked)
-    int n = configStorage.getImageSourceCount();
-    for (int i = 0; i < n && nt < 6; i++) {
-        String u = configStorage.getImageSource(i);
-        if (u.startsWith("http://") || u.startsWith("https://")) targets[nt++] = u;
-    }
-    if (nt == 0) return false;
+    static const char* targets[] = {
+        "http://connectivitycheck.gstatic.com/generate_204",  // tiny 204, fresh Date
+        "http://www.google.com",                               // backup, fresh Date
+    };
+    const int nt = (int)(sizeof(targets) / sizeof(targets[0]));
     if (httpTimeTargetIdx >= nt) httpTimeTargetIdx = 0;
-    bool ok = fetchHttpDate(targets[httpTimeTargetIdx].c_str());
+    bool ok = fetchHttpDate(targets[httpTimeTargetIdx]);
     httpTimeTargetIdx = (httpTimeTargetIdx + 1) % nt;
     return ok;
 }
@@ -572,13 +570,25 @@ bool WiFiManager::fetchHttpDate(const char* url) {
     http.setConnectTimeout(3000);
     http.setTimeout(3000);
     http.setReuse(false);
-    const char* keys[] = { "Date" };
-    http.collectHeaders(keys, 1);
+    const char* keys[] = { "Date", "Age", "X-Cache" };
+    http.collectHeaders(keys, 3);
     int code = http.sendRequest("HEAD");
-    String date = http.header("Date");  // read before end()
+    String date = http.header("Date");        // read before end()
+    String age = http.header("Age");
+    String xcache = http.header("X-Cache");
     http.end();
     if (code <= 0 || date.length() < 20) {
         LOG_DEBUG_F("[Time] HTTP Date fetch from %s failed (code=%d)\n", url, code);
+        return false;
+    }
+    // Reject responses served from a cache: their Date header reflects when the
+    // cache entry was created, not now, so trusting it sets the clock days/weeks
+    // stale (the captive.apple.com failure mode). Fresh origin responses have no
+    // Age and no X-Cache hit.
+    if (xcache.indexOf("hit") >= 0 || xcache.indexOf("HIT") >= 0 ||
+        (age.length() > 0 && age.toInt() > 60)) {
+        LOG_WARNING_F("[Time] Ignoring cached Date from %s (Age=%s, X-Cache=%s)\n",
+                      url, age.c_str(), xcache.c_str());
         return false;
     }
     // Parse RFC1123 date, e.g. "Sat, 06 Jun 2026 01:22:12 GMT" (always GMT/UTC).

@@ -9,8 +9,8 @@
 #define BUILD_TIME __TIME__
 
 // Git information (updated by compile script)
-#define GIT_COMMIT_HASH "fe9d7ad"
-#define GIT_COMMIT_FULL "fe9d7ad6c077596c1034f772916454859fa825a3"
+#define GIT_COMMIT_HASH "dd8a367"
+#define GIT_COMMIT_FULL "dd8a367877c8353dc30283eabe11a0b92f716cc0"
 #define GIT_BRANCH "feat/solar-lunar-display"
 
 #endif // BUILD_INFO_H
