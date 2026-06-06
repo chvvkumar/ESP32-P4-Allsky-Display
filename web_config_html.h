@@ -319,19 +319,22 @@ h+=moonInline(mp);
 h+='<button type="button" class="img-caret" data-act="caret" data-index="'+idx+'" aria-expanded="'+(mopen?'true':'false')+'" title="Image adjustments"><i class="fas fa-chevron-'+(mopen?'up':'down')+'"></i></button>';
 if(multi){h+='<label style="display:inline-flex;align-items:center;min-height:var(--tap)"><input type="checkbox" class="img-sel" data-index="'+idx+'"></label>'}
 h+='</div>';
+var msum='disk '+(+s.scaleX).toFixed(2)+'×';
+if(+s.offsetX||+s.offsetY){msum+='  '+((+s.offsetX>=0?'+':'')+s.offsetX)+','+((+s.offsetY>=0?'+':'')+s.offsetY)}
 h+='<div class="img-row-meta">';
 h+='<span>Duration <input type="number" class="form-control" data-act="duration" data-index="'+idx+'" min="5" max="3600" value="'+(s.duration)+'"> s</span>';
-h+='<span class="img-summary">'+esc(summary(s))+'</span>';
+h+='<span class="img-summary">'+esc(msum)+'</span>';
 h+='</div>';
 h+=moonDrawer(mp);
 h+='<div class="img-drawer'+(mopen?' is-open':'')+'" data-drawer="'+idx+'">';
+// The moon is a uniform disk: its renderer uses only scaleX (disk size) and the
+// pan offsets. Scale Y and Rotation do nothing for the moon (orientation is set
+// via the gear's roll/yaw/pitch), so they are intentionally omitted here.
 h+='<div class="img-note">Image adjustments</div>';
 h+='<div class="transform-grid">';
-h+=tf(idx,'scaleX','Scale X',s.scaleX,0.01,0.1,state.maxScale);
-h+=tf(idx,'scaleY','Scale Y',s.scaleY,0.01,0.1,state.maxScale);
+h+=tf(idx,'scaleX','Disk scale',s.scaleX,0.01,0.1,state.maxScale);
 h+=tfInt(idx,'offsetX','Offset X',s.offsetX);
 h+=tfInt(idx,'offsetY','Offset Y',s.offsetY);
-h+='<div class="transform-field"><label>Rotation</label><select class="form-control" data-act="tf" data-prop="rotation" data-index="'+idx+'">'+rotOpts(s.rotation)+'</select></div>';
 h+='</div>';
 h+='<div class="img-drawer-actions">';
 h+='<button type="button" class="btn btn-secondary" data-act="reset" data-index="'+idx+'">Reset to defaults</button>';
