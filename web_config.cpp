@@ -43,6 +43,9 @@ bool WebConfig::begin(int port) {
         server->on("/status", [this]() { handleStatus(); });
         server->on("/api/save", HTTP_POST, [this]() { handleSaveConfig(); });
         server->on("/api/add-source", HTTP_POST, [this]() { handleAddImageSource(); });
+        server->on("/api/addPreset", HTTP_POST, [this]() { handleAddPreset(); });
+        server->on("/api/setMoon", HTTP_POST, [this]() { handleSetMoon(); });
+        server->on("/api/getMoon", HTTP_GET,  [this]() { handleGetMoon(); });
         server->on("/api/remove-source", HTTP_POST, [this]() { handleRemoveImageSource(); });
         server->on("/api/update-source", HTTP_POST, [this]() { handleUpdateImageSource(); });
     server->on("/api/clear-sources", HTTP_POST, [this]() { handleClearImageSources(); });
@@ -55,6 +58,9 @@ bool WebConfig::begin(int port) {
         server->on("/api/toggle-image-enabled", HTTP_POST, [this]() { handleToggleImageEnabled(); });
         server->on("/api/select-image", HTTP_POST, [this]() { handleSelectImage(); });
         server->on("/api/clear-editing-state", HTTP_POST, [this]() { handleClearEditingState(); });
+        server->on("/api/images/state", HTTP_GET, [this]() { handleGetImagesState(); });
+        server->on("/api/images/tune", HTTP_POST, [this]() { handleTuneImage(); });
+        server->on("/api/images/tune/stop", HTTP_POST, [this]() { handleStopTune(); });
         server->on("/api/update-image-duration", HTTP_POST, [this]() { handleUpdateImageDuration(); });
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
@@ -65,6 +71,7 @@ bool WebConfig::begin(int port) {
         server->on("/api/current-image", HTTP_GET, [this]() { handleCurrentImage(); });
     server->on("/api/health", HTTP_GET, [this]() { handleGetHealth(); });
     server->on("/api/wifi-scan", HTTP_GET, [this]() { handleWiFiScan(); });
+    server->on("/api/screenshot", HTTP_GET, [this]() { handleScreenshot(); });
         
         // Favicon handler (prevents 404 log clutter when browsers request favicon)
         server->on("/favicon.ico", HTTP_GET, [this]() { 
@@ -251,6 +258,9 @@ void WebConfig::handleImageConfig() {
     LOG_DEBUG("[WebServer] Image sources page accessed");
     beginChunkedHtmlResponse("Image Sources", "images");
     server->sendContent(generateImagePage());
+    server->sendContent(F("<script>"));
+    server->sendContent(FPSTR(HTML_IMAGES_APP));
+    server->sendContent(F("</script>"));
     endChunkedHtmlResponse();
 }
 

@@ -8,6 +8,9 @@
 #include "config_storage.h"
 #include <ArduinoOTA.h>
 #include <time.h>
+#include <sys/time.h>
+#include <esp_netif.h>
+#include <HTTPClient.h>
 
 // Global instances
 WiFiManager wifiManager;
@@ -28,6 +31,8 @@ WiFiManager::WiFiManager() :
     ntpSyncInProgress(false),
     ntpSyncStartTime(0),
     ntpRetries(0),
+    nextHttpTimeSync(0),
+    httpTimeTargetIdx(0),
     debugPrintFunc(nullptr),
     debugPrintfFunc(nullptr),
     firstImageLoaded(false),
@@ -89,8 +94,11 @@ void WiFiManager::connectToWiFi() {
             LOG_DEBUG_F("[WiFi] Signal Strength (RSSI): %d dBm\n", WiFi.RSSI());
             LOG_DEBUG_F("[WiFi] Connection took %lu ms\n", now - connectionStartTime);
 
-            // Start NTP time sync (non-blocking)
+            // Start NTP time sync (non-blocking, best-effort). SNTP/UDP does not
+            // work on ESP32-P4/ESP-Hosted, so schedule the HTTP time sync shortly
+            // after, giving SNTP a brief chance first in case it works elsewhere.
             syncNTPTime();
+            nextHttpTimeSync = millis() + 8000;
         } else if (WiFi.status() == WL_CONNECT_FAILED || WiFi.status() == WL_NO_SSID_AVAIL) {
             // Definite failure — stop waiting
             connectionInProgress = false;
@@ -329,6 +337,23 @@ void WiFiManager::update() {
             }
         }
     }
+
+    // HTTP time sync: the reliable path on ESP32-P4/ESP-Hosted (SNTP/UDP does not
+    // work). When due, set the clock from an HTTP Date header. Retries every
+    // HTTP_TIME_RETRY_INTERVAL while the clock is invalid, then re-syncs every
+    // HTTP_TIME_RESYNC_INTERVAL for drift.
+    if (isConnected()) {
+        if (nextHttpTimeSync == 0) {
+            // First observed connection (regardless of which WiFi path connected):
+            // schedule the first HTTP time sync, giving SNTP a brief head start.
+            nextHttpTimeSync = millis() + 8000;
+        } else if ((long)(millis() - nextHttpTimeSync) >= 0) {
+            systemMonitor.forceResetWatchdog();
+            syncTimeViaHttp();
+            systemMonitor.forceResetWatchdog();
+            nextHttpTimeSync = millis() + (isTimeValid() ? HTTP_TIME_RESYNC_INTERVAL : HTTP_TIME_RETRY_INTERVAL);
+        }
+    }
 }
 
 void WiFiManager::printConnectionInfo() {
@@ -485,6 +510,21 @@ void WiFiManager::syncNTPTime() {
         debugPrintFunc("Updating NTP...", COLOR_YELLOW);
     }
 
+    // ESP32-P4 fix: the network runs through the ESP32-C6 over ESP-Hosted, which
+    // registers its own esp_netif. Arduino configTime() starts the legacy lwIP
+    // SNTP client with an UNBOUND UDP socket, so its packets egress the system
+    // "default" netif. If the Hosted WiFi netif is not the default, SNTP never
+    // reaches any server (even a 0ms local one) while TCP/DNS still work. Force
+    // the WiFi STA netif to be the default route before starting SNTP.
+    esp_netif_t* staNetif = WiFi.STA.netif();
+    if (!staNetif) staNetif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (staNetif) {
+        esp_err_t r = esp_netif_set_default_netif(staNetif);
+        LOG_INFO_F("[NTP] Default netif set to STA for SNTP routing: %s\n", esp_err_to_name(r));
+    } else {
+        LOG_WARNING("[NTP] Could not resolve STA netif handle; SNTP may not route correctly");
+    }
+
     // Configure time with NTP server and timezone
     configTime(0, 0, ntpServer.c_str());
     setenv("TZ", timezone.c_str(), 1);
@@ -503,6 +543,78 @@ bool WiFiManager::isTimeValid() {
     }
     // Check if year is reasonable (>2020)
     return (timeinfo.tm_year + 1900) > 2020;
+}
+
+// Set the system clock from an HTTP Date response header. Tries one target per
+// call (round-robin) to bound blocking time. Uses only Google connectivity-check
+// endpoints: globally reachable and return a *live* (non-cached) Date, so no
+// local/user infrastructure is required and the firmware behaves the same on any
+// network. Do NOT use CDN captive pages (e.g. captive.apple.com) whose long-cached
+// responses carry a stale Date, nor LAN image sources whose clock/availability
+// vary per deployment.
+bool WiFiManager::syncTimeViaHttp() {
+    static const char* targets[] = {
+        "http://connectivitycheck.gstatic.com/generate_204",  // tiny 204, fresh Date
+        "http://www.google.com",                               // backup, fresh Date
+    };
+    const int nt = (int)(sizeof(targets) / sizeof(targets[0]));
+    if (httpTimeTargetIdx >= nt) httpTimeTargetIdx = 0;
+    bool ok = fetchHttpDate(targets[httpTimeTargetIdx]);
+    httpTimeTargetIdx = (httpTimeTargetIdx + 1) % nt;
+    return ok;
+}
+
+bool WiFiManager::fetchHttpDate(const char* url) {
+    HTTPClient http;
+    if (!http.begin(url)) return false;
+    http.setConnectTimeout(3000);
+    http.setTimeout(3000);
+    http.setReuse(false);
+    const char* keys[] = { "Date", "Age", "X-Cache" };
+    http.collectHeaders(keys, 3);
+    int code = http.sendRequest("HEAD");
+    String date = http.header("Date");        // read before end()
+    String age = http.header("Age");
+    String xcache = http.header("X-Cache");
+    http.end();
+    if (code <= 0 || date.length() < 20) {
+        LOG_DEBUG_F("[Time] HTTP Date fetch from %s failed (code=%d)\n", url, code);
+        return false;
+    }
+    // Reject responses served from a cache: their Date header reflects when the
+    // cache entry was created, not now, so trusting it sets the clock days/weeks
+    // stale (the captive.apple.com failure mode). Fresh origin responses have no
+    // Age and no X-Cache hit.
+    if (xcache.indexOf("hit") >= 0 || xcache.indexOf("HIT") >= 0 ||
+        (age.length() > 0 && age.toInt() > 60)) {
+        LOG_WARNING_F("[Time] Ignoring cached Date from %s (Age=%s, X-Cache=%s)\n",
+                      url, age.c_str(), xcache.c_str());
+        return false;
+    }
+    // Parse RFC1123 date, e.g. "Sat, 06 Jun 2026 01:22:12 GMT" (always GMT/UTC).
+    struct tm tmv;
+    memset(&tmv, 0, sizeof(tmv));
+    if (!strptime(date.c_str(), "%a, %d %b %Y %H:%M:%S", &tmv)) {
+        LOG_WARNING_F("[Time] Unparseable Date header: %s\n", date.c_str());
+        return false;
+    }
+    // mktime() interprets tm in the current TZ, so convert under UTC, then restore
+    // the configured timezone for correct local-time display via localtime().
+    setenv("TZ", "UTC0", 1);
+    tzset();
+    time_t epoch = mktime(&tmv);
+    setenv("TZ", configStorage.getTimezone().c_str(), 1);
+    tzset();
+    if (epoch < 1577836800) return false;  // sanity: must be after 2020-01-01
+    struct timeval tv;
+    tv.tv_sec = epoch;
+    tv.tv_usec = 0;
+    settimeofday(&tv, nullptr);
+    LOG_INFO_F("[Time] Clock set via HTTP Date (%s): %s\n", url, date.c_str());
+    if (debugPrintfFunc && !firstImageLoaded) {
+        debugPrintfFunc(COLOR_CYAN, "Time (HTTP): %s", date.c_str());
+    }
+    return true;
 }
 
 int WiFiManager::scanNetworks(bool async, bool show_hidden) {

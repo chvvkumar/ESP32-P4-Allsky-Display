@@ -38,9 +38,15 @@ bool PPAAccelerator::begin(int16_t displayWidth, int16_t displayHeight) {
         return false;
     }
     
-    // Allocate DMA-aligned buffers for PPA operations
-    // Source buffer - dynamically sized based on FULL_IMAGE_BUFFER_SIZE config
-    ppa_src_buffer_size = FULL_IMAGE_BUFFER_SIZE; // Matches full image buffer size from config.h
+    // Allocate DMA-aligned buffers for PPA operations.
+    // These internal buffers are used ONLY by the non-zero-copy scaleImage()/
+    // scaleRotateImage() path, whose sole caller is the boot-time WiFi QR scale
+    // (its source is capped at the display size). The image render path uses
+    // scaleRotateImageZeroCopy(), which operates on caller buffers and never
+    // touches these. Sizing them to the display framebuffer instead of 4MB and
+    // (display*4) reclaims several MB of PSRAM headroom; oversized inputs are
+    // already rejected by the size guards in scaleImage().
+    ppa_src_buffer_size = (size_t)displayWidth * displayHeight * 2;
     ppa_src_buffer = (uint16_t*)heap_caps_aligned_alloc(64, ppa_src_buffer_size, 
                                                         MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
     
@@ -51,8 +57,8 @@ bool PPAAccelerator::begin(int16_t displayWidth, int16_t displayHeight) {
         return false;
     }
     
-    // Destination buffer - dynamically sized based on display and scale multiplier
-    ppa_dst_buffer_size = displayWidth * displayHeight * 2 * SCALED_BUFFER_MULTIPLIER; // Matches scaled buffer logic
+    // Destination buffer - QR scaled output is <= display size (see note above)
+    ppa_dst_buffer_size = (size_t)displayWidth * displayHeight * 2;
     ppa_dst_buffer = (uint16_t*)heap_caps_aligned_alloc(64, ppa_dst_buffer_size, 
                                                         MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
     
