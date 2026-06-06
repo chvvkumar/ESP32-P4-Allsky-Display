@@ -301,9 +301,9 @@ function bgOpts(sel){var labels=['Black','Starfield','Glow','Stars + Glow'];var 
 function northUpOpts(sel){return '<option value="1"'+(+sel===1?' selected':'')+'>On (lock upright)</option><option value="0"'+(+sel===0?' selected':'')+'>Off (true sky tilt)</option>'}
 function mfNum(prefix,key,label,val,step,dis){return '<div class="transform-field"><label>'+label+'</label><input type="number" step="'+step+'" id="'+prefix+'Moon'+key+'" class="form-control" value="'+(+val)+'"'+(dis?' disabled':'')+'></div>'}
 function mfSel(prefix,key,label,opts,sel,dis){var o='';for(var i=0;i<opts.length;i++){o+='<option value="'+i+'"'+(+sel===i?' selected':'')+'>'+opts[i]+'</option>'}return '<div class="transform-field"><label>'+label+'</label><select id="'+prefix+'Moon'+key+'" class="form-control"'+(dis?' disabled':'')+'>'+o+'</select></div>'}
-function moonInline(prefix,dis){var m=state.moon||{};var d=dis?' disabled':'';var h='';h+='<label class="img-moon-inline"><span>Background</span><select id="'+prefix+'MoonBg" class="form-control"'+d+'>'+bgOpts(m.bg)+'</select></label>';h+='<label class="img-moon-inline"><span>North up</span><select id="'+prefix+'MoonNorthUp" class="form-control"'+d+'>'+northUpOpts(m.northup)+'</select></label>';h+='<button type="button" class="img-moon-cog" id="'+prefix+'MoonCog" aria-expanded="false" title="More moon settings"><i class="fas fa-cog"></i></button>';return h}
-function moonDrawer(prefix,dis){var m=state.moon||{};var d=dis?' disabled':'';var h='<div class="img-drawer" id="'+prefix+'MoonDrawer"><div class="img-moon-grid">';h+=mfNum(prefix,'Lat','Latitude',m.lat,'0.0001',dis);h+=mfNum(prefix,'Lon','Longitude',m.lon,'0.0001',dis);h+=mfSel(prefix,'FlipU','Flip horizontal (U)',['Off','On'],m.flipu,dis);h+=mfSel(prefix,'FlipV','Flip vertical (V)',['Off','On'],m.flipv,dis);h+=mfNum(prefix,'Roll','Roll offset (deg)',m.roll,'1',dis);h+=mfNum(prefix,'Yaw','Yaw offset (deg)',m.yaw,'1',dis);h+=mfNum(prefix,'Pitch','Pitch offset (deg)',m.pitch,'1',dis);h+='<div class="transform-field"><label>Drag light mode</label><select id="'+prefix+'MoonLight" class="form-control"'+d+'><option value="0"'+(+m.light===0?' selected':'')+'>True phase</option><option value="1"'+(+m.light===1?' selected':'')+'>Explore</option></select></div>';h+='<div class="transform-field"><label>Spin mode</label><select id="'+prefix+'MoonSpin" class="form-control"'+d+'><option value="0"'+(+m.spin===0?' selected':'')+'>Snap back</option><option value="1"'+(+m.spin===1?' selected':'')+'>Free spin</option></select></div>';h+=mfNum(prefix,'SpinRet','Free-spin return (s)',m.spinret,'1',dis);h+='</div><button type="button" class="btn btn-success" id="'+prefix+'MoonSave"'+d+'>Save moon</button></div>';return h}
-function bindMoonControls(prefix){var cog=document.getElementById(prefix+'MoonCog');if(cog)cog.onclick=function(){var d=document.getElementById(prefix+'MoonDrawer');if(d){var open=d.classList.toggle('is-open');cog.setAttribute('aria-expanded',open?'true':'false')}};function g(k,def){var e=document.getElementById(prefix+'Moon'+k);return e?(e.value||def):def}function collect(){return {lat:g('Lat','0'),lon:g('Lon','0'),bg:g('Bg','1'),flipu:g('FlipU','0'),flipv:g('FlipV','0'),roll:g('Roll','0'),yaw:g('Yaw','0'),pitch:g('Pitch','0'),northup:g('NorthUp','1'),light:g('Light','0'),spin:g('Spin','0'),spinret:g('SpinRet','10')}}function saveMoon(){post('/api/setMoon',collect()).then(function(j){if(j.status==='success'){toast(j.message||'Moon saved','success');refetch()}else{toast('Error: '+(j.message||''),'error')}}).catch(function(){toast('Network error','error')})}var save=document.getElementById(prefix+'MoonSave');if(save)save.onclick=saveMoon;['Bg','NorthUp'].forEach(function(k){var e=document.getElementById(prefix+'Moon'+k);if(e)e.onchange=saveMoon})}
+function moonPrimary(mp){var m=state.moon||{};return '<div class="transform-field"><label>Background</label><select id="'+mp+'MoonBg" class="form-control">'+bgOpts(m.bg)+'</select></div><div class="transform-field"><label>North up</label><select id="'+mp+'MoonNorthUp" class="form-control">'+northUpOpts(m.northup)+'</select></div>'}
+function moonAdvanced(mp){var m=state.moon||{};var h='';h+=mfNum(mp,'Lat','Latitude',m.lat,'0.0001');h+=mfNum(mp,'Lon','Longitude',m.lon,'0.0001');h+=mfSel(mp,'FlipU','Flip horizontal (U)',['Off','On'],m.flipu);h+=mfSel(mp,'FlipV','Flip vertical (V)',['Off','On'],m.flipv);h+=mfNum(mp,'Roll','Roll offset (deg)',m.roll,'1');h+=mfNum(mp,'Yaw','Yaw offset (deg)',m.yaw,'1');h+=mfNum(mp,'Pitch','Pitch offset (deg)',m.pitch,'1');h+='<div class="transform-field"><label>Drag light mode</label><select id="'+mp+'MoonLight" class="form-control"><option value="0"'+(+m.light===0?' selected':'')+'>True phase</option><option value="1"'+(+m.light===1?' selected':'')+'>Explore</option></select></div>';h+='<div class="transform-field"><label>Spin mode</label><select id="'+mp+'MoonSpin" class="form-control"><option value="0"'+(+m.spin===0?' selected':'')+'>Snap back</option><option value="1"'+(+m.spin===1?' selected':'')+'>Free spin</option></select></div>';h+=mfNum(mp,'SpinRet','Free-spin return (s)',m.spinret,'1');return h}
+function bindMoonControls(prefix){function g(k,def){var e=document.getElementById(prefix+'Moon'+k);return e?(e.value||def):def}function collect(){return {lat:g('Lat','0'),lon:g('Lon','0'),bg:g('Bg','1'),flipu:g('FlipU','0'),flipv:g('FlipV','0'),roll:g('Roll','0'),yaw:g('Yaw','0'),pitch:g('Pitch','0'),northup:g('NorthUp','1'),light:g('Light','0'),spin:g('Spin','0'),spinret:g('SpinRet','10')}}function saveMoon(){var c=collect();post('/api/setMoon',c).then(function(j){if(j.status==='success'){if(state&&state.moon){for(var k in c){state.moon[k]=c[k]}}}else{toast('Error: '+(j.message||''),'error')}}).catch(function(){toast('Network error','error')})}['Bg','NorthUp','Lat','Lon','FlipU','FlipV','Roll','Yaw','Pitch','Light','Spin','SpinRet'].forEach(function(k){var e=document.getElementById(prefix+'Moon'+k);if(e){var ev=(e.tagName==='SELECT')?'change':'input';e.addEventListener(ev,function(){debounce('moon'+prefix,saveMoon,400)})}})}
 
 function renderRow(s,multi){
 var idx=s.index;
@@ -315,14 +315,15 @@ h+='<button type="button" class="img-toggle-btn" data-act="toggle" data-index="'
 h+='<span class="img-idx">'+(idx+1)+'.</span>';
 if(s.isMoon){
 var mp='moonrow'+idx;
-var mopen=openDrawers[idx];
-// All adjustment controls are locked until this row is being tuned on the
-// device, so every edit is previewed live (see renderRow non-moon branch too).
+// One "Edit" toggle on the row tunes the moon on the device AND unfurls a
+// single combined settings panel (display + adjustments); "Done" ends tuning
+// and collapses it. The moon renderer uses only the disk scale and pan offsets
+// (Scale Y / image rotation do nothing for a round disk; orientation is the
+// roll/yaw/pitch fields), so this panel holds every control that applies.
 var mtuned=state.tuning&&state.tuning.active&&state.tuning.index===idx;
-var mdis=!mtuned;
 h+='<span class="img-moon-label">Moon Phase</span>';
-h+=moonInline(mp,mdis);
-h+='<button type="button" class="img-caret" data-act="caret" data-index="'+idx+'" aria-expanded="'+(mopen?'true':'false')+'" title="Settings"><i class="fas fa-chevron-'+(mopen?'up':'down')+'"></i></button>';
+if(mtuned){h+='<button type="button" class="btn btn-success" data-act="tunestop">Done</button>'}
+else{h+='<button type="button" class="btn btn-secondary" data-act="tune" data-index="'+idx+'">Edit</button>'}
 if(multi){h+='<label style="display:inline-flex;align-items:center;min-height:var(--tap)"><input type="checkbox" class="img-sel" data-index="'+idx+'"></label>'}
 h+='</div>';
 var msum='disk '+(+s.scaleX).toFixed(2)+'×';
@@ -331,21 +332,18 @@ h+='<div class="img-row-meta">';
 h+='<span>Duration <input type="number" class="form-control" data-act="duration" data-index="'+idx+'" min="5" max="3600" value="'+(s.duration)+'"> s</span>';
 h+='<span class="img-summary">'+esc(msum)+'</span>';
 h+='</div>';
-h+=moonDrawer(mp,mdis);
-h+='<div class="img-drawer'+(mopen?' is-open':'')+'" data-drawer="'+idx+'">';
-// The moon is a uniform disk: its renderer uses only scaleX (disk size) and the
-// pan offsets. Scale Y and Rotation do nothing for the moon (orientation is set
-// via the gear's roll/yaw/pitch), so they are intentionally omitted here.
-h+='<div class="img-note">'+(mtuned?'Image adjustments':'Tune on device to adjust these settings.')+'</div>';
+h+='<div class="img-drawer'+(mtuned?' is-open':'')+'" data-drawer="'+idx+'">';
+h+='<div class="img-note">Moon settings — changes preview live while editing</div>';
 h+='<div class="transform-grid">';
-h+=tf(idx,'scaleX','Disk scale',s.scaleX,0.01,0.1,state.maxScale,mdis);
-h+=tfInt(idx,'offsetX','Offset X',s.offsetX,mdis);
-h+=tfInt(idx,'offsetY','Offset Y',s.offsetY,mdis);
+h+=moonPrimary(mp);
+h+=tf(idx,'scaleX','Disk scale',s.scaleX,0.01,0.1,state.maxScale);
+h+=tfInt(idx,'offsetX','Offset X',s.offsetX);
+h+=tfInt(idx,'offsetY','Offset Y',s.offsetY);
+h+=moonAdvanced(mp);
 h+='</div>';
 h+='<div class="img-drawer-actions">';
-h+='<button type="button" class="btn btn-secondary" data-act="reset" data-index="'+idx+'"'+(mdis?' disabled':'')+'>Reset to defaults</button>';
-if(mtuned){h+='<span class="status-pill status-pill--active">Holding #'+(idx+1)+' on display</span><button type="button" class="btn btn-success" data-act="tunestop">Done, resume cycling</button>'}
-else{h+='<button type="button" class="btn btn-secondary" data-act="tune" data-index="'+idx+'">Tune on device</button>'}
+h+='<button type="button" class="btn btn-secondary" data-act="reset" data-index="'+idx+'">Reset adjustments</button>';
+h+='<span class="status-pill status-pill--active">Holding #'+(idx+1)+' on display</span>';
 h+='</div></div></div>';
 return h;
 }
@@ -373,8 +371,8 @@ h+='<div class="transform-field"><label>Rotation</label><select class="form-cont
 h+='</div>';
 h+='<div class="img-drawer-actions">';
 h+='<button type="button" class="btn btn-secondary" data-act="reset" data-index="'+idx+'"'+(dis?' disabled':'')+'>Reset to defaults</button>';
-if(tuned){h+='<span class="status-pill status-pill--active">Holding #'+(idx+1)+' on display</span><button type="button" class="btn btn-success" data-act="tunestop">Done, resume cycling</button>'}
-else{h+='<button type="button" class="btn btn-secondary" data-act="tune" data-index="'+idx+'">Tune on device</button>'}
+if(tuned){h+='<span class="status-pill status-pill--active">Holding #'+(idx+1)+' on display</span><button type="button" class="btn btn-success" data-act="tunestop">Done</button>'}
+else{h+='<button type="button" class="btn btn-secondary" data-act="tune" data-index="'+idx+'">Edit</button>'}
 h+='</div></div></div>';
 return h;
 }
