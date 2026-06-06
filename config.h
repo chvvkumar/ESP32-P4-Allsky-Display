@@ -29,6 +29,10 @@ enum LogSeverity {
 //   - PPA destination buffer = display_size * SCALED_BUFFER_MULTIPLIER * 2
 //   Changing these values will automatically adjust all dependent allocations
 #define IMAGE_BUFFER_MULTIPLIER 1        // Display size multiplier for image buffer
+// Floor for the compressed-JPEG download buffer. The display-derived size
+// (w*h*IMAGE_BUFFER_MULTIPLIER*2) is fine for ~1024px sources but too small for
+// large full-disc presets (e.g. GOES-19 1808px ~1.8MB). Held in PSRAM.
+#define MIN_DOWNLOAD_BUFFER_SIZE (3 * 1024 * 1024)  // 3MB
 #define FULL_IMAGE_BUFFER_SIZE (4 * 1024 * 1024)  // 4MB for full image buffer (1448x1448 max image at RGB565)
 #define SCALED_BUFFER_MULTIPLIER 4       // 4x display size to handle large scale factors
 

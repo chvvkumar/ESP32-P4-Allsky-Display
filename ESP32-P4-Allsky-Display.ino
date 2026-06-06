@@ -545,7 +545,12 @@ void setup() {
     if (scaledBuffer) { heap_caps_free(scaledBuffer); scaledBuffer = nullptr; }
     
     imageBufferSize = w * h * IMAGE_BUFFER_MULTIPLIER * 2;
-    LOG_DEBUG_F("[Memory] Allocating image buffer: %d bytes (%.1f KB)\n", 
+    // Apply a floor so large full-disc JPEGs (e.g. GOES-19 1808px ~1.8MB) can be
+    // downloaded even on smaller panels whose display-derived size is below it.
+    if (imageBufferSize < MIN_DOWNLOAD_BUFFER_SIZE) {
+        imageBufferSize = MIN_DOWNLOAD_BUFFER_SIZE;
+    }
+    LOG_DEBUG_F("[Memory] Allocating image buffer: %d bytes (%.1f KB)\n",
                  imageBufferSize, imageBufferSize / 1024.0);
     imageBuffer = (uint8_t*)ps_malloc(imageBufferSize);
     if (!imageBuffer) {
@@ -1546,9 +1551,28 @@ void downloadAndDisplayImage() {
         Serial.println("[Image] ✓ JPEG decoder opened");
         Serial.printf("[Image] Dimensions: %dx%d pixels\n", jpeg.getWidth(), jpeg.getHeight());
         Serial.printf("DEBUG: JPEG opened successfully - %dx%d\n", jpeg.getWidth(), jpeg.getHeight());
-        pendingImageWidth = jpeg.getWidth();
-        pendingImageHeight = jpeg.getHeight();
-        
+        // Choose a decode-time downscale (1/1, 1/2, 1/4, 1/8) so oversized
+        // full-disc sources (e.g. GOES-19 1808px, which would need ~6.5MB at
+        // full size) fit the RGB565 image buffer. Normal ~1024px sources keep
+        // full resolution (divisor 1).
+        int srcW = jpeg.getWidth();
+        int srcH = jpeg.getHeight();
+        int decodeDiv = 1;
+        int decodeOptions = 0;
+        while (decodeDiv < 8) {
+            int dw = srcW / decodeDiv, dh = srcH / decodeDiv;
+            if ((size_t)dw * dh * 2 <= fullImageBufferSize && dw <= MAX_IMAGE_DIMENSION && dh <= MAX_IMAGE_DIMENSION) break;
+            decodeDiv *= 2;
+        }
+        if (decodeDiv == 2)      decodeOptions = JPEG_SCALE_HALF;
+        else if (decodeDiv == 4) decodeOptions = JPEG_SCALE_QUARTER;
+        else if (decodeDiv == 8) decodeOptions = JPEG_SCALE_EIGHTH;
+        if (decodeDiv > 1) {
+            Serial.printf("[Image] Downscaling %dx%d by 1/%d to fit buffer\n", srcW, srcH, decodeDiv);
+        }
+        pendingImageWidth = srcW / decodeDiv;
+        pendingImageHeight = srcH / decodeDiv;
+
         // Check if image fits in our pending buffer
         size_t requiredSize = pendingImageWidth * pendingImageHeight * 2;
         Serial.printf("[Image] Buffer check: %d bytes required, %d bytes available\n", requiredSize, fullImageBufferSize);
@@ -1578,7 +1602,7 @@ void downloadAndDisplayImage() {
             unsigned long decodeStartTime = millis();
 
             Serial.println("[Image] Decoding JPEG to RGB565...");
-            if (jpeg.decode(0, 0, 0)) {
+            if (jpeg.decode(0, 0, decodeOptions)) {
                 unsigned long decodeTime = millis() - decodeStart;
                 Serial.printf("[Image] ✓ Decode complete in %lu ms\n", decodeTime);
                 Serial.printf("[Image] Decoded %dx%d pixels (%d bytes RGB565)\n",
@@ -2063,10 +2087,14 @@ void loop() {
     unsigned long currentTime = millis();
     bool shouldCycle = false;
     
-    // Resume cycling if user hasn't edited transforms in 30 seconds
-    if (cyclingPausedForEditing && (currentTime - lastEditActivity > 30000)) {
+    // Tune mode uses an explicit-exit model: the web UI clears the editing
+    // pause via the Done/resume button (/api/images/tune/stop). This timer is
+    // only a long safety backstop in case the client never sends that request
+    // (e.g. tab closed mid-tune), not the normal exit path.
+    static const unsigned long EDIT_HOLD_BACKSTOP_MS = 600000UL; // 10 min safety net; normal exit is the Done/resume button
+    if (cyclingPausedForEditing && (currentTime - lastEditActivity > EDIT_HOLD_BACKSTOP_MS)) {
         cyclingPausedForEditing = false;
-        Serial.println("DEBUG: Resuming automatic cycling after 30s of inactivity");
+        Serial.println("DEBUG: Resuming automatic cycling after edit-hold backstop");
     }
     
     // Only auto-cycle if in automatic mode, not paused, and multiple images available

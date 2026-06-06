@@ -58,6 +58,9 @@ bool WebConfig::begin(int port) {
         server->on("/api/toggle-image-enabled", HTTP_POST, [this]() { handleToggleImageEnabled(); });
         server->on("/api/select-image", HTTP_POST, [this]() { handleSelectImage(); });
         server->on("/api/clear-editing-state", HTTP_POST, [this]() { handleClearEditingState(); });
+        server->on("/api/images/state", HTTP_GET, [this]() { handleGetImagesState(); });
+        server->on("/api/images/tune", HTTP_POST, [this]() { handleTuneImage(); });
+        server->on("/api/images/tune/stop", HTTP_POST, [this]() { handleStopTune(); });
         server->on("/api/update-image-duration", HTTP_POST, [this]() { handleUpdateImageDuration(); });
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
@@ -254,6 +257,9 @@ void WebConfig::handleImageConfig() {
     LOG_DEBUG("[WebServer] Image sources page accessed");
     beginChunkedHtmlResponse("Image Sources", "images");
     server->sendContent(generateImagePage());
+    server->sendContent(F("<script>"));
+    server->sendContent(FPSTR(HTML_IMAGES_APP));
+    server->sendContent(F("</script>"));
     endChunkedHtmlResponse();
 }
 

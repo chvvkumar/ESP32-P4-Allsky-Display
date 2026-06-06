@@ -441,6 +441,133 @@ void WebConfig::handleGetMoon() {
     sendResponse(200, "application/json", json);
 }
 
+// Consolidated state for the client-rendered /config/images app.
+// Returns the shape defined in the shared contract: current index, tuning
+// state, global defaults, moon config, available presets, and every source.
+void WebConfig::handleGetImagesState() {
+    extern bool cyclingPausedForEditing;
+    extern int currentImageIndex;  // live displayed index; tune does not persist to NVS
+
+    String json;
+    json.reserve(8000);  // Pre-allocate to avoid heap fragmentation on large source lists
+    json = "{";
+
+    int currentIndex = currentImageIndex;
+    json += "\"currentIndex\":" + String(currentIndex) + ",";
+
+    // Tuning is active while cycling is paused for live on-device editing.
+    json += "\"tuning\":{";
+    json += "\"active\":" + String(cyclingPausedForEditing ? "true" : "false") + ",";
+    json += "\"index\":" + String(cyclingPausedForEditing ? currentIndex : -1);
+    json += "},";
+
+    json += "\"maxScale\":" + String((float)MAX_SCALE, 4) + ",";
+    json += "\"updateMode\":" + String(configStorage.getImageUpdateMode()) + ",";
+    json += "\"defaultDuration\":" + String(configStorage.getDefaultImageDuration()) + ",";
+    // getUpdateInterval() is in milliseconds; contract wants whole minutes.
+    json += "\"updateInterval\":" + String((unsigned long)(configStorage.getUpdateInterval() / 1000UL / 60UL)) + ",";
+    json += "\"randomOrder\":" + String(configStorage.getRandomOrder() ? "true" : "false") + ",";
+
+    json += "\"defaults\":{";
+    json += "\"scaleX\":" + String(configStorage.getDefaultScaleX(), 4) + ",";
+    json += "\"scaleY\":" + String(configStorage.getDefaultScaleY(), 4) + ",";
+    json += "\"offsetX\":" + String(configStorage.getDefaultOffsetX()) + ",";
+    json += "\"offsetY\":" + String(configStorage.getDefaultOffsetY()) + ",";
+    json += "\"rotation\":" + String((int)configStorage.getDefaultRotation());
+    json += "},";
+
+    json += "\"moon\":{";
+    json += "\"lat\":" + String(configStorage.getMoonLat(), 4) + ",";
+    json += "\"lon\":" + String(configStorage.getMoonLon(), 4) + ",";
+    json += "\"bg\":" + String(configStorage.getMoonBgStyle());
+    json += "},";
+
+    // Static preset catalog (mirrors the shared contract list).
+    json += "\"presets\":[";
+    json += "{\"id\":\"sdo_aia_304\",\"label\":\"Sun SDO/AIA 304A\"},";
+    json += "{\"id\":\"sdo_aia_171\",\"label\":\"Sun SDO/AIA 171A\"},";
+    json += "{\"id\":\"sdo_aia_193\",\"label\":\"Sun SDO/AIA 193A\"},";
+    json += "{\"id\":\"sdo_hmi_igr\",\"label\":\"Sun SDO/HMI Continuum\"},";
+    json += "{\"id\":\"sdo_hmi_mag\",\"label\":\"Sun SDO/HMI Magnetogram\"},";
+    json += "{\"id\":\"soho_c2\",\"label\":\"Sun SOHO LASCO C2\"},";
+    json += "{\"id\":\"soho_c3\",\"label\":\"Sun SOHO LASCO C3\"},";
+    json += "{\"id\":\"goes19_full\",\"label\":\"Earth GOES-19 Full Disc\"},";
+    json += "{\"id\":\"__moon__\",\"label\":\"Moon (computed)\"}";
+    json += "],";
+
+    json += "\"sources\":[";
+    int count = configStorage.getImageSourceCount();
+    for (int i = 0; i < count; i++) {
+        if (i > 0) json += ",";
+        String url = configStorage.getImageSource(i);
+        bool isMoon = url.startsWith("moon://");  // moon:// sentinel = computed moon source
+        json += "{";
+        json += "\"index\":" + String(i) + ",";
+        json += "\"url\":\"" + escapeJson(url) + "\",";
+        json += "\"enabled\":" + String(configStorage.isImageEnabled(i) ? "true" : "false") + ",";
+        json += "\"duration\":" + String(configStorage.getImageDuration(i)) + ",";
+        json += "\"scaleX\":" + String(configStorage.getImageScaleX(i), 4) + ",";
+        json += "\"scaleY\":" + String(configStorage.getImageScaleY(i), 4) + ",";
+        json += "\"offsetX\":" + String(configStorage.getImageOffsetX(i)) + ",";
+        json += "\"offsetY\":" + String(configStorage.getImageOffsetY(i)) + ",";
+        json += "\"rotation\":" + String((int)configStorage.getImageRotation(i)) + ",";
+        json += "\"isMoon\":" + String(isMoon ? "true" : "false");
+        json += "}";
+    }
+    json += "]";
+
+    json += "}";
+    sendResponse(200, "application/json", json);
+}
+
+// Live-tune a source: switch the LCD to show it and pause cycling for editing.
+// Unlike handleSelectImage, this does NOT persist a startup index to NVS; it
+// only performs the live switch plus sets the editing-pause flag.
+void WebConfig::handleTuneImage() {
+    if (!server->hasArg("index")) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
+        return;
+    }
+
+    int index = server->arg("index").toInt();
+    if (index < 0 || index >= configStorage.getImageSourceCount()) {
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid index\"}");
+        return;
+    }
+
+    LOG_INFO_F("[WebAPI] Tuning image #%d (live preview on device)\n", index + 1);
+
+    // Pause cycling for editing (explicit-exit model; backstop only in .ino loop)
+    extern bool cyclingPausedForEditing;
+    extern unsigned long lastEditActivity;
+    cyclingPausedForEditing = true;
+    lastEditActivity = millis();
+
+    // Live-switch the displayed image (same mechanism as handleSelectImage),
+    // but without persisting a permanent startup index to NVS.
+    extern int currentImageIndex;
+    currentImageIndex = index;
+
+    extern void updateCurrentImageTransformSettings();
+    updateCurrentImageTransformSettings();
+
+    extern volatile bool imageDownloadPending;
+    imageDownloadPending = true;
+
+    sendResponse(200, "application/json", "{\"status\":\"success\"}");
+}
+
+// Exit tune mode: clear the editing-pause flag and resume cycling.
+// Mirrors handleClearEditingState exactly.
+void WebConfig::handleStopTune() {
+    LOG_INFO("[WebAPI] Stopping tune - resuming auto-cycling");
+
+    extern bool cyclingPausedForEditing;
+    cyclingPausedForEditing = false;
+
+    sendResponse(200, "application/json", "{\"status\":\"success\"}");
+}
+
 void WebConfig::handleRemoveImageSource() {
     if (server->hasArg("index")) {
         int index = server->arg("index").toInt();
@@ -620,12 +747,11 @@ void WebConfig::handleUpdateImageTransform() {
         String property = server->arg("property");
         String value = server->arg("value");
         
-        // Pause cycling when user is actively editing transforms
+        // Editing a transform persists the value but does NOT by itself pause
+        // cycling. The live display changes only while the user is actively
+        // tuning this source on the device (see the guarded render below).
         extern bool cyclingPausedForEditing;
-        extern unsigned long lastEditActivity;
-        cyclingPausedForEditing = true;
-        lastEditActivity = millis();
-        
+
         LOG_DEBUG_F("[WebAPI] Transform update: image %d, %s = %s\n", index, property.c_str(), value.c_str());
         
         bool success = true;
@@ -643,8 +769,16 @@ void WebConfig::handleUpdateImageTransform() {
         
         if (success) {
             configStorage.saveConfig();
-            
-            if (index == configStorage.getCurrentImageIndex()) {
+
+            // Only disturb the live display when the user is actively tuning
+            // this exact source on the device. Editing numbers without tuning
+            // persists the value but leaves the displayed image untouched.
+            extern int currentImageIndex;
+            if (cyclingPausedForEditing && index == currentImageIndex) {
+                // Keep the tune session alive while the user is actively editing.
+                extern unsigned long lastEditActivity;
+                lastEditActivity = millis();
+
                 extern float scaleX, scaleY;
                 extern int16_t offsetX, offsetY;
                 extern float rotationAngle;

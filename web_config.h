@@ -62,6 +62,9 @@ private:
     void handleToggleImageEnabled();
     void handleSelectImage();
     void handleClearEditingState();
+    void handleGetImagesState();
+    void handleTuneImage();
+    void handleStopTune();
     void handleUpdateImageDuration();
     void handleRestart();
     void handleFactoryReset();

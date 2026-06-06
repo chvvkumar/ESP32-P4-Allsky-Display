@@ -115,6 +115,47 @@ body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .btn:focus,.form-control:focus{box-shadow:0 0 0 3px rgba(56,189,248,0.3)}
 .nav-toggle{display:none;background:none;border:none;color:#f8fafc;font-size:1.5rem;cursor:pointer;padding:0.5rem}
 @media (max-width:768px){.nav-toggle{display:block;position:absolute;right:1rem;top:50%;transform:translateY(-50%)}.nav-content{display:none;flex-direction:column;position:absolute;top:100%;left:0;right:0;background:#0f172a;padding:0;box-shadow:0 4px 6px rgba(0,0,0,0.3);border-top:1px solid #334155}.nav-content.active{display:flex}.nav-item{padding:1rem;width:100%;text-align:left;border-bottom:1px solid #1e293b}.nav{position:relative}}
+:root{--accent:#38bdf8;--accent-strong:#0ea5e9;--sel-border:#3b82f6;--sel-bg:#1e3a5f;--surface:#1e293b;--sunken:#0f172a;--border:#334155;--text:#f8fafc;--muted:#94a3b8;--dim:#64748b;--ok:#10b981;--warn:#f59e0b;--danger:#ef4444;--tap:44px;--radius:8px}
+.img-toolbar{display:flex;flex-direction:column;gap:0.75rem;margin-bottom:1rem}
+.img-add-bar{display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center}
+.img-add-bar .form-control{flex:1 1 220px;min-width:0;min-height:var(--tap)}
+.img-add-bar .btn{min-height:var(--tap)}
+.img-moon-box{background:var(--sunken);border:1px solid var(--border);border-radius:var(--radius);padding:0.75rem}
+.img-moon-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.5rem;margin:0.5rem 0}
+.img-bulk-bar{display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;padding:0.5rem 0;border-top:1px solid var(--border)}
+.img-bulk-bar label{display:inline-flex;align-items:center;gap:0.4rem;color:var(--muted);font-size:0.85rem;min-height:var(--tap)}
+.img-list{display:flex;flex-direction:column;gap:0.5rem}
+.img-row{display:flex;flex-wrap:wrap;gap:0.5rem;padding:0.75rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+.img-row.is-active{border-color:var(--sel-border);background:var(--sel-bg)}
+.img-row.is-disabled .img-row-meta,.img-row.is-disabled .img-idx{opacity:0.5}
+.img-row-main{display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;width:100%}
+.img-row-main .form-control{flex:1 1 200px;min-width:0;min-height:var(--tap)}
+.img-idx{color:var(--muted);font-weight:600;min-width:1.5rem}
+.img-row-meta{display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;width:100%;color:var(--muted);font-size:0.8rem}
+.img-row-meta .form-control{width:5.5rem;min-height:36px;padding:0.3rem 0.5rem}
+.img-summary{font-family:monospace;color:var(--muted)}
+.img-toggle-btn{min-height:var(--tap);min-width:var(--tap);padding:0.4rem 0.7rem;display:inline-flex;align-items:center;gap:0.4rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--sunken);color:var(--text);cursor:pointer;font-size:0.85rem}
+.img-toggle-btn[aria-pressed="false"]{color:var(--dim)}
+.img-caret{min-height:var(--tap);min-width:var(--tap);background:var(--sunken);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);cursor:pointer}
+.img-drawer{display:none;width:100%;background:var(--sunken);border-radius:var(--radius);padding:0.75rem;margin-top:0.25rem}
+.img-drawer.is-open{display:block}
+.transform-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.6rem}
+.transform-field{display:flex;flex-direction:column;gap:0.2rem}
+.transform-field label{color:var(--muted);font-size:0.85rem}
+.transform-field .form-control{min-height:var(--tap)}
+.img-drawer-actions{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem;align-items:center}
+.img-drawer-actions .btn{min-height:var(--tap)}
+.status-pill{display:inline-flex;align-items:center;gap:0.4rem;padding:0.3rem 0.75rem;border-radius:9999px;font-size:0.8rem;font-weight:600}
+.status-pill--active{background:rgba(16,185,129,0.15);color:var(--ok)}
+.status-pill--paused{background:rgba(245,158,11,0.15);color:var(--warn)}
+.img-save-bar{position:sticky;bottom:0;display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;margin-top:1rem;padding:0.75rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.img-save-bar .btn{min-height:var(--tap)}
+.img-dirty-dot{display:inline-flex;align-items:center;gap:0.4rem;color:var(--warn);font-size:0.85rem}
+.img-collapse-head{cursor:pointer;user-select:none}
+.img-collapse-body{display:none;margin-top:1rem}
+.img-collapse-body.is-open{display:block}
+.img-note{color:var(--dim);font-size:0.8rem;margin-bottom:0.5rem}
+.img-count{color:var(--muted);font-weight:400;font-size:0.95rem;margin-left:0.5rem}
 )rawliteral";
 
 const char HTML_JAVASCRIPT[] PROGMEM = R"rawliteral(
@@ -182,6 +223,202 @@ const char HTML_MODALS[] PROGMEM = R"rawliteral(
 <div class='modal-body'></div>
 <div class='modal-footer'><button class='modal-btn modal-btn-cancel'>Cancel</button><button class='modal-btn modal-btn-confirm'>Confirm</button></div>
 </div></div>
+)rawliteral";
+
+const char HTML_IMAGES_APP[] PROGMEM = R"rawliteral(
+(function(){
+var state=null;
+var openDrawers={};
+var defaultsDirty=false;
+var debTimers={};
+
+function toast(m,t){if(typeof showToast==='function')showToast(m,t)}
+function inputOk(el){if(typeof showInputFeedback==='function'){showInputFeedback(el,'success')}else{el.classList.add('img-ok');setTimeout(function(){el.classList.remove('img-ok')},1500)}}
+function inputErr(el){if(typeof showInputFeedback==='function'){showInputFeedback(el,'error')}else{el.classList.add('img-err');setTimeout(function(){el.classList.remove('img-err')},1500)}}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function debounce(key,fn,ms){if(debTimers[key])clearTimeout(debTimers[key]);debTimers[key]=setTimeout(fn,ms||300)}
+
+function post(url,data){var body=new URLSearchParams();for(var k in data){if(data.hasOwnProperty(k))body.set(k,data[k])}return fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()}).then(function(r){return r.json()})}
+
+function load(){return fetch('/api/images/state').then(function(r){return r.json()}).then(function(j){state=j;render()})}
+function refetch(){return load()}
+
+function nearly(a,b){return Math.abs((+a)-(+b))<0.0001}
+function isDefaultTransform(s){var d=state.defaults;return nearly(s.scaleX,d.scaleX)&&nearly(s.scaleY,d.scaleY)&&(+s.offsetX===+d.offsetX)&&(+s.offsetY===+d.offsetY)&&(+s.rotation===+d.rotation)}
+function summary(s){if(isDefaultTransform(s))return 'default';var ox=(+s.offsetX>=0?'+':'')+s.offsetX;var oy=(+s.offsetY>=0?'+':'')+s.offsetY;return (+s.scaleX).toFixed(2)+'×'+(+s.scaleY).toFixed(2)+'  '+ox+','+oy+'  '+(+s.rotation)+'°'}
+
+function render(){
+var el=document.getElementById('imageApp');if(!el||!state)return;
+var h='';
+h+=renderSourcesCard();
+h+=renderPlaybackCard();
+h+=renderDefaultTransformCard();
+h+=renderSaveBar();
+el.innerHTML=h;
+bind();
+}
+
+function renderSourcesCard(){
+var sources=state.sources||[];
+var multi=sources.length>1;
+var h='<div class="card"><h2>Image Sources<span class="img-count">'+sources.length+' source'+(sources.length===1?'':'s')+'</span></h2>';
+h+='<div class="img-toolbar">';
+h+='<div class="img-add-bar"><input type="text" id="addUrl" class="form-control" placeholder="https://example.com/image.jpg"><button type="button" class="btn btn-success" id="addUrlBtn">Add</button></div>';
+var opts='';var presets=state.presets||[];for(var i=0;i<presets.length;i++){opts+='<option value="'+esc(presets[i].id)+'">'+esc(presets[i].label)+'</option>'}
+h+='<div class="img-add-bar"><select id="presetSel" class="form-control" style="flex:1 1 220px">'+opts+'</select><button type="button" class="btn btn-secondary" id="addPresetBtn">Add</button></div>';
+h+='<div class="img-moon-box"><button type="button" class="btn btn-secondary img-collapse-head" id="moonHead" style="min-height:var(--tap)">Moon (computed) settings</button>';
+h+='<div class="img-collapse-body" id="moonBody"><div class="img-moon-grid">';
+var m=state.moon||{lat:0,lon:0,bg:1};
+h+='<div class="transform-field"><label for="moonLat">Latitude</label><input type="number" step="0.0001" id="moonLat" class="form-control" value="'+(m.lat)+'"></div>';
+h+='<div class="transform-field"><label for="moonLon">Longitude</label><input type="number" step="0.0001" id="moonLon" class="form-control" value="'+(m.lon)+'"></div>';
+h+='<div class="transform-field"><label for="moonBg">Background</label><select id="moonBg" class="form-control">'+bgOpts(m.bg)+'</select></div>';
+h+='</div><button type="button" class="btn btn-success" id="saveMoonBtn" style="min-height:var(--tap)">Save moon</button></div></div>';
+h+='</div>';
+if(multi){
+h+='<div class="img-bulk-bar"><label><input type="checkbox" id="selAll"> Select all</label>';
+h+='<button type="button" class="btn btn-danger" id="bulkDelBtn" disabled>Delete selected (<span id="selCount">0</span>)</button></div>';
+}
+h+='<div class="img-list">';
+for(var x=0;x<sources.length;x++){h+=renderRow(sources[x],multi)}
+h+='</div></div>';
+return h;
+}
+
+function bgOpts(sel){var labels=['Black','Starfield','Glow','Stars + Glow'];var o='';for(var i=0;i<4;i++){o+='<option value="'+i+'"'+(+sel===i?' selected':'')+'>'+labels[i]+'</option>'}return o}
+
+function renderRow(s,multi){
+var idx=s.index;
+var active=(state.currentIndex===idx);
+var cls='img-row'+(active?' is-active':'')+(s.enabled?'':' is-disabled');
+var open=openDrawers[idx];
+var h='<div class="'+cls+'" data-index="'+idx+'">';
+h+='<div class="img-row-main">';
+h+='<button type="button" class="img-toggle-btn" data-act="toggle" data-index="'+idx+'" aria-pressed="'+(s.enabled?'true':'false')+'"><i class="fas fa-'+(s.enabled?'eye':'eye-slash')+'"></i> '+(s.enabled?'On':'Off')+'</button>';
+h+='<span class="img-idx">'+(idx+1)+'.</span>';
+h+='<input type="text" class="form-control" data-act="url" data-index="'+idx+'" value="'+esc(s.url)+'"'+(s.isMoon?' readonly':'')+'>';
+h+='<button type="button" class="img-caret" data-act="caret" data-index="'+idx+'" aria-expanded="'+(open?'true':'false')+'"><i class="fas fa-chevron-'+(open?'up':'down')+'"></i></button>';
+if(multi){h+='<label style="display:inline-flex;align-items:center;min-height:var(--tap)"><input type="checkbox" class="img-sel" data-index="'+idx+'"></label>'}
+h+='</div>';
+h+='<div class="img-row-meta">';
+h+='<span>Duration <input type="number" class="form-control" data-act="duration" data-index="'+idx+'" min="5" max="3600" value="'+(s.duration)+'"> s</span>';
+h+='<span class="img-summary">'+esc(summary(s))+'</span>';
+h+='</div>';
+h+='<div class="img-drawer'+(open?' is-open':'')+'" data-drawer="'+idx+'">';
+h+='<div class="transform-grid">';
+h+=tf(idx,'scaleX','Scale X',s.scaleX,0.01,0.1,state.maxScale);
+h+=tf(idx,'scaleY','Scale Y',s.scaleY,0.01,0.1,state.maxScale);
+h+=tfInt(idx,'offsetX','Offset X',s.offsetX);
+h+=tfInt(idx,'offsetY','Offset Y',s.offsetY);
+h+='<div class="transform-field"><label>Rotation</label><select class="form-control" data-act="tf" data-prop="rotation" data-index="'+idx+'">'+rotOpts(s.rotation)+'</select></div>';
+h+='</div>';
+h+='<div class="img-drawer-actions">';
+h+='<button type="button" class="btn btn-secondary" data-act="reset" data-index="'+idx+'">Reset to defaults</button>';
+var tuned=state.tuning&&state.tuning.active&&state.tuning.index===idx;
+if(tuned){h+='<span class="status-pill status-pill--active">Holding #'+(idx+1)+' on display</span><button type="button" class="btn btn-success" data-act="tunestop">Done, resume cycling</button>'}
+else{h+='<button type="button" class="btn btn-secondary" data-act="tune" data-index="'+idx+'">Tune on device</button>'}
+h+='</div></div></div>';
+return h;
+}
+
+function tf(idx,prop,label,val,step,min,max){return '<div class="transform-field"><label>'+label+'</label><input type="number" class="form-control" data-act="tf" data-prop="'+prop+'" data-index="'+idx+'" step="'+step+'" min="'+min+'" max="'+max+'" value="'+(+val)+'"></div>'}
+function tfInt(idx,prop,label,val){return '<div class="transform-field"><label>'+label+'</label><input type="number" class="form-control" data-act="tf" data-prop="'+prop+'" data-index="'+idx+'" step="1" value="'+(+val)+'"></div>'}
+function rotOpts(sel){var o='';[0,90,180,270].forEach(function(r){o+='<option value="'+r+'"'+(+sel===r?' selected':'')+'>'+r+'°</option>'});return o}
+
+function renderPlaybackCard(){
+var h='<div class="card"><h2>Playback</h2>';
+h+='<div class="transform-grid">';
+h+='<div class="transform-field"><label for="dz_mode">Update Mode</label><select id="dz_mode" class="form-control" data-dz="1"><option value="0"'+(+state.updateMode===0?' selected':'')+'>Automatic Cycling</option><option value="1"'+(+state.updateMode===1?' selected':'')+'>API-Triggered Refresh</option></select></div>';
+h+='<div class="transform-field"><label for="dz_interval">Refresh Interval (min)</label><input type="number" id="dz_interval" class="form-control" min="1" max="1440" value="'+(state.updateInterval)+'" data-dz="1"></div>';
+h+='<div class="transform-field"><label for="dz_duration">Default Duration (s)</label><input type="number" id="dz_duration" class="form-control" min="5" max="3600" value="'+(state.defaultDuration)+'" data-dz="1"></div>';
+h+='<div class="transform-field"><label style="display:inline-flex;align-items:center;gap:0.5rem;min-height:var(--tap)"><input type="checkbox" id="dz_random" data-dz="1"'+(state.randomOrder?' checked':'')+'> Randomize order</label></div>';
+h+='</div></div>';
+return h;
+}
+
+function renderDefaultTransformCard(){
+var d=state.defaults;
+var h='<div class="card"><h2 class="img-collapse-head" id="dtHead">Default Transform <i class="fas fa-chevron-down" style="font-size:0.8rem"></i></h2>';
+h+='<div class="img-collapse-body" id="dtBody">';
+h+='<p class="img-note">Baseline for new images. Per-image edits override these.</p>';
+h+='<div class="transform-grid">';
+h+='<div class="transform-field"><label for="dz_sx">Scale X</label><input type="number" id="dz_sx" class="form-control" step="0.01" min="0.1" max="'+state.maxScale+'" value="'+(+d.scaleX)+'" data-dz="1"></div>';
+h+='<div class="transform-field"><label for="dz_sy">Scale Y</label><input type="number" id="dz_sy" class="form-control" step="0.01" min="0.1" max="'+state.maxScale+'" value="'+(+d.scaleY)+'" data-dz="1"></div>';
+h+='<div class="transform-field"><label for="dz_ox">Offset X</label><input type="number" id="dz_ox" class="form-control" step="1" value="'+(+d.offsetX)+'" data-dz="1"></div>';
+h+='<div class="transform-field"><label for="dz_oy">Offset Y</label><input type="number" id="dz_oy" class="form-control" step="1" value="'+(+d.offsetY)+'" data-dz="1"></div>';
+h+='<div class="transform-field"><label for="dz_rot">Rotation</label><select id="dz_rot" class="form-control" data-dz="1">'+rotOpts(d.rotation)+'</select></div>';
+h+='</div></div></div>';
+return h;
+}
+
+function renderSaveBar(){
+var h='<div class="img-save-bar">';
+h+='<button type="button" class="btn btn-success" id="saveDefaultsBtn"'+(defaultsDirty?'':' disabled')+'>Save defaults</button>';
+if(defaultsDirty){h+='<span class="img-dirty-dot"><i class="fas fa-circle" style="font-size:0.6rem"></i> Unsaved default changes</span>'}
+h+='</div>';
+return h;
+}
+
+function markDirty(){if(!defaultsDirty){defaultsDirty=true;var b=document.getElementById('saveDefaultsBtn');if(b)b.disabled=false;var bar=document.querySelector('.img-save-bar');if(bar&&!bar.querySelector('.img-dirty-dot')){var s=document.createElement('span');s.className='img-dirty-dot';s.innerHTML='<i class="fas fa-circle" style="font-size:0.6rem"></i> Unsaved default changes';bar.appendChild(s)}}}
+
+function saveDefaults(){
+var d={};
+d.image_update_mode=document.getElementById('dz_mode').value;
+d.update_interval=document.getElementById('dz_interval').value;
+d.default_image_duration=document.getElementById('dz_duration').value;
+d.random_order=document.getElementById('dz_random').checked?'on':'';
+d.random_order_present='1';
+d.default_scale_x=document.getElementById('dz_sx').value;
+d.default_scale_y=document.getElementById('dz_sy').value;
+d.default_offset_x=document.getElementById('dz_ox').value;
+d.default_offset_y=document.getElementById('dz_oy').value;
+d.default_rotation=document.getElementById('dz_rot').value;
+d.cycling_enabled='on';
+d.cycling_enabled_present='1';
+post('/api/save',d).then(function(j){if(j.status==='success'){defaultsDirty=false;toast('Defaults saved','success');refetch()}else{toast('Error: '+(j.message||'save failed'),'error')}}).catch(function(){toast('Network error','error')});
+}
+
+function selSel(){return Array.prototype.slice.call(document.querySelectorAll('.img-sel'))}
+function updateBulk(){var sel=selSel().filter(function(c){return c.checked});var n=sel.length;var cnt=document.getElementById('selCount');if(cnt)cnt.textContent=n;var b=document.getElementById('bulkDelBtn');if(b)b.disabled=(n===0);var all=document.getElementById('selAll');if(all)all.checked=(n>0&&n===selSel().length)}
+
+function bind(){
+var addBtn=document.getElementById('addUrlBtn');if(addBtn)addBtn.onclick=function(){var inp=document.getElementById('addUrl');var u=(inp.value||'').trim();if(!u.match(/^https?:\/\/.+/i)){inputErr(inp);toast('URL must start with http:// or https://','error');return}post('/api/add-source',{url:u}).then(function(j){if(j.status==='success'){toast('Source added','success');refetch()}else{toast('Error: '+(j.message||''),'error')}}).catch(function(){toast('Network error','error')})};
+var apBtn=document.getElementById('addPresetBtn');if(apBtn)apBtn.onclick=function(){var sel=document.getElementById('presetSel');if(!sel||!sel.value){toast('No preset selected','warning');return}post('/api/addPreset',{id:sel.value}).then(function(j){if(j.status==='success'){toast(j.message||'Preset added','success');refetch()}else{toast('Error: '+(j.message||''),'error')}}).catch(function(){toast('Network error','error')})};
+var mh=document.getElementById('moonHead');if(mh)mh.onclick=function(){var b=document.getElementById('moonBody');if(b)b.classList.toggle('is-open')};
+var sm=document.getElementById('saveMoonBtn');if(sm)sm.onclick=function(){post('/api/setMoon',{lat:document.getElementById('moonLat').value||'0',lon:document.getElementById('moonLon').value||'0',bg:document.getElementById('moonBg').value||'1'}).then(function(j){if(j.status==='success'){toast(j.message||'Moon saved','success');refetch()}else{toast('Error: '+(j.message||''),'error')}}).catch(function(){toast('Network error','error')})};
+
+var selAll=document.getElementById('selAll');if(selAll)selAll.onchange=function(){selSel().forEach(function(c){c.checked=selAll.checked});updateBulk()};
+selSel().forEach(function(c){c.onchange=updateBulk});
+var bd=document.getElementById('bulkDelBtn');if(bd)bd.onclick=function(){var idx=selSel().filter(function(c){return c.checked}).map(function(c){return parseInt(c.getAttribute('data-index'),10)});if(idx.length===0){toast('No images selected','warning');return}if(idx.length>=(state.sources||[]).length){toast('Cannot delete all sources. At least one must remain.','error');return}if(typeof showConfirmModal==='function'){showConfirmModal('Delete Selected','Delete '+idx.length+' selected source(s)?',function(){doBulkDel(idx)})}else{doBulkDel(idx)}};
+
+var dt=document.getElementById('dtHead');if(dt)dt.onclick=function(){var b=document.getElementById('dtBody');if(b)b.classList.toggle('is-open')};
+
+bindRows();
+
+document.querySelectorAll('[data-dz]').forEach(function(el){var ev=(el.type==='checkbox'||el.tagName==='SELECT')?'change':'input';el.addEventListener(ev,markDirty)});
+var sdb=document.getElementById('saveDefaultsBtn');if(sdb)sdb.onclick=saveDefaults;
+}
+
+function doBulkDel(idx){post('/api/bulk-delete-sources',{indices:JSON.stringify(idx)}).then(function(j){if(j.status==='success'){toast(j.message||'Deleted','success');openDrawers={};refetch()}else{toast('Error: '+(j.message||''),'error')}}).catch(function(){toast('Network error','error')})}
+
+function srcByIndex(idx){var s=state.sources||[];for(var i=0;i<s.length;i++){if(s[i].index===idx)return s[i]}return null}
+
+function bindRows(){
+document.querySelectorAll('.img-toggle-btn[data-act="toggle"]').forEach(function(b){b.onclick=function(){var idx=parseInt(b.getAttribute('data-index'),10);post('/api/toggle-image-enabled',{index:idx}).then(function(j){if(j.status==='success'){toast(j.enabled?'Image enabled':'Image disabled','success');refetch()}else{toast('Failed to toggle','error')}}).catch(function(){toast('Network error','error')})}});
+document.querySelectorAll('.img-caret[data-act="caret"]').forEach(function(b){b.onclick=function(){var idx=parseInt(b.getAttribute('data-index'),10);openDrawers[idx]=!openDrawers[idx];var d=document.querySelector('.img-drawer[data-drawer="'+idx+'"]');if(d)d.classList.toggle('is-open',openDrawers[idx]);b.setAttribute('aria-expanded',openDrawers[idx]?'true':'false');var i=b.querySelector('i');if(i)i.className='fas fa-chevron-'+(openDrawers[idx]?'up':'down')}});
+document.querySelectorAll('[data-act="url"]').forEach(function(inp){inp.onchange=function(){var idx=parseInt(inp.getAttribute('data-index'),10);var u=(inp.value||'').trim();if(!u.match(/^https?:\/\/.+/i)){inputErr(inp);toast('URL must start with http:// or https://','error');return}post('/api/update-source',{index:idx,url:u}).then(function(j){if(j.status==='success'){inputOk(inp);var s=srcByIndex(idx);if(s)s.url=u}else{inputErr(inp);toast('Error: '+(j.message||''),'error');var s2=srcByIndex(idx);if(s2)inp.value=s2.url}}).catch(function(){inputErr(inp);var s3=srcByIndex(idx);if(s3)inp.value=s3.url})}});
+document.querySelectorAll('[data-act="duration"]').forEach(function(inp){inp.onchange=function(){var idx=parseInt(inp.getAttribute('data-index'),10);var v=parseInt(inp.value,10);var s=srcByIndex(idx);if(isNaN(v)||v<5||v>3600){inputErr(inp);toast('Duration must be 5-3600 seconds','error');if(s)inp.value=s.duration;return}post('/api/update-image-duration',{index:idx,duration:v}).then(function(j){if(j.status==='success'){inputOk(inp);if(s)s.duration=v}else{inputErr(inp);if(s)inp.value=s.duration}}).catch(function(){inputErr(inp);if(s)inp.value=s.duration})}});
+document.querySelectorAll('[data-act="tf"]').forEach(function(inp){var ev=inp.tagName==='SELECT'?'change':'input';inp.addEventListener(ev,function(){var idx=parseInt(inp.getAttribute('data-index'),10);var prop=inp.getAttribute('data-prop');var val=inp.value;debounce('tf'+idx+prop,function(){post('/api/update-transform',{index:idx,property:prop,value:val}).then(function(j){if(j.status==='success'){inputOk(inp);var s=srcByIndex(idx);if(s)s[prop]=val;updateSummary(idx)}else{inputErr(inp);var s2=srcByIndex(idx);if(s2){inp.value=s2[prop]}}}).catch(function(){inputErr(inp);var s3=srcByIndex(idx);if(s3)inp.value=s3[prop]})},300)})});
+document.querySelectorAll('[data-act="reset"]').forEach(function(b){b.onclick=function(){var idx=parseInt(b.getAttribute('data-index'),10);post('/api/copy-defaults',{index:idx}).then(function(j){if(j.status==='success'){toast('Reset to defaults','success');refetch()}else{toast('Failed to reset','error')}}).catch(function(){toast('Network error','error')})}});
+document.querySelectorAll('[data-act="tune"]').forEach(function(b){b.onclick=function(){var idx=parseInt(b.getAttribute('data-index'),10);post('/api/images/tune',{index:idx}).then(function(j){if(j.status==='success'){toast('Holding #'+(idx+1)+' on display','success');refetch()}else{toast('Failed to tune','error')}}).catch(function(){toast('Network error','error')})}});
+document.querySelectorAll('[data-act="tunestop"]').forEach(function(b){b.onclick=function(){post('/api/images/tune/stop',{}).then(function(j){if(j.status==='success'){toast('Resumed cycling','success');refetch()}else{toast('Failed to stop','error')}}).catch(function(){toast('Network error','error')})}});
+}
+
+function updateSummary(idx){var s=srcByIndex(idx);if(!s)return;var row=document.querySelector('.img-row[data-index="'+idx+'"]');if(!row)return;var sp=row.querySelector('.img-summary');if(sp)sp.textContent=summary(s)}
+
+window.addEventListener('beforeunload',function(e){if(defaultsDirty){e.preventDefault();e.returnValue='';return ''}});
+
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',load)}else{load()}
+})();
 )rawliteral";
 
 #endif // WEB_CONFIG_HTML_H
