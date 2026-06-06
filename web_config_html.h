@@ -256,6 +256,7 @@ function render(){
 var el=document.getElementById('imageApp');if(!el||!state)return;
 var h='';
 h+=renderSourcesCard();
+h+=renderRotationCard();
 h+=renderPlaybackCard();
 h+=renderDefaultTransformCard();
 h+=renderSaveBar();
@@ -265,18 +266,25 @@ bind();
 
 function renderSourcesCard(){
 var sources=state.sources||[];
-var multi=sources.length>1;
 var presets=state.presets||[];
 var sunOpts='',goesOpts='';
 for(var i=0;i<presets.length;i++){var pid=presets[i].id;var op='<option value="'+esc(pid)+'">'+esc(presets[i].label)+'</option>';if(pid.indexOf('sdo_')===0||pid.indexOf('soho_')===0){sunOpts+=op}else if(pid.indexOf('goes')===0){goesOpts+=op}}
 var moonExists=false;for(var k=0;k<sources.length;k++){if(sources[k].isMoon){moonExists=true;break}}
-var h='<div class="card"><h2>Image Sources<span class="img-count">'+sources.length+' source'+(sources.length===1?'':'s')+'</span></h2>';
+var h='<div class="card"><h2>Image Sources</h2>';
 h+='<div class="img-toolbar">';
 h+='<div class="img-add-bar"><input type="text" id="addUrl" class="form-control" placeholder="https://example.com/image.jpg"><button type="button" class="btn btn-success" id="addUrlBtn">Add</button></div>';
 h+='<div class="img-add-bar"><label class="img-row-label">Sun</label><select id="sunSel" class="form-control" style="flex:1 1 220px">'+sunOpts+'</select><button type="button" class="btn btn-secondary" id="addSunBtn">Add</button></div>';
-h+='<div class="img-add-bar"><label class="img-row-label">Moon Phase</label>'+moonInline('add')+'<button type="button" class="btn btn-secondary" id="addMoonBtn"'+(moonExists?' disabled title="Moon already in list"':'')+'>Add</button>'+moonDrawer('add')+'</div>';
 h+='<div class="img-add-bar"><label class="img-row-label">GOES</label><select id="goesSel" class="form-control" style="flex:1 1 220px">'+goesOpts+'</select><button type="button" class="btn btn-secondary" id="addGoesBtn">Add</button></div>';
+h+='<div class="img-add-bar"><label class="img-row-label">Moon Phase</label>'+moonInline('add')+'<button type="button" class="btn btn-secondary" id="addMoonBtn"'+(moonExists?' disabled title="Moon already in list"':'')+'>Add</button>'+moonDrawer('add')+'</div>';
 h+='</div>';
+h+='</div>';
+return h;
+}
+
+function renderRotationCard(){
+var sources=state.sources||[];
+var multi=sources.length>1;
+var h='<div class="card"><h2>Image Rotation<span class="img-count">'+sources.length+' source'+(sources.length===1?'':'s')+'</span></h2>';
 if(multi){
 h+='<div class="img-bulk-bar"><label><input type="checkbox" id="selAll"> Select all</label>';
 h+='<button type="button" class="btn btn-danger" id="bulkDelBtn" disabled>Delete selected (<span id="selCount">0</span>)</button></div>';
