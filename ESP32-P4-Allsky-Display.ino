@@ -548,7 +548,23 @@ void setup() {
     
     // Now watchdog is properly configured - reset it after initialization
     systemMonitor.forceResetWatchdog();
-    
+
+    // Decode the lunar surface texture FIRST, while all PSRAM is free and
+    // contiguous. The 2048x1024 JPEG needs a transient ~6 MB contiguous decode
+    // buffer (stb_image). If this runs after the 16.9 MB of image buffers below
+    // are allocated, the largest free block is too small and the decode fails
+    // with "outofmem", falling back to the low-detail procedural placeholder.
+    // Decoding here keeps the full-resolution texture (~4 MB resident). Safe to
+    // call early: it only touches PSRAM (no display/network), and is idempotent
+    // so the later lazy call in renderMoonToPendingBuffer() is a no-op.
+    LOG_DEBUG("[Moon] Pre-decoding lunar texture while PSRAM is contiguous...");
+    if (moon_sphere_init()) {
+        LOG_INFO("[Moon] Lunar texture ready (full resolution)");
+    } else {
+        LOG_WARNING("[Moon] Lunar texture init failed; placeholder will be used");
+    }
+    systemMonitor.forceResetWatchdog();
+
     // Pre-allocate all PSRAM buffers BEFORE display init to ensure enough contiguous memory
     // Display needs ~1.28MB contiguous for frame buffer (800x800x2), so we allocate our buffers first
     LOG_DEBUG("Pre-allocating PSRAM buffers before display initialization...");
@@ -2567,6 +2583,19 @@ void updateTouchState() {
         if (!touchPressed && touchWasPressed) {
             moon_drag_end();
         }
+        return;
+    }
+
+    // On the moon page ONLY sphere rotation (the drag handled above) is active.
+    // Suppress every page-navigation gesture (single tap = next image, double
+    // tap = mode toggle) so a tap or stray touch while viewing the moon never
+    // navigates away or changes mode. Keep the tap state machine idle so no
+    // stale tap carries over when the slideshow later leaves the moon source.
+    if (currentSourceIsMoon) {
+        touchState = TOUCH_IDLE;
+        firstTapTime = 0;
+        touchTriggeredNextImage = false;
+        touchTriggeredModeToggle = false;
         return;
     }
 
