@@ -21,6 +21,7 @@ static const uint32_t DIRTY_HA_REST     = 0x00000100;  // HA REST base URL, toke
 static const uint32_t DIRTY_TRANSFORMS  = 0x00000200;  // Per-image and default scale, offset, rotation
 static const uint32_t DIRTY_DEVICE      = 0x00000400;  // Device name
 static const uint32_t DIRTY_LOGGING     = 0x00000800;  // Log severity
+static const uint32_t DIRTY_MOON        = 0x00001000;  // Moon lat, lon, background style
 static const uint32_t DIRTY_ALL         = 0xFFFFFFFF;  // All fields dirty (used for resetToDefaults)
 
 // RAII lock guard for ConfigStorage mutex
@@ -231,6 +232,32 @@ public:
     void setColorTemp(int temp);
     int getColorTemp();
 
+    // Moon render setters/getters
+    void setMoonLat(float lat);
+    void setMoonLon(float lon);
+    void setMoonBgStyle(int style);
+    float getMoonLat();
+    float getMoonLon();
+    int  getMoonBgStyle();
+    void setMoonFlipU(uint8_t v);
+    uint8_t getMoonFlipU();
+    void setMoonFlipV(uint8_t v);
+    uint8_t getMoonFlipV();
+    void setMoonRollOffset(float v);
+    float getMoonRollOffset();
+    void setMoonYawOffset(float v);
+    float getMoonYawOffset();
+    void setMoonPitchOffset(float v);
+    float getMoonPitchOffset();
+    void setMoonNorthUp(uint8_t v);
+    uint8_t getMoonNorthUp();
+    void setMoonDragLightMode(uint8_t v);
+    uint8_t getMoonDragLightMode();
+    void setMoonSpinMode(uint8_t v);
+    uint8_t getMoonSpinMode();
+    void setMoonSpinReturnS(uint8_t v);
+    uint8_t getMoonSpinReturnS();
+
 private:
     Preferences preferences;
     static const char* NAMESPACE;
@@ -305,6 +332,20 @@ private:
 
         // Color temperature
         int colorTemp;  // Display color temperature in Kelvin (2000-10000)
+
+        // Moon render settings
+        float moonLat;        // observer latitude, degrees (0 => unset/north-up)
+        float moonLon;        // observer longitude, degrees
+        int   moonBgStyle;    // 0=black,1=stars,2=glow,3=stars+glow
+        uint8_t moonFlipU;        // flip U texture coordinate (0=off,1=on)
+        uint8_t moonFlipV;        // flip V texture coordinate (0=off,1=on)
+        float   moonRollOffset;   // roll rotation offset, degrees [-180,180]
+        float   moonYawOffset;    // yaw rotation offset, degrees [-180,180]
+        float   moonPitchOffset;  // pitch rotation offset, degrees [-90,90]
+        uint8_t moonNorthUp;      // force north-up orientation (0=off,1=on)
+        uint8_t moonDragLightMode; // drag changes light direction (0=off,1=on)
+        uint8_t moonSpinMode;     // auto-spin mode (0=off,1=on)
+        uint8_t moonSpinReturnS;  // seconds to return after spin, [3,60]
 
         // Advanced settings
         unsigned long updateInterval;

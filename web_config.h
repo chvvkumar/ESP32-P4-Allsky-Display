@@ -47,6 +47,9 @@ private:
     void handleStatus();
     void handleSaveConfig();
     void handleAddImageSource();
+    void handleAddPreset();
+    void handleSetMoon();
+    void handleGetMoon();
     void handleRemoveImageSource();
     void handleUpdateImageSource();
     void handleClearImageSources();
@@ -59,6 +62,9 @@ private:
     void handleToggleImageEnabled();
     void handleSelectImage();
     void handleClearEditingState();
+    void handleGetImagesState();
+    void handleTuneImage();
+    void handleStopTune();
     void handleUpdateImageDuration();
     void handleRestart();
     void handleFactoryReset();
@@ -67,7 +73,8 @@ private:
     void handleForceBrightnessUpdate();
     void handleGetHealth();
     void handleWiFiScan();
-    
+    void handleScreenshot();
+
 public:
     // WebSocket log broadcasting with severity filtering
     void broadcastLog(const char* message, uint16_t color = 0xFFFF, LogSeverity severity = LOG_INFO);
