@@ -1353,6 +1353,16 @@ void downloadAndDisplayImage() {
         Serial.println("[Moon] Rendering computed moon image");
         renderMoonToPendingBuffer();
         imageDownloadFailed = !imageReadyToDisplay;  // success iff a frame is ready
+        // This path returns before the shared "first image loaded" bookkeeping
+        // below. When the moon is the only enabled source, that flag would never
+        // be set, so on-screen debug text (e.g. the periodic HTTP time sync line)
+        // would keep drawing over the moon and flicker on each refresh. Mark it
+        // here once a moon frame is ready so the debug overlay is suppressed.
+        if (imageReadyToDisplay && !firstImageLoaded) {
+            firstImageLoaded = true;
+            displayManager.setFirstImageLoaded(true);
+            Serial.println("First image (moon) ready - suppressing on-screen debug");
+        }
         systemMonitor.forceResetWatchdog();
         imageProcessing = false;   // matches the early-return contract used below
         return;

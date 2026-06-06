@@ -810,14 +810,31 @@ void WebConfig::handleUpdateImageTransform() {
                 extern int16_t offsetX, offsetY;
                 extern float rotationAngle;
                 extern void renderFullImage();
-                
-                if (property == "scaleX") scaleX = configStorage.getImageScaleX(index);
-                else if (property == "scaleY") scaleY = configStorage.getImageScaleY(index);
-                else if (property == "offsetX") offsetX = configStorage.getImageOffsetX(index);
-                else if (property == "offsetY") offsetY = configStorage.getImageOffsetY(index);
-                else if (property == "rotation") rotationAngle = configStorage.getImageRotation(index);
-                
-                renderFullImage();
+                extern void updateCurrentImageTransformSettings();
+                extern volatile bool imageDownloadPending;
+
+                // The computed moon is rendered at full panel size with its disk
+                // scale applied inside the renderer; the displayed bitmap is always
+                // drawn 1:1. So a scale/rotation change must trigger a disk
+                // re-render (the same pipeline the cycle uses, which re-centers via
+                // updateCurrentImageTransformSettings) rather than scaling the
+                // full-panel bitmap here, which pushes the draw origin negative and
+                // makes the moon grow from a corner instead of the center.
+                if (configStorage.getImageSource(index).startsWith("moon://")) {
+                    if (property == "offsetX" || property == "offsetY") {
+                        updateCurrentImageTransformSettings();  // moon-aware: scale=1, offsets from NVS
+                        renderFullImage();                       // pan the existing moon frame
+                    } else {
+                        imageDownloadPending = true;             // re-render the disk at the new scale
+                    }
+                } else {
+                    if (property == "scaleX") scaleX = configStorage.getImageScaleX(index);
+                    else if (property == "scaleY") scaleY = configStorage.getImageScaleY(index);
+                    else if (property == "offsetX") offsetX = configStorage.getImageOffsetX(index);
+                    else if (property == "offsetY") offsetY = configStorage.getImageOffsetY(index);
+                    else if (property == "rotation") rotationAngle = configStorage.getImageRotation(index);
+                    renderFullImage();
+                }
             }
         }
         
@@ -840,18 +857,26 @@ void WebConfig::handleCopyDefaultsToImage() {
         configStorage.saveConfig();
         
         if (index == configStorage.getCurrentImageIndex()) {
-            extern float scaleX, scaleY;
-            extern int16_t offsetX, offsetY;
-            extern float rotationAngle;
-            extern void renderFullImage();
-            
-            scaleX = configStorage.getImageScaleX(index);
-            scaleY = configStorage.getImageScaleY(index);
-            offsetX = configStorage.getImageOffsetX(index);
-            offsetY = configStorage.getImageOffsetY(index);
-            rotationAngle = configStorage.getImageRotation(index);
-            
-            renderFullImage();
+            // For the computed moon, scale is a disk re-render (see
+            // handleUpdateImageTransform); re-run the moon pipeline so the copied
+            // scale is applied centered rather than as a full-panel bitmap scale.
+            if (configStorage.getImageSource(index).startsWith("moon://")) {
+                extern volatile bool imageDownloadPending;
+                imageDownloadPending = true;
+            } else {
+                extern float scaleX, scaleY;
+                extern int16_t offsetX, offsetY;
+                extern float rotationAngle;
+                extern void renderFullImage();
+
+                scaleX = configStorage.getImageScaleX(index);
+                scaleY = configStorage.getImageScaleY(index);
+                offsetX = configStorage.getImageOffsetX(index);
+                offsetY = configStorage.getImageOffsetY(index);
+                rotationAngle = configStorage.getImageRotation(index);
+
+                renderFullImage();
+            }
             Serial.println("Applied global defaults to current image");
         }
         
@@ -882,21 +907,25 @@ void WebConfig::handleApplyTransform() {
 
             extern volatile bool imageDownloadPending;
             imageDownloadPending = true;
+        } else if (configStorage.getImageSource(index).startsWith("moon://")) {
+            // Moon scale is a disk re-render, not a full-panel bitmap scale.
+            extern volatile bool imageDownloadPending;
+            imageDownloadPending = true;
         } else {
             extern float scaleX, scaleY;
             extern int16_t offsetX, offsetY;
             extern float rotationAngle;
             extern void renderFullImage();
-            
+
             scaleX = configStorage.getImageScaleX(index);
             scaleY = configStorage.getImageScaleY(index);
             offsetX = configStorage.getImageOffsetX(index);
             offsetY = configStorage.getImageOffsetY(index);
             rotationAngle = configStorage.getImageRotation(index);
-            
+
             renderFullImage();
         }
-        
+
         sendResponse(200, "application/json", "{\"status\":\"success\",\"message\":\"Transform applied successfully\"}");
     } else {
         sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Index parameter required\"}");
