@@ -299,12 +299,25 @@ function renderRow(s,multi){
 var idx=s.index;
 var active=(state.currentIndex===idx);
 var cls='img-row'+(active?' is-active':'')+(s.enabled?'':' is-disabled');
-var open=openDrawers[idx];
 var h='<div class="'+cls+'" data-index="'+idx+'">';
 h+='<div class="img-row-main">';
 h+='<button type="button" class="img-toggle-btn" data-act="toggle" data-index="'+idx+'" aria-pressed="'+(s.enabled?'true':'false')+'"><i class="fas fa-'+(s.enabled?'eye':'eye-slash')+'"></i> '+(s.enabled?'On':'Off')+'</button>';
 h+='<span class="img-idx">'+(idx+1)+'.</span>';
-h+='<input type="text" class="form-control" data-act="url" data-index="'+idx+'" value="'+esc(s.url)+'"'+(s.isMoon?' readonly':'')+'>';
+if(s.isMoon){
+var mp='moonrow'+idx;
+h+='<span class="img-moon-label">Moon Phase</span>';
+h+=moonInline(mp);
+if(multi){h+='<label style="display:inline-flex;align-items:center;min-height:var(--tap)"><input type="checkbox" class="img-sel" data-index="'+idx+'"></label>'}
+h+='</div>';
+h+='<div class="img-row-meta">';
+h+='<span>Duration <input type="number" class="form-control" data-act="duration" data-index="'+idx+'" min="5" max="3600" value="'+(s.duration)+'"> s</span>';
+h+='</div>';
+h+=moonDrawer(mp);
+h+='</div>';
+return h;
+}
+var open=openDrawers[idx];
+h+='<input type="text" class="form-control" data-act="url" data-index="'+idx+'" value="'+esc(s.url)+'">';
 h+='<button type="button" class="img-caret" data-act="caret" data-index="'+idx+'" aria-expanded="'+(open?'true':'false')+'"><i class="fas fa-chevron-'+(open?'up':'down')+'"></i></button>';
 if(multi){h+='<label style="display:inline-flex;align-items:center;min-height:var(--tap)"><input type="checkbox" class="img-sel" data-index="'+idx+'"></label>'}
 h+='</div>';
