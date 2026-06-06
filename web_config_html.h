@@ -156,6 +156,11 @@ body{font-family:'Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 .img-collapse-body.is-open{display:block}
 .img-note{color:var(--dim);font-size:0.8rem;margin-bottom:0.5rem}
 .img-count{color:var(--muted);font-weight:400;font-size:0.95rem;margin-left:0.5rem}
+.img-row-label{min-width:5.5rem;font-weight:600;color:var(--text);display:inline-flex;align-items:center;min-height:var(--tap)}
+.img-moon-inline{display:inline-flex;align-items:center;gap:0.35rem;color:var(--muted);font-size:0.85rem}
+.img-moon-inline select{width:auto;min-height:var(--tap)}
+.img-moon-cog{min-height:var(--tap);min-width:var(--tap);background:var(--sunken);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);cursor:pointer}
+.img-moon-label{flex:1 1 160px;font-weight:600;color:var(--text);display:inline-flex;align-items:center;min-height:var(--tap)}
 )rawliteral";
 
 const char HTML_JAVASCRIPT[] PROGMEM = R"rawliteral(
