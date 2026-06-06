@@ -435,6 +435,7 @@ document.querySelectorAll('[data-act="tf"]').forEach(function(inp){var ev=inp.ta
 document.querySelectorAll('[data-act="reset"]').forEach(function(b){b.onclick=function(){var idx=parseInt(b.getAttribute('data-index'),10);post('/api/copy-defaults',{index:idx}).then(function(j){if(j.status==='success'){toast('Reset to defaults','success');refetch()}else{toast('Failed to reset','error')}}).catch(function(){toast('Network error','error')})}});
 document.querySelectorAll('[data-act="tune"]').forEach(function(b){b.onclick=function(){var idx=parseInt(b.getAttribute('data-index'),10);post('/api/images/tune',{index:idx}).then(function(j){if(j.status==='success'){toast('Holding #'+(idx+1)+' on display','success');refetch()}else{toast('Failed to tune','error')}}).catch(function(){toast('Network error','error')})}});
 document.querySelectorAll('[data-act="tunestop"]').forEach(function(b){b.onclick=function(){post('/api/images/tune/stop',{}).then(function(j){if(j.status==='success'){toast('Resumed cycling','success');refetch()}else{toast('Failed to stop','error')}}).catch(function(){toast('Network error','error')})}});
+(state.sources||[]).forEach(function(s){if(s.isMoon){bindMoonControls('moonrow'+s.index)}});
 }
 
 function updateSummary(idx){var s=srcByIndex(idx);if(!s)return;var row=document.querySelector('.img-row[data-index="'+idx+'"]');if(!row)return;var sp=row.querySelector('.img-summary');if(sp)sp.textContent=summary(s)}
