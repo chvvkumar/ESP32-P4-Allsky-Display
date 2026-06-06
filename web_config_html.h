@@ -313,15 +313,32 @@ h+='<button type="button" class="img-toggle-btn" data-act="toggle" data-index="'
 h+='<span class="img-idx">'+(idx+1)+'.</span>';
 if(s.isMoon){
 var mp='moonrow'+idx;
+var mopen=openDrawers[idx];
 h+='<span class="img-moon-label">Moon Phase</span>';
 h+=moonInline(mp);
+h+='<button type="button" class="img-caret" data-act="caret" data-index="'+idx+'" aria-expanded="'+(mopen?'true':'false')+'" title="Image adjustments"><i class="fas fa-chevron-'+(mopen?'up':'down')+'"></i></button>';
 if(multi){h+='<label style="display:inline-flex;align-items:center;min-height:var(--tap)"><input type="checkbox" class="img-sel" data-index="'+idx+'"></label>'}
 h+='</div>';
 h+='<div class="img-row-meta">';
 h+='<span>Duration <input type="number" class="form-control" data-act="duration" data-index="'+idx+'" min="5" max="3600" value="'+(s.duration)+'"> s</span>';
+h+='<span class="img-summary">'+esc(summary(s))+'</span>';
 h+='</div>';
 h+=moonDrawer(mp);
+h+='<div class="img-drawer'+(mopen?' is-open':'')+'" data-drawer="'+idx+'">';
+h+='<div class="img-note">Image adjustments</div>';
+h+='<div class="transform-grid">';
+h+=tf(idx,'scaleX','Scale X',s.scaleX,0.01,0.1,state.maxScale);
+h+=tf(idx,'scaleY','Scale Y',s.scaleY,0.01,0.1,state.maxScale);
+h+=tfInt(idx,'offsetX','Offset X',s.offsetX);
+h+=tfInt(idx,'offsetY','Offset Y',s.offsetY);
+h+='<div class="transform-field"><label>Rotation</label><select class="form-control" data-act="tf" data-prop="rotation" data-index="'+idx+'">'+rotOpts(s.rotation)+'</select></div>';
 h+='</div>';
+h+='<div class="img-drawer-actions">';
+h+='<button type="button" class="btn btn-secondary" data-act="reset" data-index="'+idx+'">Reset to defaults</button>';
+var mtuned=state.tuning&&state.tuning.active&&state.tuning.index===idx;
+if(mtuned){h+='<span class="status-pill status-pill--active">Holding #'+(idx+1)+' on display</span><button type="button" class="btn btn-success" data-act="tunestop">Done, resume cycling</button>'}
+else{h+='<button type="button" class="btn btn-secondary" data-act="tune" data-index="'+idx+'">Tune on device</button>'}
+h+='</div></div></div>';
 return h;
 }
 var open=openDrawers[idx];
