@@ -13,6 +13,7 @@
 #include "logging.h"
 #include "image_presets.h"
 #include <Update.h>
+#include <driver/jpeg_encode.h>  // ESP32-P4 hardware JPEG encoder (screenshot endpoint)
 
 // External global instances
 extern CrashLogger crashLogger;
@@ -425,9 +426,18 @@ void WebConfig::handleAddPreset() {
 }
 
 void WebConfig::handleSetMoon() {
-    if (server->hasArg("lat")) configStorage.setMoonLat(server->arg("lat").toFloat());
-    if (server->hasArg("lon")) configStorage.setMoonLon(server->arg("lon").toFloat());
-    if (server->hasArg("bg"))  configStorage.setMoonBgStyle(server->arg("bg").toInt());
+    if (server->hasArg("lat"))     configStorage.setMoonLat(server->arg("lat").toFloat());
+    if (server->hasArg("lon"))     configStorage.setMoonLon(server->arg("lon").toFloat());
+    if (server->hasArg("bg"))      configStorage.setMoonBgStyle(server->arg("bg").toInt());
+    if (server->hasArg("flipu"))   configStorage.setMoonFlipU((uint8_t)server->arg("flipu").toInt());
+    if (server->hasArg("flipv"))   configStorage.setMoonFlipV((uint8_t)server->arg("flipv").toInt());
+    if (server->hasArg("roll"))    configStorage.setMoonRollOffset(server->arg("roll").toFloat());
+    if (server->hasArg("yaw"))     configStorage.setMoonYawOffset(server->arg("yaw").toFloat());
+    if (server->hasArg("pitch"))   configStorage.setMoonPitchOffset(server->arg("pitch").toFloat());
+    if (server->hasArg("northup")) configStorage.setMoonNorthUp((uint8_t)server->arg("northup").toInt());
+    if (server->hasArg("light"))   configStorage.setMoonDragLightMode((uint8_t)server->arg("light").toInt());
+    if (server->hasArg("spin"))    configStorage.setMoonSpinMode((uint8_t)server->arg("spin").toInt());
+    if (server->hasArg("spinret")) configStorage.setMoonSpinReturnS((uint8_t)server->arg("spinret").toInt());
     configStorage.saveConfig();
     LOG_INFO_F("[WebAPI] Moon settings saved (lat %.4f lon %.4f bg %d)\n",
                configStorage.getMoonLat(), configStorage.getMoonLon(), configStorage.getMoonBgStyle());
@@ -435,9 +445,17 @@ void WebConfig::handleSetMoon() {
 }
 
 void WebConfig::handleGetMoon() {
-    char json[96];
-    snprintf(json, sizeof(json), "{\"lat\":%.4f,\"lon\":%.4f,\"bg\":%d}",
-             configStorage.getMoonLat(), configStorage.getMoonLon(), configStorage.getMoonBgStyle());
+    char json[256];
+    snprintf(json, sizeof(json),
+             "{\"lat\":%.4f,\"lon\":%.4f,\"bg\":%d,"
+             "\"flipu\":%d,\"flipv\":%d,"
+             "\"roll\":%.2f,\"yaw\":%.2f,\"pitch\":%.2f,"
+             "\"northup\":%d,\"light\":%d,\"spin\":%d,\"spinret\":%d}",
+             configStorage.getMoonLat(), configStorage.getMoonLon(), configStorage.getMoonBgStyle(),
+             configStorage.getMoonFlipU(), configStorage.getMoonFlipV(),
+             configStorage.getMoonRollOffset(), configStorage.getMoonYawOffset(), configStorage.getMoonPitchOffset(),
+             configStorage.getMoonNorthUp(), configStorage.getMoonDragLightMode(),
+             configStorage.getMoonSpinMode(), configStorage.getMoonSpinReturnS());
     sendResponse(200, "application/json", json);
 }
 
@@ -479,7 +497,16 @@ void WebConfig::handleGetImagesState() {
     json += "\"moon\":{";
     json += "\"lat\":" + String(configStorage.getMoonLat(), 4) + ",";
     json += "\"lon\":" + String(configStorage.getMoonLon(), 4) + ",";
-    json += "\"bg\":" + String(configStorage.getMoonBgStyle());
+    json += "\"bg\":" + String(configStorage.getMoonBgStyle()) + ",";
+    json += "\"flipu\":" + String(configStorage.getMoonFlipU()) + ",";
+    json += "\"flipv\":" + String(configStorage.getMoonFlipV()) + ",";
+    json += "\"roll\":" + String(configStorage.getMoonRollOffset(), 2) + ",";
+    json += "\"yaw\":" + String(configStorage.getMoonYawOffset(), 2) + ",";
+    json += "\"pitch\":" + String(configStorage.getMoonPitchOffset(), 2) + ",";
+    json += "\"northup\":" + String(configStorage.getMoonNorthUp()) + ",";
+    json += "\"light\":" + String(configStorage.getMoonDragLightMode()) + ",";
+    json += "\"spin\":" + String(configStorage.getMoonSpinMode()) + ",";
+    json += "\"spinret\":" + String(configStorage.getMoonSpinReturnS());
     json += "},";
 
     // Static preset catalog (mirrors the shared contract list).
@@ -1368,4 +1395,96 @@ void WebConfig::handleWiFiScan() {
     
     LOG_INFO("[WebAPI] WiFi scan completed successfully");
     sendResponse(200, "application/json", json);
+}
+
+// =====================================================================
+// Screenshot capture (GET /api/screenshot)
+// Captures the live DSI panel framebuffer (RGB565) and encodes it to a
+// JPEG using the ESP32-P4 hardware JPEG encoder, then streams the result.
+// =====================================================================
+void WebConfig::handleScreenshot() {
+    LOG_INFO("[WebAPI] Screenshot requested");
+
+    Arduino_DSI_Display* gfx = displayManager.getGFX();
+    uint16_t* fb = gfx ? gfx->getFramebuffer() : nullptr;
+    if (!fb) {
+        LOG_ERROR("[WebAPI] Screenshot failed: framebuffer unavailable");
+        sendResponse(503, "application/json", "{\"status\":\"error\",\"message\":\"Framebuffer not available\"}");
+        return;
+    }
+
+    const uint32_t w = (uint32_t)displayManager.getWidth();
+    const uint32_t h = (uint32_t)displayManager.getHeight();
+    const size_t rawSize = (size_t)w * h * 2;  // RGB565 = 2 bytes/pixel
+
+    LOG_INFO_F("[WebAPI] Capturing %ux%u framebuffer (%u bytes raw)\n", w, h, (unsigned)rawSize);
+
+    // Pause rendering so the frame is stable during capture and to reduce
+    // PSRAM bandwidth contention with the encoder's DMA reads.
+    displayManager.pauseDisplay();
+
+    // Create the hardware JPEG encoder engine.
+    jpeg_encoder_handle_t encoder = nullptr;
+    jpeg_encode_engine_cfg_t engineCfg = {};
+    engineCfg.intr_priority = 0;
+    engineCfg.timeout_ms = 5000;
+    esp_err_t err = jpeg_new_encoder_engine(&engineCfg, &encoder);
+    if (err != ESP_OK) {
+        displayManager.resumeDisplay();
+        LOG_ERROR_F("[WebAPI] JPEG encoder init failed: 0x%x\n", err);
+        sendResponse(500, "application/json", "{\"status\":\"error\",\"message\":\"JPEG encoder init failed\"}");
+        return;
+    }
+
+    // Allocate a DMA-aligned output buffer. Half the raw size is a safe ceiling
+    // for quality 80 on real images; floor at 64 KB for very small panels.
+    size_t outCapacity = rawSize / 2;
+    if (outCapacity < 65536) outCapacity = 65536;
+    jpeg_encode_memory_alloc_cfg_t outMemCfg = {};
+    outMemCfg.buffer_direction = JPEG_ENC_ALLOC_OUTPUT_BUFFER;
+    size_t outAllocated = 0;
+    uint8_t* outBuf = (uint8_t*)jpeg_alloc_encoder_mem(outCapacity, &outMemCfg, &outAllocated);
+    if (!outBuf) {
+        jpeg_del_encoder_engine(encoder);
+        displayManager.resumeDisplay();
+        LOG_ERROR_F("[WebAPI] JPEG output buffer alloc failed (%u bytes)\n", (unsigned)outCapacity);
+        sendResponse(500, "application/json", "{\"status\":\"error\",\"message\":\"Out of memory for screenshot\"}");
+        return;
+    }
+
+    // Encode the framebuffer in place (RGB565 -> JPEG). YUV444 uses an 8x8 MCU,
+    // so every supported panel size (all multiples of 8) is valid without padding.
+    jpeg_encode_cfg_t encCfg = {};
+    encCfg.width = w;
+    encCfg.height = h;
+    encCfg.src_type = JPEG_ENCODE_IN_FORMAT_RGB565;
+    encCfg.sub_sample = JPEG_DOWN_SAMPLING_YUV444;
+    encCfg.image_quality = 80;
+
+    uint32_t jpgSize = 0;
+    err = jpeg_encoder_process(encoder, &encCfg, (const uint8_t*)fb, rawSize,
+                               outBuf, outAllocated, &jpgSize);
+
+    jpeg_del_encoder_engine(encoder);
+    displayManager.resumeDisplay();
+
+    if (err != ESP_OK || jpgSize == 0) {
+        free(outBuf);
+        LOG_ERROR_F("[WebAPI] JPEG encode failed: 0x%x (size=%u)\n", err, (unsigned)jpgSize);
+        sendResponse(500, "application/json", "{\"status\":\"error\",\"message\":\"JPEG encode failed\"}");
+        return;
+    }
+
+    LOG_INFO_F("[WebAPI] Screenshot encoded: %u bytes JPEG\n", (unsigned)jpgSize);
+
+    // Stream the JPEG to the client.
+    if (server) {
+        server->sendHeader("Content-Disposition", "inline; filename=\"screenshot.jpg\"");
+        server->sendHeader("Cache-Control", "no-store");
+        server->setContentLength(jpgSize);
+        server->send(200, "image/jpeg", "");
+        server->sendContent((const char*)outBuf, jpgSize);
+    }
+
+    free(outBuf);
 }

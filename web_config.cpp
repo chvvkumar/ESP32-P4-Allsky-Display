@@ -71,6 +71,7 @@ bool WebConfig::begin(int port) {
         server->on("/api/current-image", HTTP_GET, [this]() { handleCurrentImage(); });
     server->on("/api/health", HTTP_GET, [this]() { handleGetHealth(); });
     server->on("/api/wifi-scan", HTTP_GET, [this]() { handleWiFiScan(); });
+    server->on("/api/screenshot", HTTP_GET, [this]() { handleScreenshot(); });
         
         // Favicon handler (prevents 404 log clutter when browsers request favicon)
         server->on("/favicon.ico", HTTP_GET, [this]() { 

@@ -19,7 +19,8 @@
 #include "image_utils.h"  // Software image scaling fallback
 #include "ha_rest_client.h"  // Home Assistant REST brightness control
 #include "moon_ephemeris.h"
-#include "moon_render.h"
+#include "moon_sphere.h"
+#include "moon_interaction.h"
 
 // Additional required libraries
 #include <atomic>
@@ -56,6 +57,19 @@ int imageSourceCount = 1;
 String currentImageURL = "";
 bool cyclingPausedForEditing = false;  // Pause cycling when user is editing transforms
 unsigned long lastEditActivity = 0;     // Track last transform edit time
+
+// Render-reuse cache: when only the per-image offset changes, the scaled+rotated
+// buffer from the previous render can be re-drawn without re-running the PPA pass.
+uint32_t imageGeneration = 0;   // bumped on every buffer swap (new image); advisory cache key
+bool scaledBufferValid = false;
+float lastRenderScaleX = 0.0f, lastRenderScaleY = 0.0f, lastRenderRotation = -1.0f;
+int lastRenderColorTemp = -1;
+uint32_t lastRenderGeneration = 0xFFFFFFFF;
+
+// Download retry: re-attempt a failed download a few times before falling back
+// to the normal update interval (faster recovery from transient network errors).
+volatile bool imageDownloadFailed = false;
+int downloadRetryCount = 0;
 
 // Full image buffer for smooth rendering
 uint16_t* fullImageBuffer = nullptr;
@@ -119,6 +133,17 @@ bool touchTriggeredModeToggle = false;
 
 // Touch mode control
 bool singleImageRefreshMode = false;  // false = cycling mode, true = single image refresh mode
+
+// Moon drag-to-rotate state. When the currently displayed source is the computed
+// moon and the finger travels past MOON_DRAG_THRESHOLD_PX, the gesture becomes a
+// rotate (not a tap): serviceMoonDrag() runs an interactive small-render + PPA
+// upscale loop until the disc eases back home (snap-back / free-spin).
+bool currentSourceIsMoon = false;        // set when the active source is moon://
+volatile bool interactiveMoonMode = false;
+static const int MOON_DRAG_THRESHOLD_PX = 12;
+int moonTouchStartX = 0, moonTouchStartY = 0;
+bool moonDragCandidate = false;          // press landed on a moon frame
+void serviceMoonDrag();
 
 // =============================================================================
 // WIFI SETUP MODE GLOBALS
@@ -836,6 +861,38 @@ void setup() {
     delay(1000);
 }
 
+// Erase the parts of the previously drawn image that the new draw will NOT
+// cover. Without this, changing the per-image X/Y offset (or scale) draws the
+// image at the new position but leaves the previous copy on the framebuffer
+// (the flicker fix skips a full clearScreen on updates), so a near-full-screen
+// image appears not to move. Only the now-uncovered pixels are cleared to the
+// background, leaving the overlap untouched, so the flicker-free same-position
+// cycling path is unaffected (identical rect -> early return, no fill).
+static void eraseUncoveredPrevRegion(Arduino_DSI_Display* gfx,
+                                     int16_t nx, int16_t ny, int16_t nw, int16_t nh) {
+    if (!gfx) return;
+    if (prevImageX == -1 || prevImageWidth == 0 || prevImageHeight == 0) return;  // nothing drawn yet
+
+    const int16_t px = prevImageX, py = prevImageY, pw = prevImageWidth, ph = prevImageHeight;
+    if (px == nx && py == ny && pw == nw && ph == nh) return;  // unchanged rect -> no flicker
+
+    const int16_t pl = px, pr = px + pw, pt = py, pb = py + ph;   // previous rect edges
+    const int16_t nl = nx, nr = nx + nw, nt = ny, nb = ny + nh;   // new rect edges
+
+    const int16_t ox1 = max(pl, nl), ox2 = min(pr, nr);          // horizontal overlap span
+    const int16_t oy1 = max(pt, nt), oy2 = min(pb, nb);          // vertical overlap span
+
+    if (ox1 >= ox2 || oy1 >= oy2) {                              // no overlap: erase whole old rect
+        gfx->fillRect(pl, pt, pw, ph, COLOR_BLACK);
+        return;
+    }
+
+    if (nl > pl) gfx->fillRect(pl, pt, nl - pl, ph, COLOR_BLACK);            // left band (full height)
+    if (nr < pr) gfx->fillRect(nr, pt, pr - nr, ph, COLOR_BLACK);            // right band (full height)
+    if (nt > pt) gfx->fillRect(ox1, pt, ox2 - ox1, nt - pt, COLOR_BLACK);   // top band (overlap span)
+    if (nb < pb) gfx->fillRect(ox1, nb, ox2 - ox1, pb - nb, COLOR_BLACK);   // bottom band (overlap span)
+}
+
 void renderFullImage() {
     // Reset watchdog at function start
     systemMonitor.forceResetWatchdog();
@@ -876,7 +933,19 @@ void renderFullImage() {
     // Calculate final position with centering and offset
     int16_t finalX = centerX - (scaledWidth / 2) + offsetX;
     int16_t finalY = centerY - (scaledHeight / 2) + offsetY;
-    
+
+    // Clear only the region the previous frame occupied that this frame won't
+    // cover. This makes per-image X/Y offset (and scale) changes visibly move
+    // the image instead of leaving a stale copy behind, without reintroducing
+    // the flicker the full-clear skip avoids. Dimensions match whichever draw
+    // path runs below: unscaled full image vs scaled/rotated buffer.
+    {
+        bool unscaled = (scaleX == 1.0 && scaleY == 1.0 && rotationAngle == 0.0);
+        int16_t drawnW = unscaled ? fullImageWidth : scaledWidth;
+        int16_t drawnH = unscaled ? fullImageHeight : scaledHeight;
+        eraseUncoveredPrevRegion(gfx, finalX, finalY, drawnW, drawnH);
+    }
+
     // FLICKER FIX: Skip clearing on image updates to avoid black flash
     // Only clear on first image load, subsequent updates render directly without clearing
     systemMonitor.forceResetWatchdog();
@@ -896,6 +965,7 @@ void renderFullImage() {
     
     if (scaleX == 1.0 && scaleY == 1.0 && rotationAngle == 0.0) {
         // No scaling or rotation needed
+        scaledBufferValid = false;  // this path doesn't populate the scaled-render cache
         int currentTemp = configStorage.getColorTemp();
         if (currentTemp != 6500) {
             // Copy to scaledBuffer first, then apply color temp to the copy.
@@ -914,9 +984,7 @@ void renderFullImage() {
             displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
         }
 
-        // Flush to display
-        Arduino_DSI_Display* gfx = displayManager.getGFX();
-        if (gfx) gfx->flush();
+        // auto_flush (DSI ctor) already cache-syncs the drawn region
 
         systemMonitor.forceResetWatchdog();
 
@@ -928,7 +996,25 @@ void renderFullImage() {
     } else {
         // Try hardware acceleration first if available
         size_t scaledImageSize = scaledWidth * scaledHeight * 2;
-        
+
+        // Reuse fast-path: if only the per-image offset changed since the last
+        // render (same image, scale, rotation, and color temp), the scaled+rotated
+        // buffer is still valid. Re-draw it at the new position and skip the PPA
+        // pass entirely. Common during interactive offset tuning.
+        if (scaledBufferValid && imageGeneration == lastRenderGeneration
+            && scaleX == lastRenderScaleX && scaleY == lastRenderScaleY
+            && rotationAngle == lastRenderRotation
+            && configStorage.getColorTemp() == lastRenderColorTemp
+            && scaledImageSize <= scaledBufferSize) {
+            displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
+            systemMonitor.forceResetWatchdog();
+            prevImageX = finalX;
+            prevImageY = finalY;
+            prevImageWidth = scaledWidth;
+            prevImageHeight = scaledHeight;
+            return;
+        }
+
         Serial.printf("[Render] Image: %dx%d -> Scaled: %dx%d (rot:%.0f) = %d bytes vs buffer %d bytes\n",
                      fullImageWidth, fullImageHeight, scaledWidth, scaledHeight, 
                      rotationAngle, scaledImageSize, scaledBufferSize);
@@ -966,18 +1052,22 @@ void renderFullImage() {
                 
                 // Draw the hardware-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
-                
-                // Flush to display
-                Arduino_DSI_Display* gfx = displayManager.getGFX();
-                if (gfx) gfx->flush();
-                
+
+                // auto_flush (DSI ctor) already cache-syncs the drawn region
+
                 systemMonitor.forceResetWatchdog();
-                
+
                 // Update tracking variables for next transition
                 prevImageX = finalX;
                 prevImageY = finalY;
                 prevImageWidth = scaledWidth;
                 prevImageHeight = scaledHeight;
+                // Mark the scaled buffer reusable for an offset-only re-render.
+                scaledBufferValid = true;
+                lastRenderScaleX = scaleX; lastRenderScaleY = scaleY;
+                lastRenderRotation = rotationAngle;
+                lastRenderColorTemp = configStorage.getColorTemp();
+                lastRenderGeneration = imageGeneration;
                 return;
             } else {
                 Serial.println("[PPA] ✗ Hardware acceleration failed, falling back to software");
@@ -1019,18 +1109,22 @@ void renderFullImage() {
                 
                 // Draw the software-processed image
                 displayManager.drawBitmap(finalX, finalY, scaledBuffer, scaledWidth, scaledHeight);
-                
-                // Flush to display
-                Arduino_DSI_Display* gfx = displayManager.getGFX();
-                if (gfx) gfx->flush();
-                
+
+                // auto_flush (DSI ctor) already cache-syncs the drawn region
+
                 systemMonitor.forceResetWatchdog();
-                
+
                 // Update tracking variables for next transition
                 prevImageX = finalX;
                 prevImageY = finalY;
                 prevImageWidth = scaledWidth;
                 prevImageHeight = scaledHeight;
+                // Mark the scaled buffer reusable for an offset-only re-render.
+                scaledBufferValid = true;
+                lastRenderScaleX = scaleX; lastRenderScaleY = scaleY;
+                lastRenderRotation = rotationAngle;
+                lastRenderColorTemp = configStorage.getColorTemp();
+                lastRenderGeneration = imageGeneration;
                 return;
             } else {
                 Serial.println("[Render] ✗ Software scaling failed");
@@ -1050,9 +1144,7 @@ void renderFullImage() {
         
         displayManager.drawBitmap(finalX, finalY, fullImageBuffer, fullImageWidth, fullImageHeight);
         
-        // Flush to display
-        Arduino_DSI_Display* gfx = displayManager.getGFX();
-        if (gfx) gfx->flush();
+        // auto_flush (DSI ctor) already cache-syncs the drawn region
         
         systemMonitor.forceResetWatchdog();
         
@@ -1067,9 +1159,12 @@ void renderFullImage() {
     systemMonitor.forceResetWatchdog();
 }
 
-void renderMoonToPendingBuffer() {
-    const int MOON_SIZE = 600;
+// Sphere tessellation for the resting (full-resolution) moon render. 96x48 is
+// NINA's resting default: smooth enough that the limb shows no faceting.
+static const int MOON_REST_SECTORS = 96;
+static const int MOON_REST_STACKS  = 48;
 
+void renderMoonToPendingBuffer() {
     // Require a real wall-clock time (NTP). epoch < 2020-01-01 means unsynced.
     time_t now = time(nullptr);
     if (now < 1577836800) {
@@ -1077,24 +1172,49 @@ void renderMoonToPendingBuffer() {
         return;
     }
 
+    // Decode the equirectangular lunar texture into PSRAM once (lazy: only the
+    // first time a moon source is shown). ~4 MB RGB565 held for app lifetime.
+    static bool moonTexReady = false;
+    if (!moonTexReady) {
+        moonTexReady = moon_sphere_init();
+        if (!moonTexReady) {
+            Serial.println("[Moon] moon_sphere_init() failed (texture decode); skipping");
+            return;
+        }
+    }
+
     moon_state_t st;
     moon_compute(now, (double)configStorage.getMoonLat(),
                       (double)configStorage.getMoonLon(), &st);
-    Serial.printf("[Moon] %s illum=%.2f waxing=%d orient=%.2f\n",
-                  st.phase_name, st.illum, st.waxing, st.orient_rad);
+    Serial.printf("[Moon] %s illum=%.2f waxing=%d lib(%.1f,%.1f)deg\n",
+                  st.phase_name, st.illum, st.waxing,
+                  st.lib_lon * 57.2958f, st.lib_lat * 57.2958f);
+
+    // Render at the native panel resolution (720x720 or 800x800) so the
+    // starfield/glow background fills the whole screen. The per-source scale
+    // controls the moon DISK size within that frame: 1.0 = disk fills the panel
+    // edge-to-edge, <1.0 shrinks the disk and the background fills the rest.
+    const int w = displayManager.getWidth();
+    const int h = displayManager.getHeight();
+    float diskScale = (imageSourceCount > 0)
+                        ? configStorage.getImageScaleX(currentImageIndex)
+                        : 1.0f;
+    moon_sphere_set_disk_scale(diskScale);
 
     uint8_t bg = (uint8_t)configStorage.getMoonBgStyle();
-    uint16_t* moon = moonRender(MOON_SIZE, MOON_SIZE, &st, bg);
+    uint16_t* moon = moon_sphere_render(w, h, &st,
+                                        MOON_REST_SECTORS, MOON_REST_STACKS, bg);
     if (!moon) { Serial.println("[Moon] render failed"); return; }
 
-    size_t bytes = (size_t)MOON_SIZE * MOON_SIZE * 2;
+    size_t bytes = (size_t)w * (size_t)h * 2;
     if (xSemaphoreTake(imageBufferMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
         if (pendingFullImageBuffer && bytes <= fullImageBufferSize) {
             memcpy(pendingFullImageBuffer, moon, bytes);
-            pendingImageWidth  = MOON_SIZE;
-            pendingImageHeight = MOON_SIZE;
+            pendingImageWidth  = w;
+            pendingImageHeight = h;
             imageReadyToDisplay = true;
-            Serial.println("[Moon] pending buffer filled, ready to display");
+            Serial.printf("[Moon] pending buffer filled %dx%d (disk %.2f), ready\n",
+                          w, h, diskScale);
         } else {
             Serial.println("[Moon] pending buffer unavailable or too small");
         }
@@ -1103,6 +1223,76 @@ void renderMoonToPendingBuffer() {
         Serial.println("[Moon] could not acquire image buffer mutex");
     }
     heap_caps_free(moon);
+}
+
+// Config shim: moon_interaction.c is plain C and cannot call the C++
+// configStorage directly. It calls this to read the free-spin mode.
+extern "C" uint8_t moon_cfg_spin_mode(void) {
+    return configStorage.getMoonSpinMode();
+}
+
+// Interactive moon drag-to-rotate loop. Entered (and kept running) while
+// interactiveMoonMode is set by updateTouchState(). Renders the moon small
+// (240x240) with the finger-driven yaw/pitch, PPA-upscales to the panel, and
+// repeats until the disc eases home (snap-back) or the free-spin hold expires
+// and it returns. Blocks the main loop for the duration (watchdog fed each
+// frame), then forces a crisp full-resolution resting render via lastUpdate=0.
+void serviceMoonDrag() {
+    if (!interactiveMoonMode) return;
+
+    const int DS = 240;  // interactive render size, upscaled to the panel by PPA
+    static uint16_t* dragColor = nullptr;
+    static uint16_t* dragZ = nullptr;
+    if (!dragColor) dragColor = (uint16_t*)heap_caps_aligned_alloc(128, (size_t)DS * DS * 2, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
+    if (!dragZ)     dragZ     = (uint16_t*)heap_caps_aligned_alloc(128, (size_t)DS * DS * 2, MALLOC_CAP_SPIRAM);
+    if (!dragColor || !dragZ) { Serial.println("[Moon] drag buffer alloc failed"); interactiveMoonMode = false; return; }
+
+    const int16_t w = displayManager.getWidth();
+    const int16_t h = displayManager.getHeight();
+
+    // Snapshot the ephemeris once: during a drag the orientation comes from the
+    // finger (yaw/pitch), not from time advancing.
+    time_t now = time(nullptr);
+    moon_state_t st;
+    moon_compute(now, (double)configStorage.getMoonLat(), (double)configStorage.getMoonLon(), &st);
+
+    float diskScale = (imageSourceCount > 0) ? configStorage.getImageScaleX(currentImageIndex) : 1.0f;
+    moon_sphere_set_disk_scale(diskScale);
+    uint8_t bg = (uint8_t)configStorage.getMoonBgStyle();
+    moon_light_mode_t lm = (configStorage.getMoonDragLightMode() == 1) ? MOON_LIGHT_EXPLORE : MOON_LIGHT_TRUE_PHASE;
+
+    Serial.println("[Moon] interactive drag loop start");
+    while (interactiveMoonMode) {
+        updateTouchState();   // keep feeding the finger -> moon_drag_move / moon_drag_end
+
+        // Free-spin (moon_spin_mode==1): hold the spun orientation, then ease home.
+        if (!moon_drag_active() && moon_drag_freespin_pending() &&
+            moon_drag_freespin_elapsed(configStorage.getMoonSpinReturnS())) {
+            moon_drag_trigger_return();
+        }
+
+        moon_drag_advance(0.35f);   // ease current orientation toward target
+        float yaw = 0.0f, pitch = 0.0f;
+        moon_drag_get(&yaw, &pitch);
+
+        uint16_t* frame = moon_sphere_render_into(DS, DS, &st, MOON_REST_SECTORS, MOON_REST_STACKS,
+                                                  bg, yaw, pitch, lm, dragColor, dragZ);
+        if (frame &&
+            ppaAccelerator.scaleRotateImageZeroCopy(dragColor, DS, DS, scaledBuffer,
+                                                    scaledBufferSize, w, h, 0.0f)) {
+            displayManager.drawBitmap(0, 0, scaledBuffer, w, h);
+        }
+        systemMonitor.forceResetWatchdog();
+
+        // Done once the finger is up, the disc has eased home, and no free-spin
+        // hold is still pending.
+        if (!moon_drag_active() && moon_drag_settled() && !moon_drag_freespin_pending()) {
+            interactiveMoonMode = false;
+        }
+    }
+    moon_drag_reset();
+    lastUpdate = 0;   // force a prompt crisp full-resolution resting re-render
+    Serial.println("[Moon] interactive drag loop end");
 }
 
 void downloadAndDisplayImage() {
@@ -1137,10 +1327,16 @@ void downloadAndDisplayImage() {
 
     // Get current image URL based on cycling configuration
     String imageURL = getCurrentImageURL();
+    currentImageURL = imageURL;  // keep the shared copy in sync (used by render + logs)
+
+    // Assume failure until an image is successfully prepared; the scheduler uses
+    // this to decide whether to retry sooner than the normal update interval.
+    imageDownloadFailed = true;
 
     if (imageURL.startsWith("moon://")) {
         Serial.println("[Moon] Rendering computed moon image");
         renderMoonToPendingBuffer();
+        imageDownloadFailed = !imageReadyToDisplay;  // success iff a frame is ready
         systemMonitor.forceResetWatchdog();
         imageProcessing = false;   // matches the early-return contract used below
         return;
@@ -1300,33 +1496,42 @@ void downloadAndDisplayImage() {
     systemMonitor.forceResetWatchdog();
     
     WiFiClient* stream = http.getStreamPtr();
-    size_t size = http.getSize();
-    
-    Serial.printf("[Image] Content-Length: %d bytes\n", size);
+    // getSize() returns -1 when the server sends no Content-Length (e.g. chunked
+    // transfer encoding). Read it as a signed int first: a previous size_t cast
+    // turned -1 into SIZE_MAX, which tripped the "too large" check below and
+    // silently rejected every chunked / no-Content-Length source.
+    int contentLength = http.getSize();
+    bool knownLength = (contentLength > 0);
+    // For unknown-length streams, read until the connection closes, bounded by
+    // the download buffer (the read loop guards bytesRead + chunk > imageBufferSize).
+    size_t size = knownLength ? (size_t)contentLength : imageBufferSize;
+
+    Serial.printf("[Image] Content-Length: %d bytes%s\n", contentLength, knownLength ? "" : " (unknown/chunked)");
     if (cyclingEnabled && imageSourceCount > 1) {
         Serial.printf("[Image] Source: Image %d/%d - %s\n", currentImageIndex + 1, imageSourceCount, currentImageURL.c_str());
-        debugPrintf(COLOR_WHITE, "Image %d/%d: %d bytes", currentImageIndex + 1, imageSourceCount, size);
+        debugPrintf(COLOR_WHITE, "Image %d/%d: %d bytes", currentImageIndex + 1, imageSourceCount, contentLength);
     } else {
         Serial.printf("[Image] Source: %s\n", currentImageURL.c_str());
-        debugPrintf(COLOR_WHITE, "Image: %d bytes", size);
+        debugPrintf(COLOR_WHITE, "Image: %d bytes", contentLength);
     }
-    
-    // Validate size before proceeding
-    if (size <= 0) {
-        LOG_WARNING("[ImageDownload] Content-Length missing or zero - aborting download");
-        Serial.println("[Image] ⚠ Content-Length missing or zero - will download until stream ends");
-        Serial.printf("[Image] Buffer capacity: %d bytes\n", imageBufferSize);
-        debugPrintf(COLOR_RED, "Invalid size: %d bytes", size);
+
+    // A declared length of exactly 0 is an empty/invalid response.
+    if (contentLength == 0) {
+        LOG_WARNING("[ImageDownload] Content-Length is zero - aborting download");
+        Serial.println("[Image] ⚠ Content-Length is zero - aborting");
+        debugPrintf(COLOR_RED, "Invalid size: 0 bytes");
         http.end();
         systemMonitor.forceResetWatchdog();
         imageProcessing = false;  // Clear mutex before return
         return;
     }
-    
-    if (size >= imageBufferSize) {
-        LOG_ERROR_F("[ImageDownload] Image too large: %d bytes exceeds buffer capacity of %d bytes\n", size, imageBufferSize);
-        Serial.printf("[Image] ✗ Image too large! %d bytes exceeds buffer %d bytes\n", size, imageBufferSize);
-        debugPrintf(COLOR_RED, "Invalid size: %d bytes", size);
+
+    // Reject only when the server declares a size that will not fit. Unknown-length
+    // streams are capped by the read loop's buffer-overflow guard instead.
+    if (knownLength && (size_t)contentLength >= imageBufferSize) {
+        LOG_ERROR_F("[ImageDownload] Image too large: %d bytes exceeds buffer capacity of %d bytes\n", contentLength, imageBufferSize);
+        Serial.printf("[Image] ✗ Image too large! %d bytes exceeds buffer %d bytes\n", contentLength, imageBufferSize);
+        debugPrintf(COLOR_RED, "Invalid size: %d bytes", contentLength);
         http.end();
         systemMonitor.forceResetWatchdog();
         imageProcessing = false;  // Clear mutex before return
@@ -1475,8 +1680,9 @@ void downloadAndDisplayImage() {
                  bytesRead, readTime, avgSpeed / 1024.0);
     Serial.printf("DEBUG: Download complete - Read %d bytes (expected %d)\n", bytesRead, size);
     
-    // Validate download completeness
-    if (bytesRead < size) {
+    // Validate download completeness (only when the server declared a length;
+    // for chunked/unknown-length streams, a clean connection close IS the end).
+    if (knownLength && bytesRead < size) {
         float percentComplete = (bytesRead * 100.0) / size;
         Serial.printf("[Image] ✗ Incomplete download! Got %d/%d bytes (%.1f%%)\n", bytesRead, size, percentComplete);
         Serial.printf("[Image] Missing %d bytes\n", size - bytesRead);
@@ -1589,8 +1795,18 @@ void downloadAndDisplayImage() {
                 return;
             }
 
-            // Clear the PENDING image buffer
-            memset(pendingFullImageBuffer, 0, pendingImageWidth * pendingImageHeight * sizeof(uint16_t));
+            // Clear only the bottom MCU band of the PENDING buffer. The JPEG
+            // decoder overwrites every full-MCU row, so a full-buffer clear is
+            // redundant; only the final partial-MCU rows (skipped by the bounds
+            // guard in JPEGDraw when the height isn't MCU-aligned) need zeroing
+            // to avoid leftover pixels from a previous, taller image.
+            {
+                int bandRows = 16;
+                if (bandRows > pendingImageHeight) bandRows = pendingImageHeight;
+                int bandStart = pendingImageHeight - bandRows;
+                memset(pendingFullImageBuffer + (size_t)bandStart * pendingImageWidth, 0,
+                       (size_t)bandRows * pendingImageWidth * sizeof(uint16_t));
+            }
 
             // Decode the full image into PENDING buffer with watchdog protection
             systemMonitor.forceResetWatchdog();
@@ -1614,6 +1830,7 @@ void downloadAndDisplayImage() {
 
                 // Mark image as ready to display (but don't display yet - let loop handle it)
                 imageReadyToDisplay = true;
+                imageDownloadFailed = false;  // success: a frame is ready for the swap
 
                 // Release mutex after marking image ready
                 xSemaphoreGive(imageBufferMutex);
@@ -1745,7 +1962,19 @@ void updateCurrentImageTransformSettings() {
         offsetX = configStorage.getImageOffsetX(index);
         offsetY = configStorage.getImageOffsetY(index);
         rotationAngle = configStorage.getImageRotation(index);
-        
+
+        // The computed moon is rendered at native panel resolution with its disk
+        // size already applied inside the renderer (driven by scaleX). Draw that
+        // full-screen buffer 1:1 so the PPA pipeline does not re-scale it (which
+        // would double-apply the scale and crop the background). Pan offsets are
+        // kept so the user can still nudge the moon.
+        currentSourceIsMoon = configStorage.getImageSource(index).startsWith("moon://");
+        if (currentSourceIsMoon) {
+            scaleX = 1.0f;
+            scaleY = 1.0f;
+            rotationAngle = 0.0f;
+        }
+
         Serial.printf("Loaded transform settings for image %d: scale=%.1fx%.1f, offset=%d,%d, rotation=%.0f°\n",
                      index, scaleX, scaleY, offsetX, offsetY, rotationAngle);
     }
@@ -2025,8 +2254,14 @@ void loop() {
     if (touchEnabled) {
         updateTouchState();
         systemMonitor.forceResetWatchdog();
+        // If a finger started rotating the moon, run the interactive drag loop
+        // here (blocks until the disc settles), then resume the normal loop.
+        if (interactiveMoonMode) {
+            serviceMoonDrag();
+            systemMonitor.forceResetWatchdog();
+        }
     }
-    
+
     // Enhanced stuck image processing detection
     if (imageProcessing && (millis() - lastImageProcessTime > IMAGE_PROCESS_TIMEOUT)) {
         Serial.printf("WARNING: Image processing timeout detected after %lu ms, resetting...\n", 
@@ -2114,14 +2349,22 @@ void loop() {
     // Check if it's time to update the image (either scheduled update or cycling)
     // In API mode, only update on force refresh (lastUpdate = 0) or scheduled refresh interval
     // Skip image processing during OTA to prevent interference
-    bool shouldUpdate = false;
+    bool normalDue = false;
     if (imageUpdateMode == 0) {
         // Automatic cycling mode: normal behavior
-        shouldUpdate = (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0);
+        normalDue = (shouldCycle || currentTime - lastUpdate >= currentUpdateInterval || lastUpdate == 0);
     } else {
         // API-triggered mode: only update when explicitly triggered (lastUpdate = 0)
-        shouldUpdate = (lastUpdate == 0);
+        normalDue = (lastUpdate == 0);
     }
+    // Fast retry after a failed download: re-attempt a few times before falling
+    // back to the normal interval, so a transient network blip recovers in
+    // seconds instead of leaving a stale/blank screen for a full update cycle.
+    static const int MAX_DOWNLOAD_RETRIES = 3;
+    static const unsigned long DOWNLOAD_RETRY_DELAY_MS = 15000;
+    bool retryDue = imageDownloadFailed && downloadRetryCount < MAX_DOWNLOAD_RETRIES
+                    && lastUpdate != 0 && (currentTime - lastUpdate >= DOWNLOAD_RETRY_DELAY_MS);
+    bool shouldUpdate = normalDue || retryDue;
     
     if (!imageProcessing && !imageDownloadPending && !webConfig.isOTAInProgress() && shouldUpdate) {
         // Pre-download system health check
@@ -2146,7 +2389,9 @@ void loop() {
             imageDownloadPending = true;
             lastUpdate = currentTime;
             lastImageProcessTime = currentTime;
-            
+            // Count consecutive fast-retries; a normal/cycle trigger resets it.
+            downloadRetryCount = (retryDue && !normalDue) ? (downloadRetryCount + 1) : 0;
+
             systemMonitor.forceResetWatchdog();
         }
     }
@@ -2174,10 +2419,22 @@ void loop() {
             fullImageHeight = pendingImageHeight;
             pendingImageHeight = tempHeight;
 
+            // New image is now active; invalidate the scaled-render reuse cache
+            // so the next render recomputes instead of redrawing the old scale.
+            imageGeneration++;
+
             xSemaphoreGive(imageBufferMutex);
 
             Serial.printf("Buffer swap complete: %dx%d image now active\n", fullImageWidth, fullImageHeight);
             systemMonitor.forceResetWatchdog();
+
+            // Refresh the live transform globals (scale/offset/rotation) from the
+            // current image's stored config before drawing. Without this, edits made
+            // outside tune mode persist to NVS but never reach the live render: this
+            // swap path does not otherwise reload them, so the image keeps its stale
+            // offset until the next source cycle or reboot. updateCurrentImageTransformSettings
+            // reads currentImageIndex, which is the image just prepared in this swap.
+            updateCurrentImageTransformSettings();
 
             // Now render the new image to display (single seamless update, no clearing artifacts)
             if (cyclingEnabled && imageSourceCount > 1) {
@@ -2278,11 +2535,45 @@ void updateTouchState() {
     // Update touch state
     touchWasPressed = touchPressed;
     touchPressed = currentlyPressed;
-    
+
+    // --- Moon drag-to-rotate detection -------------------------------------
+    // Runs alongside the tap/double-tap machine. On a moon frame, finger travel
+    // past the threshold promotes the gesture to a rotate and hands off to the
+    // interactive render loop (serviceMoonDrag), suppressing tap-to-advance.
+    int curX = (touchData.cnt > 0) ? (int)touchData.x[0] : 0;
+    int curY = (touchData.cnt > 0) ? (int)touchData.y[0] : 0;
+    if (touchPressed && !touchWasPressed) {
+        moonTouchStartX = curX;
+        moonTouchStartY = curY;
+        moonDragCandidate = currentSourceIsMoon;
+    }
+    if (touchPressed && moonDragCandidate) {
+        int dxm = curX - moonTouchStartX;
+        int dym = curY - moonTouchStartY;
+        if (!interactiveMoonMode &&
+            (dxm * dxm + dym * dym) >= MOON_DRAG_THRESHOLD_PX * MOON_DRAG_THRESHOLD_PX) {
+            // Promote to a rotate: begin from the press point, hand to the loop.
+            interactiveMoonMode = true;
+            moon_drag_begin((float)moonTouchStartX, (float)moonTouchStartY);
+            moon_drag_move((float)curX, (float)curY);
+            Serial.println("[Moon] drag-to-rotate engaged");
+        } else if (interactiveMoonMode) {
+            moon_drag_move((float)curX, (float)curY);
+        }
+    }
+    if (interactiveMoonMode) {
+        // The interactive loop owns the gesture; skip tap/double-tap handling so
+        // a rotate never also advances the slideshow or toggles mode.
+        if (!touchPressed && touchWasPressed) {
+            moon_drag_end();
+        }
+        return;
+    }
+
     // Handle touch press
     if (touchPressed && !touchWasPressed) {
         touchPressTime = currentTime;
-        
+
         if (touchState == TOUCH_IDLE) {
             touchState = TOUCH_PRESSED;
             Serial.printf("Touch: Press detected at %lu ms\n", currentTime);

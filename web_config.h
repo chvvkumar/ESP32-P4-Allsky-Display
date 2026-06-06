@@ -73,7 +73,8 @@ private:
     void handleForceBrightnessUpdate();
     void handleGetHealth();
     void handleWiFiScan();
-    
+    void handleScreenshot();
+
 public:
     // WebSocket log broadcasting with severity filtering
     void broadcastLog(const char* message, uint16_t color = 0xFFFF, LogSeverity severity = LOG_INFO);

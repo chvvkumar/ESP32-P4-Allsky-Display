@@ -558,7 +558,31 @@ String WebConfig::generateAdvancedPage() {
     html += "<p style='color:#94a3b8;margin-bottom:1rem'><strong>Note:</strong> To clear settings after OTA update, use the Factory Reset button before updating, or use the serial command 'F' after the update.</p>";
     html += "<div style='margin-top:1rem'><a href='/update' class='btn btn-primary' style='text-decoration:none;display:inline-block'>🚀 Open OTA Update Page</a></div>";
     html += "</div>";
-    
+
+    // Live Screenshot Section
+    html += "<div class='card' style='margin-top:1.5rem'><h2>📸 Live Screenshot</h2>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Capture the current display contents as a JPEG, encoded on-device with the ESP32-P4 hardware JPEG encoder.</p>";
+    html += "<div style='display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem'>";
+    html += "<button type='button' class='btn btn-primary' onclick='takeScreenshot()'>📸 Capture Screenshot</button>";
+    html += "<a id='screenshotDownload' class='btn btn-primary' href='#' download='screenshot.jpg' style='display:none;text-decoration:none'>⬇️ Download</a></div>";
+    html += "<div id='screenshotStatus' style='color:#94a3b8;margin-bottom:0.75rem'></div>";
+    html += "<img id='screenshotImg' alt='Display screenshot' style='display:none;max-width:100%;border:1px solid #334155;border-radius:8px'>";
+    html += "<script>"
+            "function takeScreenshot(){"
+            "var s=document.getElementById('screenshotStatus');"
+            "var img=document.getElementById('screenshotImg');"
+            "var dl=document.getElementById('screenshotDownload');"
+            "s.textContent='Capturing...';dl.style.display='none';"
+            "fetch('/api/screenshot?t='+Date.now()).then(function(r){"
+            "if(!r.ok)throw new Error('HTTP '+r.status);return r.blob();}).then(function(b){"
+            "var o=URL.createObjectURL(b);img.src=o;img.style.display='block';"
+            "dl.href=o;dl.style.display='inline-block';"
+            "s.textContent='Captured '+(b.size/1024).toFixed(1)+' KB';}).catch(function(e){"
+            "s.textContent='Screenshot failed: '+e.message;});"
+            "}"
+            "</script>";
+    html += "</div>";
+
     html += "</div></div>";
     return html;
 }
