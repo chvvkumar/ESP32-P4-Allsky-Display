@@ -266,27 +266,16 @@ bind();
 function renderSourcesCard(){
 var sources=state.sources||[];
 var multi=sources.length>1;
+var presets=state.presets||[];
+var sunOpts='',goesOpts='';
+for(var i=0;i<presets.length;i++){var pid=presets[i].id;var op='<option value="'+esc(pid)+'">'+esc(presets[i].label)+'</option>';if(pid.indexOf('sdo_')===0||pid.indexOf('soho_')===0){sunOpts+=op}else if(pid.indexOf('goes')===0){goesOpts+=op}}
+var moonExists=false;for(var k=0;k<sources.length;k++){if(sources[k].isMoon){moonExists=true;break}}
 var h='<div class="card"><h2>Image Sources<span class="img-count">'+sources.length+' source'+(sources.length===1?'':'s')+'</span></h2>';
 h+='<div class="img-toolbar">';
 h+='<div class="img-add-bar"><input type="text" id="addUrl" class="form-control" placeholder="https://example.com/image.jpg"><button type="button" class="btn btn-success" id="addUrlBtn">Add</button></div>';
-var opts='';var presets=state.presets||[];for(var i=0;i<presets.length;i++){opts+='<option value="'+esc(presets[i].id)+'">'+esc(presets[i].label)+'</option>'}
-h+='<div class="img-add-bar"><select id="presetSel" class="form-control" style="flex:1 1 220px">'+opts+'</select><button type="button" class="btn btn-secondary" id="addPresetBtn">Add</button></div>';
-h+='<div class="img-moon-box"><button type="button" class="btn btn-secondary img-collapse-head" id="moonHead" style="min-height:var(--tap)">Moon (computed) settings</button>';
-h+='<div class="img-collapse-body" id="moonBody"><div class="img-moon-grid">';
-var m=state.moon||{lat:0,lon:0,bg:1,flipu:0,flipv:0,roll:0,yaw:0,pitch:0,northup:1,light:0,spin:0,spinret:10};
-h+='<div class="transform-field"><label for="moonLat">Latitude</label><input type="number" step="0.0001" id="moonLat" class="form-control" value="'+(m.lat)+'"></div>';
-h+='<div class="transform-field"><label for="moonLon">Longitude</label><input type="number" step="0.0001" id="moonLon" class="form-control" value="'+(m.lon)+'"></div>';
-h+='<div class="transform-field"><label for="moonBg">Background</label><select id="moonBg" class="form-control">'+bgOpts(m.bg)+'</select></div>';
-h+='<div class="transform-field"><label for="moonNorthUp">North up</label><select id="moonNorthUp" class="form-control"><option value="1"'+(+m.northup===1?' selected':'')+'>On (lock upright)</option><option value="0"'+(+m.northup===0?' selected':'')+'>Off (true sky tilt)</option></select></div>';
-h+='<div class="transform-field"><label for="moonFlipU">Flip horizontal (U)</label><select id="moonFlipU" class="form-control"><option value="0"'+(+m.flipu===0?' selected':'')+'>Off</option><option value="1"'+(+m.flipu===1?' selected':'')+'>On</option></select></div>';
-h+='<div class="transform-field"><label for="moonFlipV">Flip vertical (V)</label><select id="moonFlipV" class="form-control"><option value="0"'+(+m.flipv===0?' selected':'')+'>Off</option><option value="1"'+(+m.flipv===1?' selected':'')+'>On</option></select></div>';
-h+='<div class="transform-field"><label for="moonRoll">Roll offset (deg)</label><input type="number" step="1" min="-180" max="180" id="moonRoll" class="form-control" value="'+(+m.roll)+'"></div>';
-h+='<div class="transform-field"><label for="moonYaw">Yaw offset (deg)</label><input type="number" step="1" min="-180" max="180" id="moonYaw" class="form-control" value="'+(+m.yaw)+'"></div>';
-h+='<div class="transform-field"><label for="moonPitch">Pitch offset (deg)</label><input type="number" step="1" min="-90" max="90" id="moonPitch" class="form-control" value="'+(+m.pitch)+'"></div>';
-h+='<div class="transform-field"><label for="moonLight">Drag light mode</label><select id="moonLight" class="form-control"><option value="0"'+(+m.light===0?' selected':'')+'>True phase</option><option value="1"'+(+m.light===1?' selected':'')+'>Explore</option></select></div>';
-h+='<div class="transform-field"><label for="moonSpin">Spin mode</label><select id="moonSpin" class="form-control"><option value="0"'+(+m.spin===0?' selected':'')+'>Snap back</option><option value="1"'+(+m.spin===1?' selected':'')+'>Free spin</option></select></div>';
-h+='<div class="transform-field"><label for="moonSpinRet">Free-spin return (s)</label><input type="number" step="1" min="3" max="60" id="moonSpinRet" class="form-control" value="'+(+m.spinret)+'"></div>';
-h+='</div><button type="button" class="btn btn-success" id="saveMoonBtn" style="min-height:var(--tap)">Save moon</button></div></div>';
+h+='<div class="img-add-bar"><label class="img-row-label">Sun</label><select id="sunSel" class="form-control" style="flex:1 1 220px">'+sunOpts+'</select><button type="button" class="btn btn-secondary" id="addSunBtn">Add</button></div>';
+h+='<div class="img-add-bar"><label class="img-row-label">Moon Phase</label>'+moonInline('add')+'<button type="button" class="btn btn-secondary" id="addMoonBtn"'+(moonExists?' disabled title="Moon already in list"':'')+'>Add</button>'+moonDrawer('add')+'</div>';
+h+='<div class="img-add-bar"><label class="img-row-label">GOES</label><select id="goesSel" class="form-control" style="flex:1 1 220px">'+goesOpts+'</select><button type="button" class="btn btn-secondary" id="addGoesBtn">Add</button></div>';
 h+='</div>';
 if(multi){
 h+='<div class="img-bulk-bar"><label><input type="checkbox" id="selAll"> Select all</label>';
