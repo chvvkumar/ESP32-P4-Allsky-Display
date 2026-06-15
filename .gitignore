@@ -160,8 +160,10 @@ coverage.xml
 # Claude Code local settings
 .claude/
 
-# Implementation plans (local development only)
+# Superpowers specs and implementation plans (local development only)
+docs/superpowers/
 docs/plans/
+docs/specs/
 
 # AI conversation context documentation
 CONVERSATION_CONTEXT.md
