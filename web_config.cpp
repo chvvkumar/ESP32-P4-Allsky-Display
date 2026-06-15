@@ -64,6 +64,8 @@ bool WebConfig::begin(int port) {
         server->on("/api/update-image-duration", HTTP_POST, [this]() { handleUpdateImageDuration(); });
         server->on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
         server->on("/api/factory-reset", HTTP_POST, [this]() { handleFactoryReset(); });
+        server->on("/api/backup", HTTP_GET, [this]() { handleBackup(); });
+        server->on("/api/restore", HTTP_POST, [this]() { handleRestore(); });
         server->on("/api/set-log-severity", HTTP_POST, [this]() { handleSetLogSeverity(); });
         server->on("/api/clear-crash-logs", HTTP_POST, [this]() { handleClearCrashLogs(); });
         server->on("/api/force-brightness-update", HTTP_POST, [this]() { handleForceBrightnessUpdate(); });

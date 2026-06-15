@@ -10,6 +10,7 @@ Complete guide to configuring the ESP32-P4 AllSky Display firmware, covering bot
 - [Web UI Configuration](#web-ui-configuration)
 - [MQTT Configuration](#mqtt-configuration)
 - [Multi-Image Setup](#multi-image-setup)
+- [Backup and Restore](#backup-and-restore)
 - [Serial Commands Reference](#serial-commands-reference)
 - [Advanced Configuration](#advanced-configuration)
 
@@ -647,6 +648,57 @@ mkdir -p "${OUTPUT_DIR}"
 
 1. **AllSky Module** (Recommended): Use the [allsky_esp32round module](https://github.com/AllskyTeam/allsky-modules/tree/master/allsky_esp32round) → Use `http://your-server/resized/image.jpg`
 2. **Custom Script**: Add script to AllSky Module Manager or run via cron job every 1-10 minutes with `crontab -e`
+
+---
+
+## Backup and Restore
+
+Export the full device configuration to a file, then restore that file onto a device that has been wiped or reset. The backup captures runtime settings stored in NVS: device name, WiFi, MQTT, Home Assistant, image sources and transforms, display settings, and system thresholds. Compile-time settings are not part of a backup.
+
+### Where the Controls Live
+
+The controls are on the System settings page, in the "Backup and Restore" card.
+
+1. Navigate to `http://allskyesp32.lan:8080/system`
+2. Find the "Backup and Restore" card
+
+The card contains a "Download backup" button, an "Include passwords and tokens" checkbox, a file picker, and a "Restore and reboot" button.
+
+### Download a Backup
+
+1. Decide whether to include secrets. The "Include passwords and tokens" checkbox controls whether the WiFi password, MQTT password, and Home Assistant access token are written to the file.
+2. Select "Download backup". The browser saves a `.json` file named after the device.
+
+Warning: when "Include passwords and tokens" is checked, the secrets are stored in plaintext in the downloaded file. There is no encryption. Store the file in a protected location. When the checkbox is unchecked, the secret keys are omitted from the file, and other identifiers such as the WiFi SSID and MQTT username are still written.
+
+### Restore and Reboot
+
+1. Select the file picker and choose a `.json` backup file.
+2. Select "Restore and reboot" and confirm the prompt.
+3. The device applies the recognized settings, saves them to NVS, and reboots. After the reboot, the device runs with the restored settings.
+
+A restore that fails to parse the file does not reboot the device.
+
+### Version Behavior
+
+The backup file carries a schema version. Restore is lenient and best-effort:
+
+- Recognized fields are applied.
+- Unknown fields are ignored.
+- Fields absent from the file keep their current value on the device.
+- A backup made on a different schema version still restores. The restore proceeds and reports a version mismatch warning.
+- A no-secrets backup does not erase existing credentials. Secret fields are applied only when present and non-empty, so restoring a file saved without secrets leaves the current WiFi password, MQTT password, and Home Assistant token in place.
+
+### Wipe Then Restore Sequence
+
+After a factory reset the web UI is not reachable until WiFi is configured, because a factory reset clears WiFi credentials. Use this order:
+
+1. Factory reset the device.
+2. Complete WiFi setup through the captive portal so the device joins your network and the web UI becomes reachable.
+3. Open the System settings page and restore the backup file.
+4. The device reboots with the restored configuration.
+
+If the backup includes secrets, the restored WiFi credentials take effect after the reboot. If the backup excludes secrets, the WiFi credentials entered during setup are retained.
 
 ---
 

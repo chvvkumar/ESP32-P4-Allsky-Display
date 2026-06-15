@@ -583,6 +583,47 @@ String WebConfig::generateAdvancedPage() {
             "</script>";
     html += "</div>";
 
+    // Backup and Restore Section
+    html += "<div class='card' style='margin-top:1.5rem'><h2>💾 Backup and Restore</h2>";
+    html += "<p style='color:#94a3b8;margin-bottom:1rem'>Download the full device configuration to a JSON file, or restore a previously saved file. Restoring replaces the current configuration and reboots the device.</p>";
+    html += "<div style='background:rgba(245,158,11,0.1);border:1px solid #f59e0b;border-radius:8px;padding:1rem;margin-bottom:1rem'>";
+    html += "<p style='color:#f59e0b;margin:0;font-size:0.9rem'><i class='fas fa-exclamation-triangle' style='margin-right:8px'></i>If <strong>Include passwords and tokens</strong> is checked, the backup file stores the WiFi password, MQTT password, and Home Assistant token in plaintext.</p>";
+    html += "</div>";
+    html += "<div class='form-group'><label><input type='checkbox' id='backupSecrets'> Include passwords and tokens</label></div>";
+    html += "<div style='display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1.5rem'>";
+    html += "<button type='button' class='btn btn-primary' onclick='downloadBackup()'>⬇️ Download backup</button></div>";
+    html += "<div class='form-group'><label for='restoreFile'>Restore from file</label>";
+    html += "<input type='file' id='restoreFile' accept='.json,application/json' class='form-control'></div>";
+    html += "<div style='display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem'>";
+    html += "<button type='button' class='btn btn-primary' onclick='restoreBackup()'>♻️ Restore and reboot</button></div>";
+    html += "<div id='backupStatus' style='color:#94a3b8'></div>";
+    html += "<script>"
+            "function downloadBackup(){"
+            "var s=document.getElementById('backupSecrets').checked?'1':'0';"
+            "window.location='/api/backup?secrets='+s;"
+            "}"
+            "function restoreBackup(){"
+            "var st=document.getElementById('backupStatus');"
+            "var fi=document.getElementById('restoreFile');"
+            "if(!fi.files||!fi.files.length){st.textContent='Select a backup file first.';return;}"
+            "if(!confirm('Restore this configuration? The current settings will be replaced and the device will reboot.'))return;"
+            "var rd=new FileReader();"
+            "rd.onload=function(){"
+            "st.textContent='Restoring...';"
+            "fetch('/api/restore',{method:'POST',body:rd.result}).then(function(r){"
+            "return r.json().then(function(j){return {ok:r.ok,body:j};});}).then(function(res){"
+            "var msg=(res.body&&res.body.message)?res.body.message:('HTTP '+(res.body&&res.body.status?res.body.status:'error'));"
+            "if(res.body&&res.body.versionMismatch){msg+=' (backup schema version differs from this firmware; recognized fields were applied on a best-effort basis)';}"
+            "st.textContent=msg;"
+            "if(res.ok){st.textContent=msg+' Device is rebooting...';}"
+            "}).catch(function(e){st.textContent='Restore failed: '+e.message;});"
+            "};"
+            "rd.onerror=function(){st.textContent='Could not read the selected file.';};"
+            "rd.readAsText(fi.files[0]);"
+            "}"
+            "</script>";
+    html += "</div>";
+
     html += "</div></div>";
     return html;
 }
