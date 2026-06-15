@@ -68,6 +68,8 @@ private:
     void handleUpdateImageDuration();
     void handleRestart();
     void handleFactoryReset();
+    void handleBackup();
+    void handleRestore();
     void handleSetLogSeverity();
     void handleClearCrashLogs();
     void handleForceBrightnessUpdate();
