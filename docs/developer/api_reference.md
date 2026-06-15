@@ -835,6 +835,59 @@ bool isRunning();
 bool isOTAInProgress() const;
 ```
 
+### REST API Endpoints
+
+#### GET /api/backup
+
+Returns the device configuration as a JSON file attachment.
+
+Query parameters:
+
+| Parameter | Values | Description |
+|-----------|--------|-------------|
+| `secrets` | `0` or `1` | `1` includes passwords and tokens (WiFi password, MQTT password, Home Assistant access token). `0` omits them. |
+
+Response: the configuration document with `Content-Type: application/json` and a `Content-Disposition: attachment` header. The filename is derived from the device name.
+
+Example:
+
+```bash
+# Download a backup with secrets included
+curl -OJ "http://allskyesp32.lan:8080/api/backup?secrets=1"
+
+# Download a backup without secrets
+curl -OJ "http://allskyesp32.lan:8080/api/backup?secrets=0"
+```
+
+#### POST /api/restore
+
+Applies a backup file, saves the configuration, and reboots on success.
+
+Request body: the raw backup file text (the JSON document returned by `GET /api/backup`). The body is read from the `plain` argument.
+
+Behavior: the handler parses the body, applies every recognized field through the matching `ConfigStorage` setters, saves the configuration, then reboots the device. Unknown fields are ignored. Absent fields keep their current value. Secret fields are applied only when present and non-empty, so a no-secrets backup does not erase existing credentials.
+
+Response JSON fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | string | Result of the restore. |
+| `message` | string | Human-readable detail. |
+| `applied` | number | Count of recognized fields applied. |
+| `skipped` | number | Count of unknown fields ignored. |
+| `fileVersion` | number | Schema version read from the file. Absent value is treated as 0. |
+| `versionMismatch` | boolean | `true` when `fileVersion` differs from the firmware schema version. The restore still proceeds. |
+
+Errors: an empty or unparseable body returns HTTP 400 and does not reboot. A successful restore reboots after sending the response.
+
+Example:
+
+```bash
+# Restore a previously downloaded backup
+curl -X POST "http://allskyesp32.lan:8080/api/restore" \
+  --data-binary @allsky-config-backup.json
+```
+
 ---
 
 ## ConfigStorage

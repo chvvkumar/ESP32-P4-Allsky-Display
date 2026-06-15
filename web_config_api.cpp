@@ -12,6 +12,7 @@
 #include "ha_discovery.h"
 #include "logging.h"
 #include "image_presets.h"
+#include "config_backup.h"
 #include <Update.h>
 #include <driver/jpeg_encode.h>  // ESP32-P4 hardware JPEG encoder (screenshot endpoint)
 
@@ -1100,6 +1101,62 @@ void WebConfig::handleFactoryReset() {
     displayManager.debugPrint("Factory reset in progress...", COLOR_YELLOW);
     displayManager.debugPrint("WiFi setup portal will run on restart", COLOR_CYAN);
     
+    delay(500);
+    crashLogger.saveBeforeReboot();
+    ESP.restart();
+}
+
+void WebConfig::handleBackup() {
+    bool includeSecrets = server->hasArg("secrets") && server->arg("secrets") == "1";
+    LOG_INFO_F("[WebAPI] Configuration backup requested (secrets: %s)\n", includeSecrets ? "included" : "omitted");
+
+    String body = ConfigBackup::exportJson(includeSecrets);
+    server->sendHeader("Content-Disposition", "attachment; filename=\"allsky-config.json\"");
+    sendResponse(200, "application/json", body);
+}
+
+void WebConfig::handleRestore() {
+    if (!server->hasArg("plain") || server->arg("plain").length() == 0) {
+        LOG_WARNING("[WebAPI] Configuration restore called with empty body");
+        sendResponse(400, "application/json", "{\"status\":\"error\",\"message\":\"Request body is empty. Upload a backup file.\"}");
+        return;
+    }
+
+    LOG_INFO("[WebAPI] Configuration restore request received");
+    ConfigBackup::RestoreResult r = ConfigBackup::importJson(server->arg("plain"));
+
+    // Build the human-readable message, noting cross-version restores.
+    String message;
+    if (r.ok) {
+        message = "Configuration restored. Device restarting now...";
+        if (r.versionMismatch) {
+            message = "Configuration restored from a different schema version (file v" + String(r.fileVersion) +
+                      "); applied best-effort. Device restarting now...";
+        }
+    } else {
+        message = r.error;
+    }
+
+    String json = "{";
+    json += "\"status\":\"" + String(r.ok ? "success" : "error") + "\",";
+    json += "\"message\":\"" + escapeJson(message) + "\",";
+    json += "\"applied\":" + String(r.applied) + ",";
+    json += "\"skipped\":" + String(r.skipped) + ",";
+    json += "\"fileVersion\":" + String(r.fileVersion) + ",";
+    json += "\"versionMismatch\":" + String(r.versionMismatch ? "true" : "false");
+    json += "}";
+
+    if (!r.ok) {
+        LOG_WARNING_F("[WebAPI] Configuration restore failed: %s\n", r.error.c_str());
+        sendResponse(400, "application/json", json);
+        return;
+    }
+
+    LOG_INFO_F("[WebAPI] Configuration restore applied (applied: %d, skipped: %d) - rebooting\n", r.applied, r.skipped);
+    sendResponse(200, "application/json", json);
+
+    displayManager.debugPrint("Configuration restored...", COLOR_YELLOW);
+
     delay(500);
     crashLogger.saveBeforeReboot();
     ESP.restart();

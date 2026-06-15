@@ -23,6 +23,11 @@ enum LogSeverity {
 // SYSTEM CONFIGURATION
 // =============================================================================
 
+// Config backup/restore schema version. Bump when fields are added, renamed,
+// removed, or change meaning. See config_backup.cpp migrate() for the
+// non-additive migration hook.
+#define CONFIG_SCHEMA_VERSION 1
+
 // Memory allocation sizes
 // NOTE: These values automatically control PPA hardware accelerator buffer sizes:
 //   - PPA source buffer = FULL_IMAGE_BUFFER_SIZE
