@@ -1,0 +1,133 @@
+# Technology Stack
+
+**Analysis Date:** 2026-06-28
+
+## Languages
+
+**Primary:**
+- C++ (GNU dialect, C++17 features used) - All `.cpp` and `.h` files, main `.ino` sketch
+- C - `moon_ephemeris.c`, `moon_interaction.c`, `stb_image.c` (vendored, mixed-language units)
+
+**Secondary:**
+- PowerShell - `compile-and-upload.ps1` (developer build/upload script)
+- YAML - `.github/workflows/arduino-compile.yml` (CI/CD pipeline)
+- bash (within CI YAML steps)
+
+## Runtime
+
+**Environment:**
+- ESP32-P4 (dual-core RISC-V RV32IMC), 32MB flash, external PSRAM
+- ESP32-C6 co-processor handles WiFi 6 via ESP-Hosted (firmware in `firmware_esphosted/merged-flash.bin`), connected to ESP32-P4 over SDIO
+- RTOS: FreeRTOS (bundled with ESP-IDF under Arduino)
+- Both CPU cores used: Core 0 for network tasks (download, HA REST client), Core 1 for main loop and display
+
+**Package Manager:**
+- Arduino Library Manager (managed by `arduino-cli lib install` in CI)
+- No lockfile for libraries; versions are pinned in `.github/workflows/arduino-compile.yml` (lines 159-165)
+
+## Frameworks
+
+**Core:**
+- Arduino-ESP32 `3.3.7` (board package `esp32:esp32`) - ESP-IDF 5.x under the hood
+  - Board URL: `https://espressif.github.io/arduino-esp32/package_esp32_index.json`
+  - FQBN: `esp32:esp32:esp32p4:FlashSize=32M,PartitionScheme=app13M_data7M_32MB,PSRAM=enabled`
+- ESP-IDF PPA (Pixel Processing Accelerator) driver accessed directly via `extern "C" { #include "driver/ppa.h" }` in `ppa_accelerator.h` - used for hardware-accelerated image scale/rotate
+
+**Testing:**
+- No test framework detected. `test/` directory exists but is empty/stub only.
+
+**Build/Dev:**
+- arduino-cli `1.3.1` (pinned in CI via `arduino/setup-arduino-cli@v2.0.0`)
+- esptool (installed via `pip install esptool` in CI, also bundled in Arduino15 package) for flash upload
+- PowerShell script `compile-and-upload.ps1` for local developer builds (calls `arduino-cli compile` + `arduino-cli upload`)
+
+## Key Dependencies
+
+**Display:**
+- `GFX Library for Arduino` `1.6.5` (`Arduino_GFX_Library`) - DSI panel driver
+  - Uses `Arduino_ESP32DSIPanel` and `Arduino_DSI_Display` classes (`display_manager.h`)
+  - Requires a source patch in CI (`Patch GFX Library for ESP32-P4 compatibility` step): replaces `MIPI_DSI_PHY_CLK_SRC_DEFAULT` with `MIPI_DSI_PHY_PLLREF_CLK_SRC_PLL_F20M` in `Arduino_ESP32DSIPanel.cpp` to fix an ESP32-P4 compatibility issue
+  - Supports two panel configs: 3.4" 800x800 (`SCREEN_3INCH_4_DSI`) and 4.0" 1448x1448 (`SCREEN_4INCH_DSI`) - selected at runtime via `displays_config.h`
+
+**Image Decoding:**
+- `JPEGDEC` `1.8.4` - JPEG decode for downloaded images (used via global `JPEGDEC jpeg` in `.ino`)
+- `stb_image` `vendored` (local `stb_image.c` / `stb_image.h`) - used by moon renderer to decode the embedded moon texture PNG from PSRAM; not managed by library manager
+
+**Moon Renderer:**
+- `tgx` `1.1.1` - 3D software renderer (sphere rasterization with sub-solar lighting)
+  - Used only in `moon_sphere.cpp`
+  - Forced to single-precision (`TGX_SINGLE_PRECISION_COMPUTATIONS = 1`) for ESP32-P4 FPU compatibility (comment in `moon_sphere.cpp` lines 17-25)
+  - Moon texture equirectangular data in `moon_equirect_data.h` (binary asset embedded as header)
+
+**Messaging / Protocol:**
+- `PubSubClient` `2.8` - MQTT client (`mqtt_manager.cpp`, `ha_discovery.cpp`)
+- `WebSockets` `2.7.2` (Markus Sattler / `WebSocketsServer`) - WebSocket server on port 81 for real-time log console (`web_config.cpp` line 125)
+- `ArduinoJson` `7.4.3` - JSON serialization for HA discovery payloads, REST API responses, config backup/restore
+
+**Web / OTA:**
+- `ElegantOTA` `3.1.7` - HTTP OTA update endpoint at `/update` on the web config server
+- `ArduinoOTA` (bundled with Arduino-ESP32) - OTA via Arduino IDE / mDNS on port 3232 (`network_manager.cpp` line 406)
+- `WebServer` (bundled with Arduino-ESP32) - HTTP web config server on port 8080
+- `DNSServer` (bundled with Arduino-ESP32) - captive portal DNS redirect (`captive_portal.h`)
+
+**Touch:**
+- GT911 I2C capacitive touch controller - custom driver in `gt911.cpp` / `gt911.h`
+
+**Storage:**
+- `Preferences` (bundled with Arduino-ESP32) - NVS-backed key-value store for persistent configuration (`config_storage.cpp`)
+
+**Connectivity:**
+- `HTTPClient` (bundled with Arduino-ESP32) - HTTP/HTTPS image download and HA REST polling
+- `WiFi` (bundled with Arduino-ESP32) - WiFi station + AP mode; uses ESP-Hosted via internal SDIO to C6 co-processor
+
+**Hardware Acceleration:**
+- `driver/ppa` (ESP-IDF, via Arduino-ESP32 3.3.7) - PPA hardware pixel processing for scale/rotate; accessed via `extern "C"` in `ppa_accelerator.h`; DMA-aligned buffers in PSRAM required (`MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM`)
+
+## Configuration
+
+**Environment:**
+- No `.env` files. All runtime config is stored in NVS (ESP32 Preferences namespace) via `config_storage.cpp`
+- Compile-time defaults declared in `config.h` and `config.cpp`
+- Build-time git metadata injected into `build_info.h` (auto-generated by `compile-and-upload.ps1` or CI)
+
+**Build:**
+- FQBN options: `FlashSize=32M`, `PartitionScheme=app13M_data7M_32MB`, `PSRAM=enabled`
+- Custom partition table: `partitions.csv` (two 10MB OTA app slots `app0`/`app1`, 12MB SPIFFS data)
+- Build path computed from sketch path MD5 hash (local builds)
+- `build_info.h` is auto-generated; do not hand-edit
+
+## Platform Requirements
+
+**Development:**
+- arduino-cli 1.3.1
+- Arduino-ESP32 board package 3.3.7 installed in `~/.arduino15` (or `%LOCALAPPDATA%\Arduino15`)
+- Libraries installed in `~/Arduino/libraries` (or Windows equivalent)
+- GFX Library must be patched after install (see CI step "Patch GFX Library for ESP32-P4 compatibility")
+- Python + esptool for direct flash operations
+
+**Production:**
+- 32MB SPI flash, external PSRAM (used for all image buffers: 4MB full image, 4x scaled buffer, 3MB min download buffer)
+- ESP32-C6 co-processor must be pre-flashed with ESP-Hosted firmware (`firmware_esphosted/merged-flash.bin`)
+- CI runner: self-hosted (`runs-on: self-hosted`, runner name `git01`)
+- OTA supported via ElegantOTA web UI (`http://<device>:8080/update`) and ArduinoOTA (port 3232)
+- Release binaries built and published via GitHub Actions on push to `main` or `snd` branches
+
+## ESP-IDF Migration Notes
+
+The firmware is a candidate for migration to native ESP-IDF. Key facts for that work:
+- Arduino-ESP32 3.3.7 wraps ESP-IDF 5.x (exact minor determined by board package)
+- PPA driver (`driver/ppa.h`) is already accessed via raw ESP-IDF headers using `extern "C"` - migration path is straightforward
+- FreeRTOS primitives (`xTaskCreatePinnedToCore`, `xSemaphore*`, `xQueue*`) are used directly throughout; no Arduino RTOS abstraction layer
+- `Preferences` maps to `nvs_flash` / `nvs_open` in native ESP-IDF
+- `WiFi.h` functionality maps to `esp_wifi.h` + ESP-Hosted driver for C6 co-processor path
+- `HTTPClient` maps to `esp_http_client`
+- `WebServer` + `WebSocketsServer` would need replacement (e.g., `esp_http_server` + custom WebSocket)
+- `ElegantOTA` + `ArduinoOTA` would need replacement with `esp_ota_ops.h` + custom HTTP handler
+- `ArduinoJson` can be used unchanged in native IDF (header-only, no Arduino dependency)
+- `JPEGDEC` is Arduino-specific; native path is `esp_driver_jpeg` (hardware JPEG decoder available on ESP32-P4, header at `%LOCALAPPDATA%\Arduino15\packages\esp32\tools\esp32p4-libs\3.3.7\include\esp_driver_jpeg\include\driver`)
+- `tgx` requires only standard C++ headers and should port cleanly
+- `stb_image` is already plain C, no Arduino dependency
+
+---
+
+*Stack analysis: 2026-06-28*
