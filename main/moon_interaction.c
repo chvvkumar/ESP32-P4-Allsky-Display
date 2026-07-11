@@ -2,19 +2,17 @@
  * @file moon_interaction.c
  * @brief Single-finger drag-to-rotate state for the Moon page.
  *
- * The render (poll) task that rebuilds the Moon sphere reads the CURRENT
- * (eased) yaw/pitch; the UI/touch task (PRESSED / PRESSING / RELEASED events in
- * nina_image_display.c) writes a TARGET yaw/pitch from the raw finger delta.
- * Decoupling target from current lets the render task ease toward the target
- * each frame (exponential smoothing), which both filters the noisy ~40Hz touch
- * stream and gives a magnitude-proportional snap-back when the finger releases
- * (target returns to 0, current eases home).
+ * The render task that rebuilds the Moon sphere reads the CURRENT (eased)
+ * yaw/pitch; the touch layer writes a TARGET yaw/pitch from the raw finger
+ * delta on press/move/release. Decoupling target from current lets the render
+ * task ease toward the target each frame (exponential smoothing), which both
+ * filters the noisy ~40Hz touch stream and gives a magnitude-proportional
+ * snap-back when the finger releases (target returns to 0, current eases home).
  *
  * Because RISC-V single-precision float loads/stores are not guaranteed atomic
  * across cores and we read several related fields together, the float state is
- * guarded by a portMUX_TYPE spinlock — the same pattern nina_toast.c uses for
- * its pending queue. Critical sections only touch plain floats/bools, so they
- * stay short.
+ * guarded by a portMUX_TYPE spinlock. Critical sections only touch plain
+ * floats/bools, so they stay short.
  */
 
 #include "moon_interaction.h"
@@ -33,9 +31,8 @@
 #define MOON_PITCH_MAX          (89.0f)
 
 /* The per-frame exponential easing factor (cur += (target-cur)*alpha) is passed
- * IN to moon_drag_advance() by the render loop — see MOON_DRAG_EASE_A in tasks.c
- * (~0.35 at ~45fps: responsive but smooth). It lives there so the renderer owns
- * its own pacing/feel without recompiling this TU. */
+ * IN to moon_drag_advance() by the render loop (~0.35 at ~45fps: responsive but
+ * smooth), so the renderer owns its own pacing/feel without recompiling this TU. */
 /* Below this many degrees of residual the eased value snaps exactly to target,
  * so the disc never crawls forever toward a sub-pixel difference. */
 #define MOON_DRAG_DEADBAND_DEG  0.05f

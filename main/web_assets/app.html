@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AllSky Display</title>
+<style>
+:root{--bg:#0a0c14;--surface:#14171f;--elev:#181b26;--input:#0c0e14;--border:rgba(255,255,255,.08);
+ --border-em:rgba(255,255,255,.15);--text:#e2e8f0;--muted:#94a3b8;--accent:#7aa2f7;--accent-s:#5a86e8;
+ --accent-sh:#4a72d8;--danger:#f87171;--danger-h:#ef4444;--success:#4ade80;--warning:#fbbf24}
+*{box-sizing:border-box;scrollbar-width:thin}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;min-height:100vh}
+body{display:flex;flex-direction:column}
+a{color:var(--accent);text-decoration:none}
+header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap}
+header .title{font-weight:600;font-size:15px}
+header .sp{flex:1}
+.badge{font-size:11px;padding:3px 8px;border-radius:12px;background:var(--elev);border:1px solid var(--border)}
+.badge.ok{color:var(--success)}.badge.bad{color:var(--danger)}.badge.warn{color:var(--warning)}
+button.btn{background:var(--accent-s);color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:13px;cursor:pointer}
+button.btn:hover{background:var(--accent-sh)}button.btn.red{background:var(--danger)}button.btn.red:hover{background:var(--danger-h)}
+button.btn.ghost{background:var(--elev);border:1px solid var(--border-em)}
+button.btn:disabled{background:#374151;cursor:not-allowed}
+nav{position:sticky;top:0;z-index:20;display:flex;gap:2px;padding:6px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap}
+nav a{padding:7px 12px;border-radius:6px;font-size:13px;color:var(--muted)}
+nav a:hover{background:var(--elev);color:var(--text)}nav a.active{background:var(--accent-s);color:#fff}
+main{flex:1;padding:18px;max-width:1100px;width:100%;margin:0 auto}
+footer{padding:12px 16px;background:var(--surface);border-top:1px solid var(--border);font-size:11px;color:var(--muted);text-align:center}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin:0 0 14px}
+.card h2{font-size:14px;margin:0 0 12px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
+.tile .k{font-size:11px;color:var(--muted)}.tile .v{font-size:20px;font-weight:600;margin-top:4px}
+.kv{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid var(--border)}
+.kv .k{color:var(--muted)}
+label{display:block;font-size:12px;color:var(--muted);margin:10px 0 5px}
+input,select{width:100%;background:var(--input);color:var(--text);border:1px solid var(--border-em);border-radius:6px;padding:9px 10px;font-size:13px}
+input[type=checkbox]{width:auto}
+input[type=range]{padding:0}
+.row{display:flex;gap:8px;align-items:center}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.src{border:1px solid var(--border);border-radius:8px;padding:10px;margin:6px 0}
+.src.active{border-color:var(--success);background:rgba(74,222,128,.06)}
+.dim{opacity:.5}
+.toast-wrap{position:fixed;top:14px;right:14px;z-index:100;display:flex;flex-direction:column;gap:8px}
+.toast{min-width:280px;max-width:460px;padding:11px 14px;border-radius:8px;background:var(--elev);border-left:4px solid var(--accent);box-shadow:0 6px 20px rgba(0,0,0,.4);font-size:13px;display:flex;justify-content:space-between;gap:10px;transition:opacity .3s}
+.toast.success{border-color:var(--success)}.toast.error{border-color:var(--danger)}.toast.warning{border-color:var(--warning)}
+.toast .x{cursor:pointer;color:var(--muted)}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:90;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+.spin{width:38px;height:38px;border:4px solid var(--border-em);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:95;display:none;align-items:center;justify-content:center}
+.modal .box{background:var(--surface);border:1px solid var(--border-em);border-radius:10px;padding:20px;max-width:420px;width:90%}
+.modal .box h3{margin:0 0 8px;font-size:15px}.modal .box p{color:var(--muted);font-size:13px}
+.modal .box .act{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;background:var(--elev);color:var(--muted)}
+.flash-ok{border-color:var(--success)!important;box-shadow:0 0 0 2px rgba(74,222,128,.3)}
+.flash-err{border-color:var(--danger)!important;box-shadow:0 0 0 2px rgba(248,113,113,.3)}
+.collapse .body{display:none}.collapse.open .body{display:block}
+.collapse h2{cursor:pointer}
+#console{background:#05070c;border:1px solid var(--border);border-radius:8px;padding:10px;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;overflow:auto;height:60vh;min-height:250px}
+.savebar{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border-em);padding:10px;display:flex;gap:10px;align-items:center;margin:14px -18px -18px;justify-content:flex-end}
+@media(max-width:640px){nav{gap:0}}
+</style>
+</head>
+<body>
+<header>
+  <span class="title" id="devname">AllSky Display</span>
+  <a href="https://github.com/chvvkumar/ESP32-P4-Allsky-Display" target="_blank" rel="noopener">GitHub</a>
+  <span class="sp"></span>
+  <span class="badge" id="bw">WiFi</span>
+  <span class="badge" id="bm">MQTT</span>
+  <span class="badge" id="bs">System</span>
+  <button class="btn ghost" id="nextBtn" style="display:none" onclick="doNext()">Next</button>
+  <button class="btn" onclick="doRestart()">Restart</button>
+  <button class="btn red" onclick="doFactory()">Reset</button>
+</header>
+<nav id="nav"></nav>
+<main id="main"><div class="card">Loading...</div></main>
+<footer id="footer"></footer>
+<div class="toast-wrap" id="toasts"></div>
+<div class="overlay" id="overlay"><div class="spin"></div><div id="overlayMsg">Working...</div></div>
+<div class="modal" id="modal"><div class="box"><h3 id="mTitle"></h3><p id="mBody"></p><div class="act" id="mAct"></div></div></div>
+
+<script>
+/* ---------- utilities ---------- */
+var NAV=[["Dashboard","/"],["Images","/config/images"],["Display","/config/display"],
+["Network","/config/network"],["MQTT","/config/mqtt"],["Console","/console"],
+["System","/config/system"],["Commands","/config/commands"],["API","/api-reference"]];
+function esc(s){return (s==null?'':''+s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function el(id){return document.getElementById(id);}
+function toast(msg,type){var w=el('toasts');var t=document.createElement('div');t.className='toast '+(type||'info');
+ t.innerHTML='<span>'+esc(msg)+'</span><span class="x">&times;</span>';w.appendChild(t);
+ t.querySelector('.x').onclick=function(){t.remove();};
+ setTimeout(function(){t.style.opacity='0';},2700);setTimeout(function(){t.remove();},3000);}
+function overlay(show,msg){el('overlayMsg').textContent=msg||'Working...';el('overlay').style.display=show?'flex':'none';}
+function modal(title,body,onOk,onCancel,confirm){el('mTitle').textContent=title;el('mBody').textContent=body;
+ var a=el('mAct');a.innerHTML='';el('modal').style.display='flex';
+ function close(){el('modal').style.display='none';}
+ if(confirm){var c=document.createElement('button');c.className='btn ghost';c.textContent='Cancel';
+  c.onclick=function(){close();if(onCancel)onCancel();};a.appendChild(c);}
+ var ok=document.createElement('button');ok.className='btn';ok.textContent=confirm?'Confirm':'OK';
+ ok.onclick=function(){close();if(onOk)onOk();};a.appendChild(ok);}
+function flash(input,ok){input.classList.add(ok?'flash-ok':'flash-err');setTimeout(function(){input.classList.remove('flash-ok','flash-err');},2000);}
+function api(path,opts){return fetch(path,opts).then(function(r){return r.json().then(function(j){return{ok:r.ok,status:r.status,json:j};}).catch(function(){return{ok:r.ok,status:r.status,json:{}};});});}
+function form(obj){return Object.keys(obj).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(obj[k]);}).join('&');}
+function postSave(fields){return api('/api/save',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:form(fields)});}
+function validUrl(u){return /^https?:\/\/.+/i.test(u);}
+
+/* ---------- header actions ---------- */
+function doNext(){api('/api/next-image',{method:'POST'}).then(function(){toast('Next image queued','success');setTimeout(function(){location.reload();},2000);});}
+function doRestart(){modal('Restart','Are you sure you want to restart the device?',function(){
+ overlay(true,'Restarting device...');api('/api/restart',{method:'POST'});toast('Device is restarting...','info');
+ setTimeout(function(){location.reload();},10000);},null,true);}
+function doFactory(){modal('Factory Reset','Reset all settings to defaults?',function(){
+ modal('Confirm','This will erase ALL your settings. Are you absolutely sure?',function(){
+  overlay(true,'Factory reset...');api('/api/factory-reset',{method:'POST'});toast('Factory reset complete. Restarting...','warning');
+  setTimeout(function(){location.reload();},5000);},null,true);},null,true);}
+
+/* ---------- keyboard shortcuts ---------- */
+document.addEventListener('keydown',function(e){
+ if(!(e.ctrlKey||e.metaKey))return;
+ var k=e.key.toLowerCase();
+ if(k==='s'){e.preventDefault();var f=document.querySelector('form');toast('Saving...','info');if(f)f.requestSubmit?f.requestSubmit():f.dispatchEvent(new Event('submit',{cancelable:true}));}
+ else if(k==='r'){e.preventDefault();if(confirm('Restart device?'))doRestart();}
+ else if(k==='n'){e.preventDefault();var b=el('nextBtn');if(b&&b.style.display!=='none')b.click();}
+});
+
+/* ---------- router ---------- */
+function renderNav(path){el('nav').innerHTML=NAV.map(function(n){
+ return '<a href="'+n[1]+'" class="'+(n[1]===path?'active':'')+'" onclick="return go(\''+n[1]+'\')">'+n[0]+'</a>';}).join('');}
+function go(path){history.pushState({},'',path);route(path);return false;}
+window.onpopstate=function(){route(location.pathname);};
+var PAGES={};
+function route(path){renderNav(path);var fn=PAGES[path]||PAGES['/'];el('main').innerHTML='<div class="card">Loading...</div>';fn();}
+
+/* ---------- shared header/footer refresh ---------- */
+function updateBadges(info){
+ var net=info.network||{},mq=info.mqtt||{},sys=info.system||{};
+ el('bw').className='badge '+(net.connected?'ok':'bad');el('bw').textContent='WiFi '+(net.connected?'OK':'Off');
+ el('bm').className='badge '+(mq.connected?'ok':'bad');el('bm').textContent='MQTT '+(mq.connected?'OK':'Off');
+ el('bs').className='badge '+(sys.healthy?'ok':'warn');el('bs').textContent=sys.healthy?'Healthy':'Warning';
+ if(sys.device_name){el('devname').textContent=sys.device_name;document.title=sys.device_name;}
+ var fw=info.firmware||{};
+ el('footer').innerHTML=esc((sys.device_name||'AllSky')+' Configuration Portal')+' &middot; fw '+esc((fw.checksum||'').slice(0,8))+
+  ' &middot; '+((fw.size/1024)|0)+' KB &middot; free '+((fw.free_space/1024)|0)+' KB &middot; SDK '+esc(sys.sdk_version||'');
+}
+function loadInfo(){return api('/api/info').then(function(r){return r.json;});}
+
+/* ======================================================= DASHBOARD */
+PAGES['/']=function(){
+ loadInfo().then(function(i){
+  var net=i.network||{},mq=i.mqtt||{},sys=i.system||{},dsp=i.display||{},img=i.image||{},fw=i.firmware||{},ha=i.home_assistant||{};
+  updateBadges(i);
+  el('nextBtn').style.display=(img.source_count>1)?'':'none';
+  var up=sys.uptime_seconds||0;var us=up<60?up+'s':up<3600?((up/60|0)+'m '+(up%60)+'s'):up<86400?((up/3600|0)+'h '+((up%3600)/60|0)+'m'):((up/86400|0)+'d '+((up%86400)/3600|0)+'h');
+  var bmode=dsp.use_ha_rest_control?'Home Assistant':dsp.brightness_auto_mode?'MQTT Auto':'Manual';
+  var srcs=(img.sources||[]);
+  var h='<div class="tiles">'+
+   tile('Uptime',us)+tile('Active Source',((img.current_index||0)+1)+'/'+(img.source_count||1))+
+   tile('Update Mode',img.cycling_enabled?'Auto':'API')+tile('Refresh Interval',Math.round((img.update_interval||0)/60000)+' min')+'</div>';
+  h+='<div class="grid">';
+  h+=card('Network',net.connected?kv('SSID',net.ssid)+kv('IP',net.ip)+kv('Signal',net.rssi+' dBm')+kv('MAC',net.mac)+kv('Gateway',net.gateway)+kv('DNS',net.dns):'<p class="dim">Not connected</p>');
+  h+=card('MQTT',mq.connected?kv('Broker',mq.server+':'+mq.port)+kv('Client',mq.client_id)+kv('HA Discovery',ha.discovery_enabled?'On':'Off'):'<p class="dim">Not connected</p>');
+  h+=card('System',kv('Chip',sys.chip_model+' rev'+sys.chip_revision)+kv('Cores/MHz',sys.chip_cores+' / '+sys.cpu_freq)+kv('Heap',fmtk(sys.free_heap)+' / '+fmtk(sys.total_heap))+kv('PSRAM',fmtk(sys.free_psram)+' / '+fmtk(sys.total_psram))+kv('Temp',(sys.temperature_celsius||0).toFixed(1)+'C / '+(sys.temperature_fahrenheit||0).toFixed(1)+'F')+kv('Health',sys.healthy?'Healthy':'Issues'));
+  h+=card('Display',kv('Resolution',dsp.width+' x '+dsp.height)+kv('Brightness',dsp.brightness+'% ('+bmode+')')+kv('PWM Freq',dsp.backlight_freq+' Hz')+kv('PWM Res',dsp.backlight_resolution+' bit'));
+  h+=card('Firmware',kv('Version',fw.version)+kv('Size',fmtk(fw.size))+kv('Free',fmtk(fw.free_space))+kv('Checksum','<span class="mono">'+esc((fw.checksum||'').slice(0,16))+'</span>'));
+  h+=card('Home Assistant',kv('Discovery',ha.discovery_enabled?'On':'Off')+kv('Device',ha.device_name)+kv('Prefix',ha.discovery_prefix)+kv('State topic',ha.state_topic)+kv('Interval',ha.sensor_update_interval+' s'));
+  h+='</div>';
+  h+='<div class="card"><h2>Configured Sources</h2>'+srcs.map(function(s){
+    return '<div class="src '+(s.active?'active':'')+'"><span class="mono" style="word-break:break-all">'+(s.index+1)+'. '+esc(s.url)+'</span>'+(s.active?' <span class="pill">Active</span>':'')+'</div>';}).join('')+'</div>';
+  el('main').innerHTML=h;
+ });
+ clearInterval(window._dashT);window._dashT=setInterval(function(){if(location.pathname!=='/'){clearInterval(window._dashT);return;}loadInfo().then(updateBadges);},5000);
+};
+function tile(k,v){return '<div class="tile"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'</div></div>';}
+function card(t,b){return '<div class="card"><h2>'+esc(t)+'</h2>'+b+'</div>';}
+function kv(k,v){return '<div class="kv"><span class="k">'+esc(k)+'</span><span>'+(v==null?'-':v)+'</span></div>';}
+function fmtk(b){return b>1048576?((b/1048576).toFixed(1)+' MB'):((b/1024|0)+' KB');}
+
+/* ======================================================= DISPLAY */
+PAGES['/config/display']=function(){
+ loadInfo().then(function(i){
+  var d=i.display||{},def=i.defaults||{},t=i.time||{};
+  function auto(field,val,extra){var f={};f[field]=val;f[field+'_present']='1';for(var k in (extra||{}))f[k]=extra[k];
+   postSave(f).then(function(r){toast(r.json.status==='success'?'Setting saved':'Error: '+(r.json.message||''),r.json.status==='success'?'success':'error');});}
+  var bmode=d.use_ha_rest_control?'ha':d.brightness_auto_mode?'mqtt':'manual';
+  var h='<form onsubmit="return false"><div class="card"><h2>Live Brightness</h2>'+
+   '<label>Brightness Mode</label>'+
+   '<div class="row"><label class="row"><input type="radio" name="bmode" value="manual" '+(bmode==='manual'?'checked':'')+'> Manual</label>'+
+   '<label class="row"><input type="radio" name="bmode" value="mqtt" '+(bmode==='mqtt'?'checked':'')+'> MQTT Auto</label>'+
+   '<label class="row"><input type="radio" name="bmode" value="ha" '+(bmode==='ha'?'checked':'')+'> Home Assistant Auto</label></div>'+
+   '<label>Brightness <span id="blab">'+d.brightness+'%</span></label>'+
+   '<input type="range" min="0" max="100" id="bright" value="'+d.brightness+'" '+(bmode!=='manual'?'disabled':'')+'></div>'+
+   '<div class="card collapse" id="basic"><h2 onclick="tog(\'basic\')">Basic Settings &#9662;</h2><div class="body">'+
+   '<label>Startup Brightness <span id="sb">'+def.brightness+'%</span></label><input type="range" min="0" max="100" id="startbr" value="'+def.brightness+'">'+
+   '<label>Color Temp <span id="ct">'+i.display.color_temp+'K</span></label><input type="range" min="2000" max="15000" step="100" id="colort" value="'+i.display.color_temp+'">'+
+   '<label>PWM Frequency (Hz)</label><input type="number" min="1000" max="20000" id="plf" value="'+d.backlight_freq+'">'+
+   '<label>PWM Resolution (bits)</label><input type="number" min="8" max="16" id="plr" value="'+d.backlight_resolution+'"></div></div>'+
+   '<div class="card collapse" id="haab"><h2 onclick="tog(\'haab\')">HA Auto-Brightness &#9662;</h2><div class="body" id="habody">Loading...</div></div>'+
+   '</form>';
+  el('main').innerHTML=h;
+  el('bright').oninput=function(){el('blab').textContent=this.value+'%';};
+  el('bright').onchange=function(){auto('default_brightness',this.value);};
+  el('startbr').oninput=function(){el('sb').textContent=this.value+'%';};el('startbr').onchange=function(){auto('default_brightness',this.value);};
+  el('colort').oninput=function(){el('ct').textContent=this.value+'K';};el('colort').onchange=function(){var f={color_temp:this.value};postSave(f).then(function(){toast('Setting saved','success');});};
+  el('plf').onchange=function(){var f={backlight_freq:this.value};postSave(f).then(function(){toast('Setting saved','success');});};
+  el('plr').onchange=function(){var f={backlight_resolution:this.value};postSave(f).then(function(){toast('Setting saved','success');});};
+  document.querySelectorAll('input[name=bmode]').forEach(function(r){r.onchange=function(){
+   var m=this.value;postSave({brightness_auto_mode:m==='mqtt'?'on':'',brightness_auto_mode_present:'1',use_ha_rest_control:m==='ha'?'on':'',use_ha_rest_control_present:'1'}).then(function(rr){
+    if(rr.json.status==='success'){toast('Brightness mode updated','success');api('/api/force-brightness-update',{method:'POST'});route('/config/display');}else toast('Failed to update mode','error');});};});
+  renderHA();
+ });
+};
+function renderHA(){el('habody').innerHTML='<label>HA Base URL</label><input id="hu" placeholder="http://homeassistant.local:8123">'+
+ '<label>Poll interval (s)</label><input type="number" id="hpi" min="10" max="3600">'+
+ '<label>Access Token</label><input type="password" id="htk" placeholder="Leave blank to keep current">'+
+ '<label>Sensor Entity</label><input id="hse" placeholder="sensor.living_room_illuminance">'+
+ '<label>Response Curve</label><select id="hmm"><option value="0">Linear (Indoor)</option><option value="1">Logarithmic (Outdoor)</option><option value="2">Threshold (Day/Night)</option></select>'+
+ '<div class="grid"><div><label>Lux min</label><input type="number" step="0.1" id="lmin"></div><div><label>Lux max</label><input type="number" step="0.1" id="lmax"></div>'+
+ '<div><label>Brightness min %</label><input type="number" min="0" max="100" id="dmin"></div><div><label>Brightness max %</label><input type="number" min="0" max="100" id="dmax"></div></div>';
+ var map={hu:'ha_base_url',hpi:'ha_poll_interval',htk:'ha_access_token',hse:'ha_light_sensor_entity',hmm:'light_sensor_mapping_mode',lmin:'light_sensor_min_lux',lmax:'light_sensor_max_lux',dmin:'display_min_brightness',dmax:'display_max_brightness'};
+ Object.keys(map).forEach(function(id){el(id).onchange=function(){var v=this.value;if(map[id]==='ha_access_token'&&!v)return;var f={};f[map[id]]=v;postSave(f).then(function(){toast('Setting saved','success');});};});
+}
+function tog(id){el(id).classList.toggle('open');}
+
+/* ======================================================= NETWORK */
+PAGES['/config/network']=function(){
+ el('main').innerHTML='<div class="card"><h2>WiFi Networks</h2><button class="btn" id="scanb" onclick="wifiScan()">Scan Networks</button>'+
+  '<div id="scanstat" style="font-size:12px;color:var(--muted);margin-top:8px"></div><div id="nets" style="max-height:400px;overflow:auto;margin-top:8px">Click Scan to discover networks.</div></div>'+
+  '<form id="wf"><div class="card"><h2>Manual Configuration</h2><label>SSID</label><input id="wssid" required>'+
+  '<label>Password</label><input type="password" id="wpw" placeholder="(unchanged)"><button class="btn" type="submit" style="margin-top:12px">Save Network Settings</button></div></form>';
+ el('wf').onsubmit=function(e){e.preventDefault();postSave({wifi_ssid:el('wssid').value,wifi_password:el('wpw').value}).then(function(r){
+  if(r.json.status==='success'){toast('Settings saved successfully','success');if(r.json.needsRestart){modal('Restarting',r.json.message,function(){api('/api/restart',{method:'POST'});setTimeout(function(){location.reload();},10000);});}}
+  else toast('Error: '+(r.json.message||''),'error');});};
+ window._lastScan=0;wifiScan();clearInterval(window._scanT);window._scanT=setInterval(function(){if(location.pathname!=='/config/network'){clearInterval(window._scanT);return;}wifiScan(true);},60000);
+};
+function wifiScan(auto){if(Date.now()-window._lastScan<10000){if(!auto)alert('Please wait 10 seconds between scans');return;}
+ window._lastScan=Date.now();el('scanstat').textContent='Scanning for networks...';
+ api('/api/wifi-scan').then(function(r){el('scanstat').textContent='';
+  if(r.status===429){el('scanstat').textContent='Rate limited';return;}
+  if(!r.ok){el('nets').textContent=(r.json.message||'Scan failed');return;}
+  var nets=r.json.networks||[];if(!nets.length){el('nets').textContent='No 2.4GHz networks found';return;}
+  el('nets').innerHTML=nets.map(function(n){return '<div class="src" style="cursor:pointer" onclick="pickSsid('+"'"+esc(n.ssid).replace(/'/g,"\\'")+"'"+')">'+
+   (n.is_open?'':'&#128274; ')+esc(n.ssid)+' <span class="pill">'+esc(n.quality||'')+' '+n.rssi+'dBm ch'+n.channel+'</span></div>';}).join('');
+ });}
+function pickSsid(s){el('wssid').value=s;el('wpw').value='';el('wpw').focus();toast('Network selected: '+s,'info');}
+
+/* ======================================================= MQTT */
+PAGES['/config/mqtt']=function(){
+ loadInfo().then(function(i){var mq=i.mqtt||{},ha=i.home_assistant||{};
+  el('main').innerHTML='<form id="mf"><div class="card"><h2>MQTT Broker</h2>'+
+   '<label>Broker Address</label><input id="ms" value="'+esc(mq.server)+'" required>'+
+   '<label>Port</label><input type="number" min="1" max="65535" id="mp" value="'+mq.port+'" required>'+
+   '<label>Client ID</label><input id="mc" value="'+esc(mq.client_id)+'" required>'+
+   '<label>Username</label><input id="mu" value="'+esc(mq.username)+'">'+
+   '<label>Password</label><input type="password" id="mpw" placeholder="(unchanged)"></div>'+
+   '<div class="card"><h2>Home Assistant Discovery</h2>'+
+   '<label class="row"><input type="checkbox" id="hde" '+(ha.discovery_enabled?'checked':'')+'> Enable discovery</label>'+
+   '<label>Device Name</label><input id="hdn" value="'+esc(ha.device_name)+'">'+
+   '<label>Discovery Prefix</label><input id="hdp" value="'+esc(ha.discovery_prefix)+'">'+
+   '<label>State Topic Prefix</label><input id="hst" value="'+esc(ha.state_topic)+'">'+
+   '<label>Sensor Update Interval (s)</label><input type="number" min="10" max="300" id="hsi" value="'+ha.sensor_update_interval+'">'+
+   '<button class="btn" type="submit" style="margin-top:12px">Save MQTT Settings</button></div></form>';
+  el('mf').onsubmit=function(e){e.preventDefault();
+   postSave({mqtt_server:el('ms').value,mqtt_port:el('mp').value,mqtt_client_id:el('mc').value,mqtt_user:el('mu').value,mqtt_password:el('mpw').value,
+    ha_discovery_enabled:el('hde').checked?'on':'',ha_discovery_enabled_present:'1',ha_device_name:el('hdn').value,ha_discovery_prefix:el('hdp').value,ha_state_topic:el('hst').value,ha_sensor_update_interval:el('hsi').value}).then(function(r){
+    if(r.json.status==='success'){toast('Settings saved successfully','success');if(r.json.needsRestart)modal('Restarting',r.json.message,function(){api('/api/restart',{method:'POST'});setTimeout(function(){location.reload();},10000);});}
+    else toast('Error: '+(r.json.message||''),'error');});};
+ });
+};
+
+/* ======================================================= SYSTEM */
+var TZ=[["UTC","UTC0"],["London","GMT0BST,M3.5.0/1,M10.5.0"],["Paris","CET-1CEST,M3.5.0,M10.5.0/3"],["US Eastern","EST5EDT,M3.2.0,M11.1.0"],["US Central","CST6CDT,M3.2.0,M11.1.0"],["US Mountain","MST7MDT,M3.2.0,M11.1.0"],["US Pacific","PST8PDT,M3.2.0,M11.1.0"],["Tokyo","JST-9"],["Shanghai","CST-8"],["Kolkata","IST-5:30"],["Sydney","AEST-10AEDT,M10.1.0,M4.1.0/3"],["Dubai","GST-4"]];
+PAGES['/config/system']=function(){
+ loadInfo().then(function(i){var s=i.system||{},a=i.advanced||{},t=i.time||{};
+  var tzopts=TZ.map(function(z){return '<option value="'+esc(z[1])+'" '+(z[1]===t.timezone?'selected':'')+'>'+esc(z[0])+'</option>';}).join('');
+  el('main').innerHTML='<form id="sf"><div class="grid">'+
+   '<div class="card"><h2>Device</h2><label>Device Name</label><input id="dn" value="'+esc(s.device_name)+'"></div>'+
+   '<div class="card"><h2>Timing</h2><label>MQTT Reconnect (s)</label><input type="number" min="1" max="300" id="mri" value="'+Math.round(a.mqtt_reconnect_interval/1000)+'">'+
+   '<label>Watchdog Timeout (s)</label><input type="number" min="10" max="120" id="wdt" value="'+Math.round(a.watchdog_timeout/1000)+'"></div>'+
+   '<div class="card"><h2>Time</h2><label class="row"><input type="checkbox" id="ntpe" '+(t.ntp_enabled?'checked':'')+'> Enable NTP</label>'+
+   '<label>NTP Server</label><input id="ntps" value="'+esc(t.ntp_server)+'"><label>Timezone</label><select id="tz">'+tzopts+'</select></div>'+
+   '<div class="card"><h2>Display Hardware</h2><label>Display Type</label><select id="dt"><option value="1" '+(a.display_type==1?'selected':'')+'>3.4" 800x800</option><option value="2" '+(a.display_type==2?'selected':'')+'>4.0" 720x720</option></select><p class="dim" style="font-size:11px">Changing restarts the device.</p></div>'+
+   '<div class="card"><h2>Memory Thresholds</h2><label>Critical Heap (bytes)</label><input type="number" min="10000" max="1000000" id="cht" value="'+a.critical_heap_threshold+'">'+
+   '<label>Critical PSRAM (bytes)</label><input type="number" min="10000" max="10000000" id="cpt" value="'+a.critical_psram_threshold+'"></div></div>'+
+   '<button class="btn" type="submit">Save System Settings</button></form>'+
+   '<div class="card"><h2>Firmware Update</h2><p class="dim">Settings survive OTA.</p><a class="btn" href="/update">Open OTA Uploader</a></div>'+
+   '<div class="card"><h2>Live Screenshot</h2><button class="btn" onclick="shot()">Capture Screenshot</button><div id="shotout" style="margin-top:10px"></div></div>'+
+   '<div class="card"><h2>Backup &amp; Restore</h2><label class="row"><input type="checkbox" id="secrets"> Include passwords and tokens</label>'+
+   '<button class="btn" style="margin-top:8px" onclick="backup()">Download Backup</button><hr style="border-color:var(--border);margin:14px 0">'+
+   '<input type="file" id="rf" accept=".json"><button class="btn" style="margin-top:8px" onclick="restore()">Restore and Reboot</button><div id="rstat" style="font-size:12px;color:var(--muted);margin-top:8px"></div></div>';
+  el('sf').onsubmit=function(e){e.preventDefault();
+   postSave({device_name:el('dn').value,mqtt_reconnect_interval:el('mri').value,watchdog_timeout:el('wdt').value,
+    ntp_enabled:el('ntpe').checked?'on':'',ntp_enabled_present:'1',ntp_server:el('ntps').value,timezone:el('tz').value,
+    display_type:el('dt').value,critical_heap_threshold:el('cht').value,critical_psram_threshold:el('cpt').value}).then(function(r){
+    if(r.json.status==='success'){toast('Settings saved successfully','success');if(r.json.needsRestart)modal('Restarting',r.json.message,function(){api('/api/restart',{method:'POST'});setTimeout(function(){location.reload();},10000);});}
+    else toast('Error: '+(r.json.message||''),'error');});};
+ });
+};
+function shot(){el('shotout').textContent='Capturing...';fetch('/api/screenshot?t='+Date.now()).then(function(r){if(!r.ok)throw 0;return r.blob();})
+ .then(function(b){var u=URL.createObjectURL(b);el('shotout').innerHTML='<img src="'+u+'" style="max-width:100%;border-radius:8px"><br><a class="btn" href="'+u+'" download="screenshot.jpg" style="margin-top:8px;display:inline-block">Download</a> <span class="pill">'+(b.size/1024).toFixed(1)+' KB</span>';})
+ .catch(function(){el('shotout').textContent='Screenshot failed';});}
+function backup(){location.href='/api/backup?secrets='+(el('secrets').checked?'1':'0');}
+function restore(){var f=el('rf').files[0];if(!f){el('rstat').textContent='Select a backup file first.';return;}
+ if(!confirm('Restore this configuration? The current settings will be replaced and the device will reboot.'))return;
+ var rd=new FileReader();rd.onload=function(){fetch('/api/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:rd.result})
+  .then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j};});}).then(function(x){var m=x.j.message||'';if(x.j.versionMismatch)m+=' (backup schema version differs from this firmware; recognized fields were applied on a best-effort basis)';if(x.ok)m+=' Device is rebooting...';el('rstat').textContent=m;})
+  .catch(function(){el('rstat').textContent='Restore failed';});};rd.readAsText(f);}
+
+/* ======================================================= CONSOLE */
+PAGES['/console']=function(){
+ loadInfo().then(function(i){
+  el('main').innerHTML='<div class="grid" style="grid-template-columns:200px 1fr"><div>'+
+   '<div class="card"><h2>Connection</h2><button class="btn" id="cc" onclick="wsConnect()">Connect</button> <button class="btn ghost" id="cd" onclick="wsDisc()">Disconnect</button>'+
+   '<div id="cstat" style="font-size:12px;color:var(--muted);margin-top:8px">Disconnected</div></div>'+
+   '<div class="card"><h2>Filter</h2><label>Min Severity</label><select id="sev"><option value="0">DEBUG</option><option value="1">INFO</option><option value="2">WARNING</option><option value="3">ERROR</option><option value="4">CRITICAL</option></select></div>'+
+   '<div class="card"><h2>Actions</h2><button class="btn ghost" onclick="el(\'console\').textContent=\'\'">Clear Display</button>'+
+   '<button class="btn ghost" style="margin-top:6px" onclick="dlLogs()">Download Logs</button>'+
+   '<button class="btn red" style="margin-top:6px" onclick="clrDev()">Clear Device Logs</button></div></div>'+
+   '<div class="card"><h2>Console</h2><div id="console"></div></div></div>';
+  el('sev').value=i.logging?i.logging.min:'0';
+  el('sev').onchange=function(){var v=this.value;api('/api/set-log-severity',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'severity='+v}).then(function(r){cline('[CLIENT] Severity filter updated to '+(r.json.severity!=null?r.json.severity:v));});};
+  setTimeout(wsConnect,500);
+ });
+};
+var WS=null,wsAttempt=0;
+function cline(t){var c=el('console');if(!c)return;c.textContent+=t+(t.endsWith('\n')?'':'\n');var lines=c.textContent.split('\n');if(lines.length>1000)c.textContent=lines.slice(-1000).join('\n');c.scrollTop=c.scrollHeight;}
+function wsConnect(){if(WS)return;el('cstat').textContent='Connecting...';
+ WS=new WebSocket('ws://'+location.host+'/ws/logs');
+ WS.onopen=function(){wsAttempt=0;el('cstat').textContent='Connected';cline('[CLIENT] Connected');};
+ WS.onmessage=function(e){wsAttempt=0;cline(e.data);};
+ WS.onclose=function(){WS=null;el('cstat')&&(el('cstat').textContent='Disconnected');if(wsAttempt<5&&location.pathname==='/console'&&!window._wsManual){var d=Math.min(1000*Math.pow(2,wsAttempt),30000);wsAttempt++;setTimeout(wsConnect,d);}};
+ WS.onerror=function(){};}
+function wsDisc(){window._wsManual=true;if(WS)WS.close();WS=null;}
+function dlLogs(){var b=new Blob([el('console').textContent],{type:'text/plain'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='esp32-console-'+new Date().toISOString()+'.txt';a.click();}
+function clrDev(){if(!confirm('Clear all buffered crash logs from device memory? This will remove logs from RTC and NVS storage.'))return;api('/api/clear-crash-logs',{method:'POST'}).then(function(r){cline('[CLIENT] '+(r.json.message||'cleared'));});}
+
+/* ======================================================= IMAGES SPA */
+var IST=null,drawer={},dirty=false;
+PAGES['/config/images']=function(){loadImages();};
+function loadImages(){api('/api/images/state').then(function(r){IST=r.json;renderImages();});}
+function renderImages(){
+ var s=IST;el('nextBtn').style.display=(s.sources.length>1)?'':'none';
+ var sunP=s.presets.filter(function(p){return /^(sdo_|soho_)/.test(p.id);});
+ var goesP=s.presets.filter(function(p){return /^goes/.test(p.id);});
+ var moonExists=s.sources.some(function(x){return x.isMoon;});
+ var h='<div class="card"><h2>Image Sources</h2>'+
+  '<div class="row"><input id="newurl" placeholder="https://example.com/image.jpg"><button class="btn" onclick="addUrl()">Add</button></div>'+
+  '<div class="row" style="margin-top:8px"><select id="sunsel">'+sunP.map(function(p){return '<option value="'+p.id+'">'+esc(p.label)+'</option>';}).join('')+'</select><button class="btn" onclick="addPreset(el(\'sunsel\').value)">Add Sun</button></div>'+
+  '<div class="row" style="margin-top:8px"><select id="goessel">'+goesP.map(function(p){return '<option value="'+p.id+'">'+esc(p.label)+'</option>';}).join('')+'</select><button class="btn" onclick="addPreset(el(\'goessel\').value)">Add GOES</button></div>'+
+  '<div class="row" style="margin-top:8px"><span class="dim" style="flex:1">Moon phase computed locally</span><button class="btn" onclick="addPreset(\'__moon__\')" '+(moonExists?'disabled title="Moon already in list"':'')+'>Add Moon</button></div></div>';
+ h+='<div class="card"><h2>Image Rotation ('+s.sources.length+' source'+(s.sources.length!=1?'s':'')+')</h2>';
+ if(s.sources.length>1)h+='<div class="row" style="margin-bottom:8px"><label class="row"><input type="checkbox" id="selall" onchange="selAll(this.checked)"> Select all</label><button class="btn red" id="delsel" onclick="bulkDel()" disabled>Delete selected (0)</button></div>';
+ h+='<div id="srclist">'+s.sources.map(srcRow).join('')+'</div></div>';
+ h+='<div class="card"><h2>Playback</h2>'+
+  '<label>Update Mode</label><select id="pmode" onchange="mkDirty()"><option value="0" '+(s.updateMode==0?'selected':'')+'>Automatic Cycling</option><option value="1" '+(s.updateMode==1?'selected':'')+'>API-Triggered Refresh</option></select>'+
+  '<label>Refresh Interval (min)</label><input type="number" min="1" max="1440" id="pint" value="'+s.updateInterval+'" onchange="mkDirty()">'+
+  '<label>Default Duration (s)</label><input type="number" min="5" max="3600" id="pdur" value="'+s.defaultDuration+'" onchange="mkDirty()">'+
+  '<label class="row"><input type="checkbox" id="prand" '+(s.randomOrder?'checked':'')+' onchange="mkDirty()"> Randomize order</label></div>';
+ h+='<div class="card collapse" id="deftf"><h2 onclick="tog(\'deftf\')">Default Transform &#9662;</h2><div class="body">'+
+  tfFields('d',s.defaults,s.maxScale)+'<p class="dim">Baseline for new images. Per-image edits override these.</p></div></div>';
+ h+='<div class="savebar"><span id="dirtytag" style="color:var(--warning);display:none">Unsaved default changes</span><button class="btn" id="savedef" onclick="saveDefaults()" disabled>Save defaults</button></div>';
+ el('main').innerHTML=h;
+ attachDefListeners();updateSelCount();
+}
+function srcRow(s){
+ var active=(s.index===IST.currentIndex);
+ var tuning=IST.tuning.active&&IST.tuning.index===s.index;
+ var open=drawer[s.index];
+ var summary=tfSummary(s);
+ var h='<div class="src '+(active?'active':'')+(s.enabled?'':' dim')+'">'+
+  '<div class="row">'+(IST.sources.length>1?'<input type="checkbox" class="rowsel" data-i="'+s.index+'" onchange="updateSelCount()"> ':'')+
+  '<button class="btn ghost" onclick="toggleEn('+s.index+')">'+(s.enabled?'On':'Off')+'</button>'+
+  '<span>'+(s.index+1)+'.</span>';
+ if(s.isMoon)h+='<span style="flex:1">Moon Phase</span>';
+ else h+='<input style="flex:1" class="urlin" data-i="'+s.index+'" value="'+esc(s.url)+'" onchange="updUrl('+s.index+',this)">';
+ h+='<button class="btn ghost" onclick="tglDrawer('+s.index+')">'+(open?'&#9652;':'&#9662;')+'</button></div>';
+ h+='<div class="row" style="margin-top:6px"><label style="margin:0">Duration</label><input type="number" style="width:90px" min="5" max="3600" value="'+s.duration+'" onchange="updDur('+s.index+',this)"><span class="pill mono">'+summary+'</span>'+(tuning?' <span class="pill" style="color:var(--success)">Holding #'+(s.index+1)+'</span>':'')+'</div>';
+ if(open)h+='<div class="drawer" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">'+drawerBody(s,tuning)+'</div>';
+ h+='</div>';
+ return h;
+}
+function tfFields(pfx,tf,maxs){return '<div class="grid"><div><label>Scale X</label><input type="number" step="0.01" min="0.1" max="'+maxs+'" id="'+pfx+'sx" value="'+tf.scaleX+'"></div>'+
+ '<div><label>Scale Y</label><input type="number" step="0.01" min="0.1" max="'+maxs+'" id="'+pfx+'sy" value="'+tf.scaleY+'"></div>'+
+ '<div><label>Offset X</label><input type="number" step="1" id="'+pfx+'ox" value="'+tf.offsetX+'"></div>'+
+ '<div><label>Offset Y</label><input type="number" step="1" id="'+pfx+'oy" value="'+tf.offsetY+'"></div>'+
+ '<div><label>Rotation</label><select id="'+pfx+'rot"><option '+(tf.rotation==0?'selected':'')+'>0</option><option '+(tf.rotation==90?'selected':'')+'>90</option><option '+(tf.rotation==180?'selected':'')+'>180</option><option '+(tf.rotation==270?'selected':'')+'>270</option></select></div></div>';}
+function drawerBody(s,tuning){
+ if(s.isMoon)return moonDrawer(s,tuning);
+ var dis=tuning?'':'disabled';
+ var h='<p class="dim">'+(tuning?'Image adjustments':'Tune on device to adjust these settings.')+'</p>';
+ h+=tfFieldsRow(s,dis);
+ h+='<div class="row" style="margin-top:8px">'+(tuning?'<button class="btn" onclick="tuneStop()">Done</button>':'<button class="btn" onclick="tuneStart('+s.index+')">Edit</button>')+
+  '<button class="btn ghost" onclick="copyDef('+s.index+')" '+dis+'>Reset to defaults</button></div>';
+ return h;
+}
+function tfFieldsRow(s,dis){return '<div class="grid"><div><label>Scale X</label><input type="number" step="0.01" min="0.1" max="'+IST.maxScale+'" '+dis+' value="'+s.scaleX+'" onchange="tf('+s.index+',\'scaleX\',this.value)"></div>'+
+ '<div><label>Scale Y</label><input type="number" step="0.01" min="0.1" max="'+IST.maxScale+'" '+dis+' value="'+s.scaleY+'" onchange="tf('+s.index+',\'scaleY\',this.value)"></div>'+
+ '<div><label>Offset X</label><input type="number" step="1" '+dis+' value="'+s.offsetX+'" onchange="tf('+s.index+',\'offsetX\',this.value)"></div>'+
+ '<div><label>Offset Y</label><input type="number" step="1" '+dis+' value="'+s.offsetY+'" onchange="tf('+s.index+',\'offsetY\',this.value)"></div>'+
+ '<div><label>Rotation</label><select '+dis+' onchange="tf('+s.index+',\'rotation\',this.value)"><option '+(s.rotation==0?'selected':'')+'>0</option><option '+(s.rotation==90?'selected':'')+'>90</option><option '+(s.rotation==180?'selected':'')+'>180</option><option '+(s.rotation==270?'selected':'')+'>270</option></select></div></div>';}
+function moonDrawer(s,tuning){var m=IST.moon;var dis=tuning?'':'disabled';
+ var h='<p class="dim">Moon settings &mdash; changes preview live while editing</p>';
+ h+='<div class="grid"><div><label>Background</label><select id="mbg" '+dis+'><option value="0" '+(m.bg==0?'selected':'')+'>Black</option><option value="1" '+(m.bg==1?'selected':'')+'>Starfield</option><option value="2" '+(m.bg==2?'selected':'')+'>Glow</option><option value="3" '+(m.bg==3?'selected':'')+'>Stars + Glow</option></select></div>'+
+  '<div><label>North up</label><select id="mnu" '+dis+'><option value="1" '+(m.northup==1?'selected':'')+'>On</option><option value="0" '+(m.northup==0?'selected':'')+'>Off</option></select></div>'+
+  '<div><label>Disk scale</label><input type="number" step="0.01" min="0.1" max="'+IST.maxScale+'" '+dis+' value="'+s.scaleX+'" onchange="tf('+s.index+',\'scaleX\',this.value)"></div>'+
+  '<div><label>Offset X</label><input type="number" '+dis+' value="'+s.offsetX+'" onchange="tf('+s.index+',\'offsetX\',this.value)"></div>'+
+  '<div><label>Offset Y</label><input type="number" '+dis+' value="'+s.offsetY+'" onchange="tf('+s.index+',\'offsetY\',this.value)"></div>'+
+  '<div><label>Latitude</label><input type="number" step="0.0001" id="mlat" '+dis+' value="'+m.lat+'"></div>'+
+  '<div><label>Longitude</label><input type="number" step="0.0001" id="mlon" '+dis+' value="'+m.lon+'"></div>'+
+  '<div><label>Flip horizontal</label><select id="mfu" '+dis+'><option value="0" '+(m.flipu==0?'selected':'')+'>Off</option><option value="1" '+(m.flipu==1?'selected':'')+'>On</option></select></div>'+
+  '<div><label>Flip vertical</label><select id="mfv" '+dis+'><option value="0" '+(m.flipv==0?'selected':'')+'>Off</option><option value="1" '+(m.flipv==1?'selected':'')+'>On</option></select></div>'+
+  '<div><label>Roll offset</label><input type="number" step="1" id="mroll" '+dis+' value="'+m.roll+'"></div>'+
+  '<div><label>Yaw offset</label><input type="number" step="1" id="myaw" '+dis+' value="'+m.yaw+'"></div>'+
+  '<div><label>Pitch offset</label><input type="number" step="1" id="mpitch" '+dis+' value="'+m.pitch+'"></div>'+
+  '<div><label>Drag light</label><select id="mlight" '+dis+'><option value="0" '+(m.light==0?'selected':'')+'>True phase</option><option value="1" '+(m.light==1?'selected':'')+'>Explore</option></select></div>'+
+  '<div><label>Spin mode</label><select id="mspin" '+dis+'><option value="0" '+(m.spin==0?'selected':'')+'>Snap back</option><option value="1" '+(m.spin==1?'selected':'')+'>Free spin</option></select></div>'+
+  '<div><label>Free-spin return (s)</label><input type="number" id="mspinret" '+dis+' value="'+m.spinret+'"></div></div>';
+ h+='<div class="row" style="margin-top:8px">'+(tuning?'<button class="btn" onclick="tuneStop()">Done</button>':'<button class="btn" onclick="tuneStart('+s.index+')">Edit</button>')+
+  '<button class="btn ghost" onclick="copyDef('+s.index+')" '+dis+'>Reset adjustments</button></div>';
+ if(tuning)setTimeout(bindMoon,0);
+ return h;
+}
+function bindMoon(){['mbg','mnu','mlat','mlon','mfu','mfv','mroll','myaw','mpitch','mlight','mspin','mspinret'].forEach(function(id){var e=el(id);if(e)e.onchange=saveMoon;});}
+var moonT=null;
+function saveMoon(){clearTimeout(moonT);moonT=setTimeout(function(){
+ var b={bg:el('mbg').value,northup:el('mnu').value,lat:el('mlat').value,lon:el('mlon').value,flipu:el('mfu').value,flipv:el('mfv').value,roll:el('mroll').value,yaw:el('myaw').value,pitch:el('mpitch').value,light:el('mlight').value,spin:el('mspin').value,spinret:el('mspinret').value};
+ api('/api/setMoon',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:form(b)}).then(function(r){if(r.json.status!=='success')toast(r.json.message||'Error','error');});},400);}
+function tfSummary(s){var d=IST.defaults;
+ if(Math.abs(s.scaleX-d.scaleX)<1e-4&&Math.abs(s.scaleY-d.scaleY)<1e-4&&s.offsetX===d.offsetX&&s.offsetY===d.offsetY&&s.rotation===d.rotation)return 'default';
+ if(s.isMoon)return 'disk '+s.scaleX.toFixed(2)+'x'+(s.offsetX||s.offsetY?'  +'+s.offsetX+','+s.offsetY:'');
+ return s.scaleX.toFixed(2)+'x'+s.scaleY.toFixed(2)+'  '+(s.offsetX>=0?'+':'')+s.offsetX+','+(s.offsetY>=0?'+':'')+s.offsetY+'  '+s.rotation+'deg';}
+/* image actions */
+function addUrl(){var u=el('newurl').value;if(!validUrl(u)){flash(el('newurl'),false);toast('URL must start with http:// or https://','error');return;}
+ api('/api/add-source',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'url='+encodeURIComponent(u)}).then(function(r){if(r.ok){toast('Source added','success');loadImages();}else toast(r.json.message||'Error','error');});}
+function addPreset(id){api('/api/addPreset',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'id='+encodeURIComponent(id)}).then(function(r){if(r.ok){toast(r.json.message||'Added','success');loadImages();}else toast(r.json.message||'Error','error');});}
+function toggleEn(i){api('/api/toggle-image-enabled',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'index='+i}).then(function(r){toast(r.json.enabled?'Image enabled':'Image disabled','success');loadImages();});}
+function updUrl(i,inp){if(!validUrl(inp.value)){flash(inp,false);toast('URL must start with http:// or https://','error');return;}
+ api('/api/update-source',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'index='+i+'&url='+encodeURIComponent(inp.value)}).then(function(r){if(r.ok){flash(inp,true);IST.sources[i].url=inp.value;}else{flash(inp,false);toast(r.json.message||'Error','error');loadImages();}});}
+function updDur(i,inp){var v=parseInt(inp.value);if(v<5||v>3600||isNaN(v)){flash(inp,false);toast('Duration must be 5-3600 seconds','error');return;}
+ api('/api/update-image-duration',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'index='+i+'&duration='+v}).then(function(r){if(r.ok){flash(inp,true);IST.sources[i].duration=v;}else{flash(inp,false);toast(r.json.message||'Error','error');}});}
+function tglDrawer(i){drawer[i]=!drawer[i];renderImages();}
+function tuneStart(i){api('/api/images/tune',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'index='+i}).then(function(){toast('Holding #'+(i+1)+' on display','info');drawer[i]=true;loadImages();});}
+function tuneStop(){api('/api/images/tune/stop',{method:'POST'}).then(function(){toast('Resumed cycling','info');loadImages();});}
+var tfT={};
+function tf(i,prop,val){clearTimeout(tfT[i+prop]);tfT[i+prop]=setTimeout(function(){
+ api('/api/update-transform',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'index='+i+'&property='+prop+'&value='+val}).then(function(r){if(r.json.status==='success'){IST.sources[i][prop]=(prop.indexOf('offset')<0&&prop!=='rotation')?parseFloat(val):parseInt(val);}else toast(r.json.message||'Error','error');});},300);}
+function copyDef(i){api('/api/copy-defaults',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'index='+i}).then(function(){toast('Reset to defaults','success');loadImages();});}
+function selAll(c){document.querySelectorAll('.rowsel').forEach(function(x){x.checked=c;});updateSelCount();}
+function updateSelCount(){var n=document.querySelectorAll('.rowsel:checked').length;var b=el('delsel');if(b){b.textContent='Delete selected ('+n+')';b.disabled=n===0;}}
+function bulkDel(){var idx=[].slice.call(document.querySelectorAll('.rowsel:checked')).map(function(x){return parseInt(x.dataset.i);});
+ if(!idx.length){toast('Nothing selected','warning');return;}if(idx.length>=IST.sources.length){toast('Cannot delete all sources. At least one must remain.','error');return;}
+ modal('Delete sources','Delete '+idx.length+' selected source(s)?',function(){
+  api('/api/bulk-delete-sources',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'indices='+encodeURIComponent(JSON.stringify(idx))}).then(function(r){if(r.ok){toast(r.json.message||'Deleted','success');drawer={};loadImages();}else toast(r.json.message||'Error','error');});},null,true);}
+function mkDirty(){dirty=true;el('savedef').disabled=false;el('dirtytag').style.display='';}
+function attachDefListeners(){window.onbeforeunload=function(){if(dirty)return 'Unsaved changes';};}
+function saveDefaults(){postSave({image_update_mode:el('pmode').value,update_interval:el('pint').value,default_image_duration:el('pdur').value,
+ random_order:el('prand').checked?'on':'',random_order_present:'1',default_scale_x:el('dsx').value,default_scale_y:el('dsy').value,
+ default_offset_x:el('dox').value,default_offset_y:el('doy').value,default_rotation:el('drot').value,cycling_enabled:'on',cycling_enabled_present:'1'}).then(function(r){
+ if(r.json.status==='success'){dirty=false;el('savedef').disabled=true;el('dirtytag').style.display='none';toast('Defaults saved','success');loadImages();}else toast(r.json.message||'Error','error');});}
+
+/* ======================================================= COMMANDS / API (static) */
+PAGES['/config/commands']=function(){el('main').innerHTML='<div class="card"><h2>Serial Commands</h2>'+
+ '<p class="dim">USB serial at 9600 baud. Type H or ? for help. Keys are case-insensitive.</p>'+
+ tbl('Image Transforms',[['+ / -','Scale both axes by 0.1'],['W/S/A/D','Move image 10px up/down/left/right'],['Q/E','Rotate 90 CCW/CW'],['R','Reset all transforms']])+
+ tbl('Display',[['L','Brightness +10%'],['K','Brightness -10%']])+
+ tbl('System',[['B','Reboot'],['M','Memory info'],['I','Network info'],['P','PPA info'],['T','MQTT info'],['X','Web server status/restart'],['H / ?','Help']])+
+ tbl('Touch',[['Single tap','Next image'],['Double tap','Toggle cycling/refresh mode']])+'</div>';};
+function tbl(t,rows){return '<h2 style="margin-top:14px">'+esc(t)+'</h2><table style="width:100%;border-collapse:collapse">'+rows.map(function(r){return '<tr><td class="mono" style="padding:5px;border-bottom:1px solid var(--border);width:120px">'+esc(r[0])+'</td><td style="padding:5px;border-bottom:1px solid var(--border)">'+esc(r[1])+'</td></tr>';}).join('')+'</table>';}
+PAGES['/api-reference']=function(){el('main').innerHTML='<div class="card"><h2>REST API</h2>'+
+ '<p>Base: <span class="mono">http://'+location.host+'</span>. POST bodies are form-encoded (restore takes raw JSON). Responses are JSON.</p>'+
+ '<p class="dim">GET /status, /api/info, /api/health, /api/images/state, /api/current-image, /api/getMoon, /api/wifi-scan, /api/screenshot, /api/backup?secrets=0|1</p>'+
+ '<p class="dim">POST /api/save, /api/add-source, /api/addPreset, /api/remove-source, /api/update-source, /api/clear-sources, /api/bulk-delete-sources, /api/next-image, /api/force-refresh, /api/update-transform, /api/copy-defaults, /api/apply-transform, /api/toggle-image-enabled, /api/select-image, /api/images/tune, /api/images/tune/stop, /api/update-image-duration, /api/setMoon, /api/restore, /api/restart, /api/factory-reset, /api/set-log-severity, /api/clear-crash-logs, /api/force-brightness-update</p>'+
+ '<p>Status codes: 200 OK, 400 bad input, 401 auth, 404 not found, 500 error.</p></div>';};
+
+/* ---------- boot ---------- */
+loadInfo().then(updateBadges).catch(function(){});
+route(location.pathname);

@@ -26,6 +26,10 @@ static char *s_buf;
 static size_t s_head;
 static size_t s_count;
 
+/* Monotonic count of bytes ever appended. Not reset by clear so live cursors stay
+ * consistent across a user-initiated clear. */
+static uint64_t s_total;
+
 /* Original vprintf to chain to (console output). Captured at init. */
 static vprintf_like_t s_orig_vprintf;
 
@@ -84,6 +88,7 @@ static void ring_append(const char *src, size_t len)
     if (s_count > LOG_CAPTURE_SIZE) {
         s_count = LOG_CAPTURE_SIZE;
     }
+    s_total += len;
 
     portEXIT_CRITICAL(&s_mux);
 }
@@ -163,4 +168,15 @@ size_t log_capture_size(void)
     size_t n = s_count;
     portEXIT_CRITICAL(&s_mux);
     return n;
+}
+
+uint64_t log_capture_total(void)
+{
+    if (!s_buf) {
+        return 0;
+    }
+    portENTER_CRITICAL(&s_mux);
+    uint64_t t = s_total;
+    portEXIT_CRITICAL(&s_mux);
+    return t;
 }

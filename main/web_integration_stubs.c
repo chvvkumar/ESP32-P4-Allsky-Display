@@ -46,8 +46,21 @@ WEAK int web_hook_net_wifi_scan(char *buf, size_t buf_len)
 
 WEAK void web_hook_net_resync_time(void) {}
 
+WEAK void web_hook_captive_scan_start(void) {}
+WEAK size_t web_hook_captive_scan_results(char *buf, size_t buf_len)
+{
+    static const char *s = "{\"status\":\"complete\",\"networks\":[]}";
+    if (!buf || !buf_len) return 0;
+    size_t n = strlen(s);
+    if (n >= buf_len) n = buf_len - 1;
+    memcpy(buf, s, n); buf[n] = '\0';
+    return n;
+}
+WEAK void web_hook_captive_connect(const char *ssid, const char *password) { (void)ssid; (void)password; }
+
 WEAK bool web_hook_mqtt_connected(void) { return false; }
 WEAK void web_hook_mqtt_publish_state(void) {}
+WEAK void web_hook_mqtt_sources_changed(void) {}
 
 WEAK bool web_hook_ha_rest_reapply_brightness(void) { return false; }
 
@@ -73,5 +86,6 @@ WEAK size_t web_hook_bootlog_read(size_t offset, char *dst, size_t max_len)
     return 0;
 }
 WEAK size_t web_hook_bootlog_size(void) { return 0; }
+WEAK size_t web_hook_logstream_read(char *dst, size_t max_len) { (void)dst; (void)max_len; return 0; }
 WEAK void web_hook_crash_clear(void) {}
 WEAK void web_hook_crash_save(void) {}

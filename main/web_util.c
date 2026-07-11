@@ -124,9 +124,12 @@ esp_err_t web_send_status(httpd_req_t *req, int http_code, const char *status_st
     const char *reason =
         http_code == 200 ? "OK" :
         http_code == 400 ? "Bad Request" :
+        http_code == 401 ? "Unauthorized" :
         http_code == 404 ? "Not Found" :
+        http_code == 409 ? "Conflict" :
         http_code == 429 ? "Too Many Requests" :
         http_code == 500 ? "Internal Server Error" :
+        http_code == 502 ? "Bad Gateway" :
         http_code == 503 ? "Service Unavailable" : "OK";
     snprintf(status_line, sizeof(status_line), "%d %s", http_code, reason);
     httpd_resp_set_status(req, status_line);

@@ -90,10 +90,30 @@ int web_hook_net_wifi_scan(char *buf, size_t buf_len);
 /* Trigger an NTP / time re-sync after time settings change. */
 void web_hook_net_resync_time(void);
 
+/* ---- Captive provisioning portal (network manager owns AP/DNS/test) ------- */
+
+/* Kick off an asynchronous provisioning-mode WiFi scan. Idempotent. */
+void web_hook_captive_scan_start(void);
+
+/* Write the captive scan result JSON into buf:
+ *   {"status":"scanning"} while a scan is in progress, else
+ *   {"status":"complete","networks":[{"ssid","rssi","encrypted"},...]}
+ * deduped by SSID, sorted by descending RSSI. Returns bytes written. */
+size_t web_hook_captive_scan_results(char *buf, size_t buf_len);
+
+/* Save SSID/password + provisioned flag, attempt a test join in AP+STA mode,
+ * then reboot (kept credentials regardless of outcome). Returns after scheduling
+ * the async test+reboot; the HTTP response is sent before the reboot fires. */
+void web_hook_captive_connect(const char *ssid, const char *password);
+
 /* ---- MQTT ---------------------------------------------------------------- */
 
 bool web_hook_mqtt_connected(void);
 void web_hook_mqtt_publish_state(void);
+
+/* Notify MQTT/HA discovery that the image source list changed (rebuild the
+ * source select entity). No-op when MQTT is not wired. */
+void web_hook_mqtt_sources_changed(void);
 
 /* ---- HA REST brightness -------------------------------------------------- */
 
@@ -118,6 +138,11 @@ float web_hook_system_temperature_c(void);
 /* Copy preserved boot/crash log bytes (oldest-first) into dst; returns count. */
 size_t web_hook_bootlog_read(size_t offset, char *dst, size_t max_len);
 size_t web_hook_bootlog_size(void);
+
+/* Drain up to max_len bytes of NEW log output emitted since the previous call
+ * (for the live WebSocket console). Returns bytes copied; 0 when no new output.
+ * The system log subsystem implements this over its capture ring. */
+size_t web_hook_logstream_read(char *dst, size_t max_len);
 
 /* Clear crash/boot logs in RTC and NVS. */
 void web_hook_crash_clear(void);

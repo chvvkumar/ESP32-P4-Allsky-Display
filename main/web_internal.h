@@ -5,6 +5,7 @@
  * header: only the web_*.c translation units include it.
  */
 
+#include <stdint.h>
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "cJSON.h"
@@ -93,5 +94,26 @@ esp_err_t   web_tune_stop_handler(httpd_req_t *req);
 esp_err_t   web_update_duration_handler(httpd_req_t *req);
 esp_err_t   web_set_moon_handler(httpd_req_t *req);
 
+/* Preset image catalog (web-server.md 5.2), shared by web_api_read/web_api_images. */
+typedef struct {
+    const char *id;
+    const char *label;
+    const char *url;
+    int         nominal_px;
+    int         crop_pct;
+} web_preset_t;
+extern const web_preset_t g_web_presets[];
+extern const int g_web_preset_count;
+
 /* Editing-pause state shared with the image pipeline via hooks (web_api_images.c). */
 void        web_editing_touch(void);   /* mark edit activity (resets backstop) */
+bool        web_editing_paused(void);  /* true while paused-for-editing */
+int         web_editing_tune_index(void); /* live tune index, -1 when not tuning */
+void        web_editing_tick(void);    /* main-loop backstop: auto-resume after 10 min idle */
+
+/* ---- Firmware / system info (web_server.c) ------------------------------- */
+void        web_fw_checksum8(char *out8);              /* 8 hex chars + NUL */
+void        web_fw_checksum_full(char *out, size_t len);
+uint32_t    web_fw_app_size(void);
+uint32_t    web_fw_free_space(void);
+const char *web_fw_version(void);

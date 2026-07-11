@@ -165,8 +165,8 @@ void moon_compute(time_t utc, double lat, double lon, moon_state_t *out)
      * Treats the Sun as anti-solar from the Moon (lambdaH = slon + 180) and the
      * Sun's ecliptic latitude as 0. This omits the Moon's parallax (~0.95 deg) and
      * the Moon/Sun ecliptic-latitude contribution, so sun_lon carries up to ~1 deg
-     * error -> the lit-fraction terminator longitude inherits that error. Adequate
-     * for Phase 1; to be refined with the Meeus ch.53 colongitude term in Phase 2. */
+     * error -> the lit-fraction terminator longitude inherits that error, which is
+     * within display tolerance. */
     double lambdaH = slon*DEG + M_PI;   /* Sun direction from the Moon, approx */
     double WlS = lambdaH - Nm*DEG;
     double bS  = asin(-sin(WlS)*sin(I));

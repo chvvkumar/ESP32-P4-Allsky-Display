@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AllSky Display - WiFi Setup</title>
+<style>
+  :root{
+    --bg:#0a0c14; --surface:#14171f; --elevated:#181b26; --input-bg:#0c0e14;
+    --border:rgba(255,255,255,0.08); --border-em:rgba(255,255,255,0.15);
+    --text:#e2e8f0; --text-muted:#94a3b8; --text-hint:#7a8ba4;
+    --accent:#7aa2f7; --accent-hover:#9dbcff; --accent-strong:#5a86e8;
+    --danger:#f87171; --success:#4ade80; --warning:#fbbf24;
+  }
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;
+    padding:16px;box-sizing:border-box;background-image:linear-gradient(135deg,#0a0c14 0%,#0f1320 100%)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:28px;width:100%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+  h1{font-size:18px;margin:0 0 4px;font-weight:600}
+  .sub{font-size:14px;color:var(--text-muted);margin:0 0 20px}
+  .scan-panel{background:var(--elevated);border:1px solid var(--border);border-radius:8px;
+    margin-bottom:20px;overflow:hidden}
+  .scan-header{display:flex;align-items:center;justify-content:space-between;
+    padding:12px 14px;border-bottom:1px solid var(--border)}
+  .scan-label{font-size:13px;font-weight:600}
+  .btn-rescan{background:transparent;color:var(--accent);border:1px solid var(--accent);
+    border-radius:5px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;
+    text-transform:uppercase;letter-spacing:.3px}
+  .btn-rescan:disabled{opacity:.5;cursor:not-allowed}
+  .scan-list{max-height:240px;overflow-y:auto}
+  .scan-empty{padding:20px;text-align:center;color:var(--text-muted);font-size:13px}
+  .spinner-wrap{display:flex;align-items:center;justify-content:center;padding:24px;gap:10px;
+    color:var(--text-muted);font-size:13px}
+  .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.1);
+    border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .net-row{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);gap:10px}
+  .net-row:last-child{border-bottom:none}
+  .net-info{flex:1;min-width:0}
+  .net-ssid{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .net-meta{font-size:11px;color:var(--text-hint);margin-top:2px}
+  .btn-select{background:var(--accent);color:#0a0c14;border:none;border-radius:5px;
+    padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase}
+  .form-group{margin-bottom:14px}
+  .form-group label{display:block;font-size:12px;color:var(--text-muted);margin-bottom:6px}
+  .form-group input{width:100%;box-sizing:border-box;background:var(--input-bg);color:var(--text);
+    border:1px solid var(--border-em);border-radius:6px;padding:10px 12px;font-size:14px;outline:none}
+  .form-group input:focus{border-color:var(--accent)}
+  .btn-connect{margin-top:6px;width:100%;background:var(--accent-strong);color:#fff;border:0;
+    border-radius:6px;padding:10px 12px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn-connect:disabled{background:#374151;cursor:not-allowed}
+  .status{margin-top:16px;text-align:center;font-size:13px;min-height:18px}
+  .status.err{color:var(--danger)}
+  .status.ok{color:var(--success)}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>AllSky Display</h1>
+    <p class="sub">WiFi Setup</p>
+
+    <div class="scan-panel">
+      <div class="scan-header">
+        <span class="scan-label">Available Networks</span>
+        <button class="btn-rescan" id="rescan" type="button">Rescan</button>
+      </div>
+      <div class="scan-list" id="scanBody">
+        <div class="spinner-wrap"><div class="spinner"></div>Scanning...</div>
+      </div>
+    </div>
+
+    <form id="form" autocomplete="off">
+      <div class="form-group">
+        <label for="ssid">Network Name (SSID)</label>
+        <input type="text" id="ssid" name="ssid" required>
+      </div>
+      <div class="form-group">
+        <label for="pwd">Password</label>
+        <input type="password" id="pwd" name="wifi_password">
+      </div>
+      <button class="btn-connect" id="connect" type="submit">Connect</button>
+    </form>
+    <div class="status" id="status"></div>
+  </div>
+
+<script>
+  var scanBody = document.getElementById('scanBody');
+  var statusEl = document.getElementById('status');
+  var rescanBtn = document.getElementById('rescan');
+  var connectBtn = document.getElementById('connect');
+  var pollTimer = null;
+
+  function qualityBars(r){ return r > -50 ? 4 : r > -60 ? 3 : r > -70 ? 2 : 1; }
+
+  function renderNetworks(list){
+    if(!list.length){ scanBody.innerHTML='<div class="scan-empty">No networks found</div>'; return; }
+    scanBody.innerHTML='';
+    list.forEach(function(n){
+      var row=document.createElement('div'); row.className='net-row';
+      var info=document.createElement('div'); info.className='net-info';
+      var ssid=document.createElement('div'); ssid.className='net-ssid'; ssid.textContent=n.ssid;
+      var meta=document.createElement('div'); meta.className='net-meta';
+      meta.textContent=(n.encrypted?'Secured':'Open')+' · '+n.rssi+' dBm · '+qualityBars(n.rssi)+'/4';
+      info.appendChild(ssid); info.appendChild(meta);
+      var btn=document.createElement('button'); btn.className='btn-select'; btn.type='button'; btn.textContent='Select';
+      btn.onclick=function(){ document.getElementById('ssid').value=n.ssid; document.getElementById('pwd').focus(); };
+      row.appendChild(info); row.appendChild(btn);
+      scanBody.appendChild(row);
+    });
+  }
+
+  function startScan(){
+    rescanBtn.disabled=true;
+    scanBody.innerHTML='<div class="spinner-wrap"><div class="spinner"></div>Scanning...</div>';
+    fetch('/scan').then(function(){ pollResults(0); });
+  }
+
+  function pollResults(tries){
+    if(pollTimer) clearTimeout(pollTimer);
+    fetch('/scan/results').then(function(r){ return r.json(); }).then(function(d){
+      if(d.status==='complete'){ renderNetworks(d.networks||[]); rescanBtn.disabled=false; }
+      else if(tries<15){ pollTimer=setTimeout(function(){ pollResults(tries+1); }, 700); }
+      else { scanBody.innerHTML='<div class="scan-empty">Scan timed out</div>'; rescanBtn.disabled=false; }
+    }).catch(function(){ rescanBtn.disabled=false; });
+  }
+
+  rescanBtn.onclick=startScan;
+
+  document.getElementById('form').addEventListener('submit', function(e){
+    e.preventDefault();
+    var ssid=document.getElementById('ssid').value.trim();
+    if(!ssid){ statusEl.className='status err'; statusEl.textContent='SSID is required'; return; }
+    connectBtn.disabled=true; statusEl.className='status'; statusEl.textContent='Connecting...';
+    var body='ssid='+encodeURIComponent(ssid)+'&wifi_password='+encodeURIComponent(document.getElementById('pwd').value);
+    fetch('/connect',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d.status==='success'){ statusEl.className='status ok'; statusEl.textContent=d.message||'Connected. Restarting...'; }
+        else { statusEl.className='status err'; statusEl.textContent=d.message||'Connection failed'; connectBtn.disabled=false; }
+      })
+      .catch(function(){ statusEl.className='status err'; statusEl.textContent='Request failed'; connectBtn.disabled=false; });
+  });
+
+  startScan();
+</script>
+</body>
+</html>

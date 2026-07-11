@@ -17,6 +17,7 @@
 
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,6 +44,13 @@ void log_capture_clear(void);
 
 /* Current number of valid (readable) bytes in the ring. */
 size_t log_capture_size(void);
+
+/* Total bytes ever appended since boot (monotonic; NOT reset by log_capture_clear).
+ * The oldest still-readable byte is at absolute position (total - size). A live
+ * consumer keeps an absolute cursor and reads new bytes as: oldest = total - size;
+ * if cursor < oldest, cursor = oldest (bytes were overwritten); then read at
+ * logical offset (cursor - oldest). */
+uint64_t log_capture_total(void);
 
 #ifdef __cplusplus
 }
