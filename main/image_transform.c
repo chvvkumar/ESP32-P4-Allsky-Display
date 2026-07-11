@@ -67,10 +67,15 @@ static void channel_rgb(double kelvin, double *r, double *g, double *b)
     } else {
         bb = 138.5177312231 * log(t - 10.0) - 305.0447927307;
     }
-    if (rr < 1.0) rr = 1.0; if (rr > 255.0) rr = 255.0;
-    if (gg < 1.0) gg = 1.0; if (gg > 255.0) gg = 255.0;
-    if (bb < 1.0) bb = 1.0; if (bb > 255.0) bb = 255.0;
-    *r = rr; *g = gg; *b = bb;
+    if (rr < 1.0) rr = 1.0;
+    if (rr > 255.0) rr = 255.0;
+    if (gg < 1.0) gg = 1.0;
+    if (gg > 255.0) gg = 255.0;
+    if (bb < 1.0) bb = 1.0;
+    if (bb > 255.0) bb = 255.0;
+    *r = rr;
+    *g = gg;
+    *b = bb;
 }
 
 static ct_mult_t ct_mults(int kelvin)

@@ -307,7 +307,7 @@ static void cmd_help(void)
         "Brightness : L up  K down    (not persisted)\n"
         "System     : B reboot  M memory  I network  P ppa  T mqtt  X web status/restart  G health\n"
         "             O firmware version  Z factory reset  C clear crash logs\n"
-        "Touch      : single tap = next image, double tap = toggle cycling\n"
+        "Touch      : single tap = next image, double tap = toggle single-image refresh\n"
         "Help       : H or ?\n"
         "=========================================================================\n";
     printf("%s", help);

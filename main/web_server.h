@@ -36,6 +36,10 @@ bool web_auth_is_enabled(void);
  * Call once early at boot after the app is known-good (WiFi + config loaded). */
 void web_ota_mark_valid_after_boot(void);
 
+/* True while a firmware OTA transfer is in progress. Consumed by the image
+ * pipeline and MQTT subsystem to suspend heavy activity during an update. */
+bool web_ota_in_progress(void);
+
 /* ---- Captive provisioning portal (port 80), started by the network manager
  * while in AP provisioning mode. Serves the setup page, WiFi scan, and the
  * credential-save+test+reboot join flow. ------------------------------------ */

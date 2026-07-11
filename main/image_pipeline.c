@@ -9,6 +9,8 @@
 #include "image_transform.h"
 #include "image_ppa.h"
 #include "image_sink.h"
+#include "moon_source.h"
+#include "input_context.h"
 #include "app_config.h"
 #include "config_debounce.h"
 #include "display_defs.h"
@@ -26,10 +28,6 @@
 #include "bsp/esp-bsp.h"
 
 static const char *TAG = "img_pipe";
-
-/* Moon renderer hook (owned by the moon team). Returns a freshly allocated w*h
- * RGB565 PSRAM buffer (caller frees with heap_caps_free) or NULL on failure. */
-extern uint16_t *moon_render_to_buffer(int w, int h);
 
 #define IMG_MAX_DIM            1448
 /* Holds an MCU-aligned decode of content up to IMG_MAX_DIM (1456*1456*2). */
@@ -233,13 +231,11 @@ static void advance_next_image(void)
 
 static bool produce_moon(uint16_t *dst, image_frame_meta_t *meta)
 {
-    uint16_t *frame = moon_render_to_buffer(s_pw, s_ph);
-    if (!frame) {
-        ESP_LOGW(TAG, "moon render failed");
+    esp_err_t err = moon_render_to_buffer(dst, s_pw, s_ph);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "moon render failed (%s)", esp_err_to_name(err));
         return false;
     }
-    memcpy(dst, frame, (size_t)s_pw * s_ph * 2);
-    heap_caps_free(frame);
     meta->width = (uint16_t)s_pw;
     meta->height = (uint16_t)s_ph;
     meta->stride_px = (uint16_t)s_pw;
@@ -400,6 +396,11 @@ static bool try_swap(void)
     s_last_success_ms = now_ms();
     s_retry_count = 0;
     s_first_image = true;
+
+    /* The displayed source just changed: tell the input layer whether the moon
+     * page is now active so touch drives drag-to-rotate instead of slideshow
+     * navigation. */
+    input_set_moon_page_active(image_pipeline_current_is_moon());
     return true;
 }
 

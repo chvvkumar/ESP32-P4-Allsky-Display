@@ -18,6 +18,11 @@ static void ota_wdt_feed(void)
     if (esp_task_wdt_status(NULL) == ESP_OK) esp_task_wdt_reset();
 }
 
+bool web_ota_in_progress(void)
+{
+    return s_ota_active;
+}
+
 void web_ota_mark_valid_after_boot(void)
 {
     const esp_partition_t *run = esp_ota_get_running_partition();

@@ -1,5 +1,7 @@
 #include "input_touch.h"
 #include "input_context.h"
+#include "moon_interaction.h"
+#include "moon_source.h"
 
 #include "bsp/esp-bsp.h"
 #include "esp_log.h"
@@ -35,9 +37,14 @@ static int64_t             s_press_start_us;
 static int64_t             s_first_release_us;
 static bool                s_pending_first;
 
-/* Cross-task flag (moon page). Written by the moon subsystem's task, read by the
- * recognizer; a single aligned bool is atomic on this target. */
+/* Cross-task flag (moon page). Written by the image pipeline when the displayed
+ * source changes, read by the recognizer; a single aligned bool is atomic on
+ * this target. */
 static volatile bool       s_moon_active;
+
+/* Moon drag edge-detection state, owned by the poll callback (LVGL task). */
+static bool                s_moon_prev_active;
+static bool                s_moon_prev_pressed;
 
 /* ---- Cross-subsystem input context (input_context.h) -------------------- */
 
@@ -135,9 +142,33 @@ static void poll_cb(lv_timer_t *t)
 
     bool pressed = lv_indev_get_state(s_indev) == LV_INDEV_STATE_PRESSED;
 
-    /* Moon page: hold IDLE, clear any pending tap, and adopt the current physical
-     * state without emitting so leaving the page sees no spurious transition. */
+    /* Leaving the moon page: drop any drag / free-spin state so the next visit
+     * starts from the live orientation, and let the interactive task run out. */
+    if (!s_moon_active && s_moon_prev_active) {
+        moon_drag_reset();
+        moon_interactive_wake();
+        s_moon_prev_pressed = false;
+    }
+    s_moon_prev_active = s_moon_active;
+
+    /* Moon page: own the touch stream. Drive the drag-to-rotate model from the
+     * finger and wake the interactive render task; keep the tap recognizer IDLE
+     * so no tap advances the slideshow and leaving the page emits nothing. */
     if (s_moon_active) {
+        int mx = 0, my = 0;
+        bool moon_pressed = input_touch_read(&mx, &my);
+        if (moon_pressed && !s_moon_prev_pressed) {
+            moon_drag_begin((float)mx, (float)my);
+            moon_interactive_wake();
+        } else if (moon_pressed) {
+            moon_drag_move((float)mx, (float)my);
+            moon_interactive_wake();
+        } else if (!moon_pressed && s_moon_prev_pressed) {
+            moon_drag_end();
+            moon_interactive_wake();
+        }
+        s_moon_prev_pressed = moon_pressed;
+
         s_gs = GS_IDLE;
         s_pending_first = false;
         s_prev_pressed = pressed;
