@@ -1,12 +1,12 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  # C6 WiFi via ESP-Hosted (SDIO). Pinned to the 2.7.x line for compatibility
-  # with field-deployed ESP32-C6 slaves stuck on esp-hosted 2.7.x. Those slaves
-  # cannot be OTA-upgraded (DIO-bootloader/QIO-app trap, esp-hosted-mcu issue
-  # #143), and a host on 2.12 logs a version mismatch and risks RPC timeouts
-  # against a 2.7.x co-processor. Do not bump this without first recovering the
-  # slave to a matching version.
-  espressif/esp_hosted: "~2.7.4"
+  # C6 WiFi via ESP-Hosted (SDIO). Pinned to the newest esp_hosted line (2.12.x).
+  # The host is backward-compatible with older ESP32-C6 slaves but not forward-
+  # compatible: a 2.12 host tolerates a 2.7.x slave with only a cosmetic version-
+  # mismatch warning, while an older host crashes against a newer slave
+  # (sdio_rx_get_buffer assert in sdio_drv.c). Field devices whose C6 slave is
+  # stuck on 2.7.x still work against a 2.12 host. Do not downgrade this pin.
+  espressif/esp_hosted: ">=2.12.3,<2.12.4"
   espressif/esp_wifi_remote: "~0.16.3"
   espressif/esp_websocket_client: "~1.6.1"
   espressif/esp_lvgl_port:
