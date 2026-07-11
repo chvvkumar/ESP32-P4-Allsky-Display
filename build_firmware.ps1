@@ -16,6 +16,8 @@
 #   .\build_firmware.ps1 -Port COM7 -Flash
 #   .\build_firmware.ps1 -OTA            # Build + OTA flash over the network
 #   .\build_firmware.ps1 -OTA -Device allskyesp3236.lan
+#   .\build_firmware.ps1 -Out C:\artifacts  # Build + copy app bin to a directory
+#   .\build_firmware.ps1 -Downloads      # Build + copy app bin to ~\Downloads
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'Password',
     Justification='Dev tool: password sourced from env var or interactive prompt; not persisted.')]
@@ -28,7 +30,9 @@ param(
     [switch]$OTA,
     [string]$Port,
     [string]$Device    = "allskyesp3236.lan",
-    [string]$Password  = $(if ($env:ALLSKY_PASSWORD) { $env:ALLSKY_PASSWORD } else { "" })
+    [string]$Password  = $(if ($env:ALLSKY_PASSWORD) { $env:ALLSKY_PASSWORD } else { "" }),
+    [string]$Out,
+    [switch]$Downloads
 )
 
 $ErrorActionPreference = "Stop"
@@ -172,6 +176,32 @@ $BinSizeMB = [math]::Round($BinSize / 1MB, 2)
 Write-Host "`nBuild successful!" -ForegroundColor Green
 Write-Host "  App binary: $AppBin" -ForegroundColor Green
 Write-Host "              $BinSizeMB MB ($BinSize bytes)" -ForegroundColor Green
+
+# Copy build output to a directory (only after a successful build). -Out wins
+# over -Downloads if both are given. The app bin path is the one resolved above.
+$OutDir = if ($Out) { $Out } elseif ($Downloads) { Join-Path $env:USERPROFILE "Downloads" } else { $null }
+if ($OutDir) {
+    if (-not (Test-Path $OutDir)) {
+        New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+    }
+    $OutBin = Join-Path $OutDir (Split-Path $AppBin -Leaf)
+    Copy-Item -Path $AppBin -Destination $OutBin -Force
+    Write-Host "`nCopied app binary to: $OutBin" -ForegroundColor Green
+
+    # Also produce a merged flash-from-scratch image next to the app bin.
+    $MergedBin = Join-Path $OutDir "allsky_display_merged.bin"
+    Push-Location $ProjectDir
+    try {
+        idf.py -B build_idf merge-bin -o $MergedBin
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $MergedBin)) {
+            Write-Host "Copied merged image to:  $MergedBin" -ForegroundColor Green
+        } else {
+            Write-Warning "merge-bin did not produce $MergedBin; app bin was still copied."
+        }
+    } finally {
+        Pop-Location
+    }
+}
 
 # Serial flash and/or monitor over USB (default path)
 if ($Flash -or $Monitor) {
