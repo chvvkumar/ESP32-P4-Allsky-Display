@@ -367,7 +367,7 @@ esp_err_t web_server_start(void)
     config.server_port     = WEB_PORT;
     config.stack_size      = 16384;
     config.max_uri_handlers = WEB_MAX_URI_HANDLERS;
-    config.max_open_sockets = 10;
+    config.max_open_sockets = 12;   /* <= CONFIG_LWIP_MAX_SOCKETS(16) - 3 reserved by httpd */
     config.lru_purge_enable = true;
     config.keep_alive_enable = true;
     config.keep_alive_idle   = 5;

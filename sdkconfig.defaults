@@ -66,6 +66,10 @@ CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
 CONFIG_ESP_COREDUMP_CHECKSUM_SHA256=y
 CONFIG_ESP_COREDUMP_CHECK_BOOT=y
 
+# --- LWIP sockets: headroom for the HTTP server (3 reserved internally) plus the
+#     /ws/logs WebSocket console, REST clients, MQTT, and HA REST poll ---
+CONFIG_LWIP_MAX_SOCKETS=16
+
 # --- HTTP server WebSocket (/ws/logs live console) ---
 CONFIG_HTTPD_WS_SUPPORT=y
 

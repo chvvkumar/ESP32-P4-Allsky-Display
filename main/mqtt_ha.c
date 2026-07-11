@@ -378,19 +378,23 @@ static void publish_sensors_locked(const allsky_config_t *cfg)
 static void publish_state_and_sensors(void)
 {
     if (!s_connected || !app_config_get_ha_disc_en()) return;
-    allsky_config_t cfg;
-    app_config_snapshot(&cfg);
+    /* Snapshot on the heap: allsky_config_t is several KB (image source array),
+     * too large to place on a service task stack alongside newlib float formatting. */
+    allsky_config_t *cfg = heap_caps_malloc(sizeof(*cfg), MALLOC_CAP_DEFAULT);
+    if (!cfg) return;
+    app_config_snapshot(cfg);
 
     char t[112], v[16];
     topic_of(t, sizeof(t), "brightness", "state"); snprintf(v, sizeof(v), "%d", cur_brightness()); pub(t, v, 1);
-    topic_of(t, sizeof(t), "cycling", "state"); pub(t, cfg.cycling_en ? "ON" : "OFF", 1);
-    topic_of(t, sizeof(t), "random_order", "state"); pub(t, cfg.random_ord ? "ON" : "OFF", 1);
-    topic_of(t, sizeof(t), "auto_brightness", "state"); pub(t, cfg.bright_auto ? "ON" : "OFF", 1);
-    topic_of(t, sizeof(t), "cycle_interval", "state"); snprintf(v, sizeof(v), "%lu", (unsigned long)(cfg.cycle_intv / 1000)); pub(t, v, 1);
-    topic_of(t, sizeof(t), "update_interval", "state"); snprintf(v, sizeof(v), "%lu", (unsigned long)(cfg.upd_interval / 1000)); pub(t, v, 1);
-    topic_of(t, sizeof(t), "image_source", "state"); snprintf(v, sizeof(v), "Image %ld", (long)cfg.curr_img_idx + 1); pub(t, v, 1);
+    topic_of(t, sizeof(t), "cycling", "state"); pub(t, cfg->cycling_en ? "ON" : "OFF", 1);
+    topic_of(t, sizeof(t), "random_order", "state"); pub(t, cfg->random_ord ? "ON" : "OFF", 1);
+    topic_of(t, sizeof(t), "auto_brightness", "state"); pub(t, cfg->bright_auto ? "ON" : "OFF", 1);
+    topic_of(t, sizeof(t), "cycle_interval", "state"); snprintf(v, sizeof(v), "%lu", (unsigned long)(cfg->cycle_intv / 1000)); pub(t, v, 1);
+    topic_of(t, sizeof(t), "update_interval", "state"); snprintf(v, sizeof(v), "%lu", (unsigned long)(cfg->upd_interval / 1000)); pub(t, v, 1);
+    topic_of(t, sizeof(t), "image_source", "state"); snprintf(v, sizeof(v), "Image %ld", (long)cfg->curr_img_idx + 1); pub(t, v, 1);
 
-    publish_sensors_locked(&cfg);
+    publish_sensors_locked(cfg);
+    free(cfg);
 }
 
 void mqtt_ha_publish_state(void) { publish_state_and_sensors(); }
@@ -612,9 +616,14 @@ static void advance_discovery(void)
     if (now - s_disc_last_us < DISCOVERY_STEP_GAP_US) return;
 
     if (s_disc_step < ENTITY_COUNT) {
-        allsky_config_t cfg;
-        app_config_snapshot(&cfg);
-        if (!publish_discovery_entity(s_disc_step, &cfg)) {
+        /* Heap snapshot: keep the multi-KB config off this task's stack, and free it
+         * before publish_state_and_sensors() so the two snapshots never layer. */
+        allsky_config_t *cfg = heap_caps_malloc(sizeof(*cfg), MALLOC_CAP_DEFAULT);
+        if (!cfg) return;
+        app_config_snapshot(cfg);
+        bool ok = publish_discovery_entity(s_disc_step, cfg);
+        free(cfg);
+        if (!ok) {
             ESP_LOGW(TAG, "discovery step %d failed, aborting", s_disc_step);
             s_disc_step = -1;
             s_disc_failed = true;
@@ -644,10 +653,13 @@ static void service_heartbeat_and_sensors(void)
     if (app_config_get_ha_disc_en() && s_disc_step < 0 && !s_disc_failed) {
         int64_t period = (int64_t)app_config_get_ha_sens_int() * 1000000;
         if (now - s_last_sensor_us >= period) {
-            allsky_config_t cfg;
-            app_config_snapshot(&cfg);
-            publish_sensors_locked(&cfg);
-            s_last_sensor_us = now;
+            allsky_config_t *cfg = heap_caps_malloc(sizeof(*cfg), MALLOC_CAP_DEFAULT);
+            if (cfg) {
+                app_config_snapshot(cfg);
+                publish_sensors_locked(cfg);
+                free(cfg);
+                s_last_sensor_us = now;
+            }
         }
     }
 }
@@ -711,7 +723,7 @@ esp_err_t mqtt_ha_init(const mqtt_ha_hooks_t *hooks)
     if (err != ESP_OK) { ESP_LOGE(TAG, "brightness debounce init failed: %s", esp_err_to_name(err)); return err; }
 
     if (!s_task) {
-        if (xTaskCreate(mqtt_ha_task, "mqtt_ha", 6144, NULL, 4, &s_task) != pdPASS) {
+        if (xTaskCreate(mqtt_ha_task, "mqtt_ha", 8192, NULL, 4, &s_task) != pdPASS) {
             ESP_LOGE(TAG, "service task create failed");
             return ESP_ERR_NO_MEM;
         }
@@ -988,7 +1000,7 @@ esp_err_t mqtt_ha_rest_start(void)
 {
     static TaskHandle_t rest_task = NULL;
     if (rest_task) return ESP_OK;
-    if (xTaskCreate(ha_rest_task, "ha_rest", 6144, NULL, 4, &rest_task) != pdPASS) {
+    if (xTaskCreate(ha_rest_task, "ha_rest", 8192, NULL, 4, &rest_task) != pdPASS) {
         ESP_LOGE(TAG, "HA REST task create failed");
         return ESP_ERR_NO_MEM;
     }
