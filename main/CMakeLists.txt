@@ -57,7 +57,7 @@ idf_component_register(
         json
         esp_timer
         esp_driver_tsens
-        esp_driver_usb_serial_jtag
+        esp_driver_uart
         esp_app_format
         app_update
         esp_hw_support

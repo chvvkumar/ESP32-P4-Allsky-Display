@@ -14,13 +14,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_app_desc.h"
-#include "driver/usb_serial_jtag.h"
+#include "driver/uart.h"
+#include "driver/uart_vfs.h"
+#include "sdkconfig.h"
 
 static const char *TAG = "serial_cmd";
 
@@ -346,19 +350,23 @@ void system_serial_dispatch(char c)
 }
 
 /* ---- console task ------------------------------------------------------ */
+#define CONSOLE_POLL_MS  100
+
 static void console_task(void *arg)
 {
     (void)arg;
     for (;;) {
-        uint8_t c;
-        int n = usb_serial_jtag_read_bytes(&c, 1, pdMS_TO_TICKS(100));
+        char c;
+        int n = read(STDIN_FILENO, &c, 1);
         if (n == 1) {
-            system_serial_dispatch((char)c);
+            system_serial_dispatch(c);
             /* Drain any remaining buffered bytes (one command per read). */
-            uint8_t drain[32];
-            while (usb_serial_jtag_read_bytes(drain, sizeof(drain), 0) > 0) {
+            char drain[32];
+            while (read(STDIN_FILENO, drain, sizeof(drain)) > 0) {
                 /* discard */
             }
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(CONSOLE_POLL_MS));
         }
     }
 }
@@ -384,11 +392,21 @@ esp_err_t system_serial_start(void)
     if (s_task_started) {
         return ESP_OK;
     }
-    usb_serial_jtag_driver_config_t cfg = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
-    esp_err_t err = usb_serial_jtag_driver_install(&cfg);
+    /* Drive stdin from the console UART so single-key commands arrive on the
+     * primary UART (COM8). The bootloader/app logs already use this UART. */
+    esp_err_t err = uart_driver_install(CONFIG_ESP_CONSOLE_UART_NUM, 256, 0, 0, NULL, 0);
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(TAG, "usb_serial_jtag driver install failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "console uart driver install failed: %s", esp_err_to_name(err));
         return err;
+    }
+    uart_vfs_dev_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
+    /* Non-blocking reads so the poll loop yields instead of busy-spinning. */
+    int fd = fileno(stdin);
+    if (fd >= 0) {
+        int flags = fcntl(fd, F_GETFL, 0);
+        if (flags >= 0) {
+            fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        }
     }
     if (xTaskCreate(console_task, "SerialConsole", CONSOLE_TASK_STACK, NULL,
                     CONSOLE_TASK_PRIO, NULL) != pdPASS) {
