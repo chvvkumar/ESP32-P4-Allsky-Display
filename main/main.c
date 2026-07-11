@@ -36,6 +36,7 @@
 #include "network_wifi.h"
 #include "network_time.h"
 #include "network_portal.h"
+#include "provision_screen.h"
 #include "image_pipeline.h"
 #include "moon_source.h"
 #include "input_touch.h"
@@ -68,6 +69,10 @@ static void run_provisioning_portal(void)
     if (network_portal_start() != ESP_OK) {
         ESP_LOGE(TAG, "setup portal failed to start");
     }
+
+    /* Draw the on-panel setup screen (title, AP SSID, portal URL, join QR) so the
+     * panel is not blank while the captive portal is up. */
+    provision_screen_show();
 
     const int64_t timeout_ms = 300000;
     const int64_t start_ms = esp_timer_get_time() / 1000;

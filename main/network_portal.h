@@ -32,6 +32,12 @@ bool network_portal_is_running(void);
  * show a success message, stop the portal, and reboot. */
 bool network_portal_is_configured(void);
 
+/** SSID of the open setup access point (e.g. "AllSky-Display-Setup"). */
+const char *network_portal_ap_ssid(void);
+
+/** Dotted-quad IP of the setup portal on the AP (e.g. "192.168.4.1"). */
+const char *network_portal_ap_ip(void);
+
 #ifdef __cplusplus
 }
 #endif

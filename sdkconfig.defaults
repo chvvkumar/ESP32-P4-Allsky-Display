@@ -72,6 +72,9 @@ CONFIG_HTTPD_WS_SUPPORT=y
 # --- LVGL snapshot (web screenshot capture) ---
 CONFIG_LV_USE_SNAPSHOT=y
 
+# --- LVGL QR code widget (first-boot on-panel setup screen) ---
+CONFIG_LV_USE_QRCODE=y
+
 # --- FreeRTOS introspection (monitor stack high-water marks) ---
 CONFIG_FREERTOS_USE_TRACE_FACILITY=y
 CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS=y

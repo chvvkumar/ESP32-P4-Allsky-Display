@@ -19,6 +19,7 @@ idf_component_register(
         "network_wifi.c"
         "network_time.c"
         "network_portal.c"
+        "provision_screen.c"
         "network_poll.c"
         "network_http.c"
         "network_timeparse.c"

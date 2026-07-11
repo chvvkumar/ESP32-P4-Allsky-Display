@@ -432,3 +432,6 @@ void network_portal_stop(void) {
 
 bool network_portal_is_running(void) { return s_running; }
 bool network_portal_is_configured(void) { return s_configured; }
+
+const char *network_portal_ap_ssid(void) { return AP_SSID; }
+const char *network_portal_ap_ip(void) { return AP_IP; }
