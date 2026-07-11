@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="340" viewBox="0 0 760 340">
+  <rect width="760" height="340" fill="#ffffff"/>
+
+  <defs>
+    <marker id="arrowDark" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#333333"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#1f5da8"/>
+    </marker>
+  </defs>
+
+  <!-- Image grid: 4 x 3 pixels.  The floating origin (0.0,0.0) is the
+       center of the top-left pixel, so the axes enter the image. -->
+  <g id="grid" transform="translate(150 55)">
+    <rect x="0" y="0" width="304" height="228" fill="#fbfdff" stroke="#1f2937" stroke-width="2"/>
+
+    <rect x="0" y="0" width="76" height="76" fill="#eaf3ff"/>
+    <rect x="76" y="76" width="76" height="76" fill="#fff1dc"/>
+
+    <path d="M76 0 V228 M152 0 V228 M228 0 V228" stroke="#7fa6d6" stroke-width="1.5"/>
+    <path d="M0 76 H304 M0 152 H304" stroke="#7fa6d6" stroke-width="1.5"/>
+
+    <!-- Integer pixel labels. -->
+    <text x="18" y="66" font-family="Arial, sans-serif" font-size="15" fill="#1f2937">(0,0)</text>
+    <text x="94" y="66" font-family="Arial, sans-serif" font-size="15" fill="#1f2937">(1,0)</text>
+    <text x="18" y="142" font-family="Arial, sans-serif" font-size="15" fill="#1f2937">(0,1)</text>
+    <text x="94" y="142" font-family="Arial, sans-serif" font-size="15" fill="#1f2937">(1,1)</text>
+
+    <!-- Pixel centers. -->
+    <circle cx="38" cy="38" r="5" fill="#1f5da8"/>
+    <circle cx="114" cy="38" r="3.5" fill="#6b7280"/>
+    <circle cx="38" cy="114" r="3.5" fill="#6b7280"/>
+    <circle cx="114" cy="114" r="5" fill="#d36b00"/>
+  </g>
+
+  <!-- Floating coordinate axes. They cross at the center of pixel (0,0). -->
+  <line x1="112" y1="93" x2="506" y2="93" stroke="#1f5da8" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <line x1="188" y1="24" x2="188" y2="315" stroke="#1f5da8" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <text x="512" y="99" font-family="Arial, sans-serif" font-size="16" fill="#1f5da8">x</text>
+  <text x="181" y="332" font-family="Arial, sans-serif" font-size="16" fill="#1f5da8">y</text>
+  <text x="198" y="82" font-family="Arial, sans-serif" font-size="14" fill="#1f5da8">0.0</text>
+
+  <!-- Floating image boundary labels. -->
+  <line x1="150" y1="48" x2="150" y2="290" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 4"/>
+  <line x1="142" y1="55" x2="462" y2="55" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4 4"/>
+  <line x1="150" y1="87" x2="150" y2="99" stroke="#6b7280" stroke-width="1"/>
+  <line x1="182" y1="55" x2="194" y2="55" stroke="#6b7280" stroke-width="1"/>
+  <text x="125" y="42" font-family="Arial, sans-serif" font-size="13" fill="#555555">x = -0.5</text>
+  <text x="95" y="62" font-family="Arial, sans-serif" font-size="13" fill="#555555">y = -0.5</text>
+  <text x="438" y="47" font-family="Arial, sans-serif" font-size="13" fill="#555555">3.5</text>
+  <text x="125" y="288" font-family="Arial, sans-serif" font-size="13" fill="#555555">2.5</text>
+
+  <!-- Integer interpretation callout. -->
+  <path d="M525 70 C410 22 240 25 166 70" fill="none" stroke="#333333" stroke-width="1.7" marker-end="url(#arrowDark)"/>
+  <rect x="525" y="35" width="190" height="78" rx="6" ry="6" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="540" y="58" font-family="Arial, sans-serif" font-size="15" fill="#111827">Integer coordinates</text>
+  <text x="540" y="80" font-family="Arial, sans-serif" font-size="13" fill="#374151">iVec2(0,0) names</text>
+  <text x="540" y="98" font-family="Arial, sans-serif" font-size="13" fill="#374151">the top-left pixel.</text>
+
+  <!-- Floating interpretation callout. -->
+  <path d="M525 255 C430 236 348 205 268 172" fill="none" stroke="#d36b00" stroke-width="1.8" marker-end="url(#arrowDark)"/>
+  <rect x="525" y="213" width="200" height="86" rx="6" ry="6" fill="#fff7ed" stroke="#f0b36b"/>
+  <text x="540" y="237" font-family="Arial, sans-serif" font-size="15" fill="#111827">Floating coordinates</text>
+  <text x="540" y="259" font-family="Arial, sans-serif" font-size="13" fill="#374151">fVec2(1.0,1.0) is</text>
+  <text x="540" y="277" font-family="Arial, sans-serif" font-size="13" fill="#374151">the center of pixel (1,1).</text>
+
+  <!-- Coordinate orientation reminder. -->
+  <text x="222" y="306" font-family="Arial, sans-serif" font-size="14" fill="#374151">
+    Floating extent: x = -0.5 .. 3.5
+  </text>
+  <text x="222" y="324" font-family="Arial, sans-serif" font-size="14" fill="#374151">
+    and y = -0.5 .. 2.5 for this 4 x 3 image.
+  </text>
+</svg>

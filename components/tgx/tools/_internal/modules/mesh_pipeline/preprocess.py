@@ -1,0 +1,275 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+
+from .mesh import FaceVertex, ObjMesh, Triangle
+
+
+DEFAULT_TEXCOORD_QUANT_BITS = 9
+DEFAULT_NORMAL_QUANT_BITS = 16
+DEFAULT_VERTEX_QUANT_BITS = 20
+
+
+@dataclass
+class PreprocessStats:
+    vertices_before: int
+    vertices_after: int
+    texcoords_before: int
+    texcoords_after: int
+    normals_before: int
+    normals_after: int
+    normals_generated: bool
+    normals_removed: bool
+    normalized: bool
+    degenerate_triangles_removed: int = 0
+
+
+def _dedupe_array(values: np.ndarray, eps: float) -> tuple[np.ndarray, list[int]]:
+    if len(values) == 0:
+        return values.copy(), []
+    scale = 1.0 / eps if eps > 0.0 else 1e12
+    remap: list[int] = []
+    unique: list[np.ndarray] = []
+    seen: dict[tuple[int, ...], int] = {}
+    for row in values:
+        key = tuple(int(round(float(x) * scale)) for x in row)
+        index = seen.get(key)
+        if index is None:
+            index = len(unique)
+            seen[key] = index
+            unique.append(row.copy())
+        remap.append(index)
+    return np.asarray(unique, dtype=np.float64).reshape((-1, values.shape[1])), remap
+
+
+def _quantize_dedupe_vertices(values: np.ndarray, bits: int) -> tuple[np.ndarray, list[int]]:
+    if len(values) == 0:
+        return values.copy(), []
+    if bits <= 0:
+        return _dedupe_array(values, 1e-12)
+    bb_min = np.min(values, axis=0)
+    bb_max = np.max(values, axis=0)
+    extent = bb_max - bb_min
+    scale = (1 << bits) - 1
+    safe_extent = np.where(extent > 0.0, extent, 1.0)
+    quant = np.rint(((values - bb_min) / safe_extent) * scale).astype(np.int64)
+    quant[:, extent <= 0.0] = 0
+    remap: list[int] = []
+    unique: list[np.ndarray] = []
+    seen: dict[tuple[int, int, int], int] = {}
+    for i, key in enumerate(map(tuple, quant)):
+        index = seen.get(key)
+        if index is None:
+            index = len(unique)
+            seen[key] = index
+            unique.append(bb_min + (quant[i].astype(np.float64) / scale) * extent)
+        remap.append(index)
+    return np.asarray(unique, dtype=np.float64).reshape((-1, 3)), remap
+
+
+def _quantize_dedupe_texcoords(values: np.ndarray, bits: int, *, wrap: bool) -> tuple[np.ndarray, list[int]]:
+    if len(values) == 0:
+        return values.copy(), []
+    if bits < 0:
+        return _dedupe_array(values, 1e-12)
+    scale = 1 << bits
+    source = np.mod(values, 1.0) if wrap else values.copy()
+    quant = np.rint(source * scale).astype(np.int64)
+    if wrap:
+        quant %= scale
+    remap: list[int] = []
+    unique: list[np.ndarray] = []
+    seen: dict[tuple[int, int], int] = {}
+    for i, key in enumerate(map(tuple, quant)):
+        index = seen.get(key)
+        if index is None:
+            index = len(unique)
+            seen[key] = index
+            unique.append(quant[i].astype(np.float64) / scale)
+        remap.append(index)
+    return np.asarray(unique, dtype=np.float64).reshape((-1, 2)), remap
+
+
+def _quantize_dedupe_normals(values: np.ndarray, bits: int) -> tuple[np.ndarray, list[int]]:
+    if len(values) == 0:
+        return values.copy(), []
+    if bits <= 1:
+        return _dedupe_array(_normalize_normals(values), 1e-12)
+    normalized = _normalize_normals(values)
+    maxq = (1 << (bits - 1)) - 1
+    quant = np.rint(np.clip(normalized, -1.0, 1.0) * maxq).astype(np.int64)
+    remap: list[int] = []
+    unique: list[np.ndarray] = []
+    seen: dict[tuple[int, int, int], int] = {}
+    for i, key in enumerate(map(tuple, quant)):
+        index = seen.get(key)
+        if index is None:
+            index = len(unique)
+            seen[key] = index
+            n = quant[i].astype(np.float64) / maxq
+            length = float(np.linalg.norm(n))
+            if length > 0.0:
+                n /= length
+            else:
+                n = np.asarray([0.0, 0.0, 1.0], dtype=np.float64)
+            unique.append(n)
+        remap.append(index)
+    return np.asarray(unique, dtype=np.float64).reshape((-1, 3)), remap
+
+
+def _normalize_normals(normals: np.ndarray) -> np.ndarray:
+    if len(normals) == 0:
+        return normals.copy()
+    out = normals.astype(np.float64, copy=True)
+    lengths = np.linalg.norm(out, axis=1)
+    valid = lengths > 1e-20
+    out[valid] /= lengths[valid, None]
+    out[~valid] = np.asarray([0.0, 0.0, 1.0], dtype=np.float64)
+    return out
+
+
+def _generate_smooth_normals(mesh: ObjMesh) -> tuple[np.ndarray, list[Triangle]]:
+    normals = np.zeros_like(mesh.vertices, dtype=np.float64)
+    for tri in mesh.triangles:
+        ids = [c.v for c in tri.corners]
+        p0, p1, p2 = mesh.vertices[ids]
+        normal = np.cross(p1 - p0, p2 - p0)
+        for vi in ids:
+            normals[vi] += normal
+    normals = _normalize_normals(normals)
+
+    triangles: list[Triangle] = []
+    for tri in mesh.triangles:
+        corners = tuple(FaceVertex(c.v, c.vt, c.v) for c in tri.corners)
+        triangles.append(Triangle(corners, tri.material, tri.group))
+    return normals, triangles
+
+
+def _remove_degenerate_triangles(vertices: np.ndarray, triangles: list[Triangle], eps: float = 1e-24) -> tuple[list[Triangle], int]:
+    kept: list[Triangle] = []
+    removed = 0
+    for tri in triangles:
+        ids = [c.v for c in tri.corners]
+        p0, p1, p2 = vertices[ids]
+        n = np.cross(p1 - p0, p2 - p0)
+        if float(np.dot(n, n)) <= eps:
+            removed += 1
+        else:
+            kept.append(tri)
+    if not kept:
+        raise ValueError("all triangles are degenerate")
+    return kept, removed
+
+
+def preprocess_mesh(
+    mesh: ObjMesh,
+    *,
+    normalize: bool = False,
+    normalize_size: float = 2.0,
+    dedupe_epsilon: float = 1e-9,
+    force_normals: bool = False,
+    remove_normals: bool = False,
+    vertex_quant_bits: int = DEFAULT_VERTEX_QUANT_BITS,
+    texcoord_quant_bits: int = DEFAULT_TEXCOORD_QUANT_BITS,
+    texcoord_wrap: bool = False,
+    normal_quant_bits: int = DEFAULT_NORMAL_QUANT_BITS,
+) -> tuple[ObjMesh, PreprocessStats]:
+    """Return a cleaned mesh suitable for meshlet export."""
+    if force_normals and remove_normals:
+        raise ValueError("force_normals and remove_normals are mutually exclusive")
+
+    vertices_before = len(mesh.vertices)
+    texcoords_before = len(mesh.texcoords)
+    normals_before = len(mesh.normals)
+
+    vertices = mesh.vertices.astype(np.float64, copy=True)
+    texcoords = mesh.texcoords.astype(np.float64, copy=True)
+    normals = _normalize_normals(mesh.normals)
+    triangles = [Triangle(t.corners, t.material, t.group) for t in mesh.triangles]
+
+    if normalize:
+        bb_min = np.min(vertices, axis=0)
+        bb_max = np.max(vertices, axis=0)
+        center = (bb_min + bb_max) * 0.5
+        extent = float(np.max(bb_max - bb_min))
+        if extent > 0.0:
+            vertices = (vertices - center) * (float(normalize_size) / extent)
+
+    normals_generated = False
+    normals_removed = False
+    tmp_before_quant = ObjMesh(vertices, texcoords, normals, triangles, mesh.name, mesh.materials.copy(), mesh.source_path)
+    if remove_normals:
+        normals = np.zeros((0, 3), dtype=np.float64)
+        triangles = [
+            Triangle(tuple(FaceVertex(c.v, c.vt, -1) for c in tri.corners), tri.material, tri.group)
+            for tri in triangles
+        ]
+        normals_removed = True
+    elif force_normals or not tmp_before_quant.has_normals():
+        normals, triangles = _generate_smooth_normals(tmp_before_quant)
+        normals_generated = True
+
+    if vertex_quant_bits >= 0:
+        vertices, v_remap = _quantize_dedupe_vertices(vertices, vertex_quant_bits)
+    else:
+        vertices, v_remap = _dedupe_array(vertices, dedupe_epsilon)
+    if texcoord_quant_bits >= 0:
+        texcoords, vt_remap = _quantize_dedupe_texcoords(texcoords, texcoord_quant_bits, wrap=texcoord_wrap)
+    else:
+        texcoords, vt_remap = _dedupe_array(texcoords, dedupe_epsilon)
+    if normal_quant_bits >= 0:
+        normals, vn_remap = _quantize_dedupe_normals(normals, normal_quant_bits)
+    else:
+        normals, vn_remap = _dedupe_array(normals, dedupe_epsilon)
+
+    remapped: list[Triangle] = []
+    for tri in triangles:
+        new_corners = []
+        for c in tri.corners:
+            vt = vt_remap[c.vt] if c.vt >= 0 and vt_remap else c.vt
+            vn = vn_remap[c.vn] if c.vn >= 0 and vn_remap else c.vn
+            new_corners.append(FaceVertex(v_remap[c.v], vt, vn))
+        remapped.append(Triangle(tuple(new_corners), tri.material, tri.group))
+    triangles = remapped
+    triangles, degenerate_removed = _remove_degenerate_triangles(vertices, triangles)
+
+    tmp = ObjMesh(vertices, texcoords, normals, triangles, mesh.name, mesh.materials.copy(), mesh.source_path)
+    any_texcoord_ref = any(c.vt >= 0 for tri in triangles for c in tri.corners)
+    if not tmp.has_texcoords():
+        if any_texcoord_ref:
+            raise ValueError("texture coordinates are present only on some triangle corners")
+        texcoords = np.zeros((0, 2), dtype=np.float64)
+        triangles = [
+            Triangle(tuple(FaceVertex(c.v, -1, c.vn) for c in tri.corners), tri.material, tri.group)
+            for tri in triangles
+        ]
+        tmp = ObjMesh(vertices, texcoords, normals, triangles, mesh.name, mesh.materials.copy(), mesh.source_path)
+
+    if not remove_normals and not tmp.has_normals():
+        normals, triangles = _generate_smooth_normals(tmp)
+        normals_generated = True
+        if normal_quant_bits >= 0:
+            normals, vn_remap = _quantize_dedupe_normals(normals, normal_quant_bits)
+        else:
+            normals, vn_remap = _dedupe_array(normals, dedupe_epsilon)
+        remapped = []
+        for tri in triangles:
+            remapped.append(Triangle(tuple(FaceVertex(c.v, c.vt, vn_remap[c.vn]) for c in tri.corners), tri.material, tri.group))
+        triangles = remapped
+
+    cleaned = ObjMesh(vertices, texcoords, normals, triangles, mesh.name, mesh.materials.copy(), mesh.source_path)
+    stats = PreprocessStats(
+        vertices_before=vertices_before,
+        vertices_after=len(cleaned.vertices),
+        texcoords_before=texcoords_before,
+        texcoords_after=len(cleaned.texcoords),
+        normals_before=normals_before,
+        normals_after=len(cleaned.normals),
+        normals_generated=normals_generated,
+        normals_removed=normals_removed,
+        normalized=normalize,
+        degenerate_triangles_removed=degenerate_removed,
+    )
+    return cleaned, stats

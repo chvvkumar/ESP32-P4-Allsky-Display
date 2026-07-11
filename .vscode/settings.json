@@ -1,5 +1,6 @@
 {
     "files.associations": {
         "lv_draw.h": "c"
-    }
+    },
+    "idf.currentSetup": "C:\\Users\\Kumar\\esp\\v5.5.1\\esp-idf"
 }

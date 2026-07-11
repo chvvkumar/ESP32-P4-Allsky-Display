@@ -1,0 +1,16 @@
+## IDF Component Manager Manifest File
+dependencies:
+  # C6 WiFi via ESP-Hosted (SDIO), matching the NINA-Display donor versions.
+  espressif/esp_hosted: ">=2.12.3,<2.12.4"
+  espressif/esp_wifi_remote: "~0.16.3"
+  espressif/esp_websocket_client: "~1.6.1"
+  espressif/esp_lvgl_port:
+    version: "^2"
+    public: true
+  lvgl/lvgl:
+    version: "~9.5.0"
+    public: true
+  # Local BSP override (adapted Waveshare XC round-panel BSP).
+  esp32_p4_wifi6_touch_lcd_xc:
+    version: "*"
+    override_path: "../components/esp32_p4_wifi6_touch_lcd_xc"

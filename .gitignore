@@ -161,6 +161,8 @@ coverage.xml
 .claude/
 
 # Superpowers specs and implementation plans (local development only)
+.planning/
+references/
 docs/superpowers/
 docs/plans/
 docs/specs/
@@ -170,3 +172,10 @@ CONVERSATION_CONTEXT.md
 
 # GitHub Copilot instructions (development-only)
 # .github/copilot-instructions.md
+
+# ESP-IDF rewrite (branch esp-idf)
+build_idf/
+build_idf_40/
+managed_components/
+sdkconfig.ci
+sdkconfig.40

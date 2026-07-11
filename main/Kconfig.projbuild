@@ -1,0 +1,25 @@
+menu "AllSky Display"
+
+    choice ALLSKY_PANEL
+        prompt "Round DSI panel variant"
+        default ALLSKY_PANEL_3_4
+        help
+            Selects the Waveshare round MIPI-DSI panel. This single choice is the source of
+            truth for the whole firmware: it drives the active resolution, the DSI timings and
+            the one byte that differs in the JD9365 init sequence (page-1 register 0x40). Both
+            the BSP (components/esp32_p4_wifi6_touch_lcd_xc) and the app display profile
+            (main/display_defs.h) read CONFIG_ALLSKY_PANEL_* directly, so they can never disagree.
+
+        config ALLSKY_PANEL_3_4
+            bool "3.4 inch round, 800x800 (type id 1, default)"
+            help
+                Waveshare 3.4-inch round DSI panel. JD9365 page-1 reg 0x40 = 0x00.
+
+        config ALLSKY_PANEL_4_0
+            bool "4.0 inch round, 720x720 (type id 2)"
+            help
+                Waveshare 4.0-inch round DSI panel (ESP32-P4-WIFI6-Touch-LCD-4C).
+                JD9365 page-1 reg 0x40 = 0x04.
+    endchoice
+
+endmenu
