@@ -223,9 +223,9 @@ void app_main(void)
         .force_refresh      = image_pipeline_request_refresh,
         .rerender_current   = image_pipeline_notify_edit,
         .restart_web_server = integ_restart_web_server,
-        .web_status         = NULL,
-        .network_info       = NULL,
-        .ppa_info           = NULL,
+        .web_status         = integ_serial_web_status,
+        .network_info       = integ_serial_network_info,
+        .ppa_info           = integ_serial_ppa_info,
     };
     system_serial_init(&serial_hooks);
     system_serial_start();

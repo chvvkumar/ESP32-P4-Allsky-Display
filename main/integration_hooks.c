@@ -24,6 +24,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "esp_log.h"
 #include "esp_heap_caps.h"
@@ -234,6 +235,55 @@ void integ_single_tap(void)
     if (!image_pipeline_current_is_moon()) {
         image_pipeline_next_image();
     }
+}
+
+/* ---- Serial diagnostic report providers ---------------------------------- */
+
+void integ_serial_web_status(char *out, size_t len)
+{
+    if (!out || len == 0) {
+        return;
+    }
+    bool running = web_server_is_running();
+    bool auth = web_auth_is_enabled();
+    snprintf(out, len, "Web server: %s (port %d)\nAuth: %s",
+             running ? "running" : "stopped", 8080,
+             auth ? "enabled" : "disabled");
+}
+
+void integ_serial_network_info(char *out, size_t len)
+{
+    if (!out || len == 0) {
+        return;
+    }
+    network_wifi_status_t s;
+    network_wifi_get_status(&s);
+    snprintf(out, len,
+             "Status:   %s\n"
+             "Hostname: %s\n"
+             "SSID:     %s\n"
+             "IP:       %s\n"
+             "Gateway:  %s\n"
+             "RSSI:     %d dBm\n"
+             "Clock:    %s",
+             s.connected ? "connected" : "disconnected",
+             s.hostname, s.ssid[0] ? s.ssid : "-", s.ip, s.gateway, s.rssi,
+             network_time_is_valid() ? "valid" : "not synced");
+}
+
+void integ_serial_ppa_info(char *out, size_t len)
+{
+    if (!out || len == 0) {
+        return;
+    }
+    /* No runtime PPA counter is exposed; report the fixed engine configuration
+     * plus the pipeline state that drives it. */
+    snprintf(out, len,
+             "PPA engine: RGB565 SRM hardware scaler (single shared client)\n"
+             "First image: %s\n"
+             "Current source: %s",
+             image_pipeline_has_first_image() ? "shown" : "pending",
+             image_pipeline_current_is_moon() ? "moon:// (local render)" : "downloaded");
 }
 
 /* ---- Moon interactive drag sinks ----------------------------------------- */

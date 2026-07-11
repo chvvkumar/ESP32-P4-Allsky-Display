@@ -29,6 +29,11 @@ void integ_image_index_changed(int new_index);
 /* Serial 'X': stop and restart the web server. */
 void integ_restart_web_server(void);
 
+/* Serial diagnostic report providers (write a text block into out/len). */
+void integ_serial_web_status(char *out, size_t len);    /* 'X' web/auth status */
+void integ_serial_network_info(char *out, size_t len);  /* 'I' network block   */
+void integ_serial_ppa_info(char *out, size_t len);      /* 'P' PPA block       */
+
 /* Touch single tap: advance to the next image, suppressed on the moon page. */
 void integ_single_tap(void);
 

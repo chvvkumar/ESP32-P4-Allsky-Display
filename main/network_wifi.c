@@ -6,6 +6,7 @@
 #include "network_wifi.h"
 #include "network_time.h"
 #include "app_config.h"
+#include "system_health.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -276,6 +277,12 @@ static void enter_connected(bool from_roam) {
     s_backoff_ms = BACKOFF_MIN_MS;
     xEventGroupSetBits(s_event_group, NETWORK_WIFI_CONNECTED_BIT);
 
+    /* A from_roam arrival is a directed re-association to a different BSSID for
+     * the same SSID (evaluate_roam_candidate only targets a distinct BSSID). */
+    if (from_roam) {
+        system_health_record_roam();
+    }
+
     wifi_ap_record_t ap;
     int rssi = 0;
     if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) rssi = ap.rssi;
@@ -312,6 +319,8 @@ static void maybe_start_roam_scan(void) {
     s_last_scan_start_ms = t;
     if (esp_wifi_scan_start(&sc, false) != ESP_OK) {
         s_scan_running = false;
+    } else {
+        system_health_record_roam_scan();
     }
 }
 
@@ -417,6 +426,9 @@ void network_wifi_update(void) {
     case NET_CONNECTED:
         if (!s_link_up || !s_got_ip) {
             ESP_LOGW(TAG, "Connection lost");
+            /* Unplanned connected->disconnected edge. A roam leaves this state via
+             * NET_ROAMING instead, so it is not double-counted here. */
+            system_health_record_network_disconnect();
             xEventGroupClearBits(s_event_group, NETWORK_WIFI_CONNECTED_BIT);
             s_state = NET_IDLE;
             s_last_attempt_ms = t;

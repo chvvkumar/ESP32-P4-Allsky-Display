@@ -1,5 +1,6 @@
 #include "web_internal.h"
 #include "display_defs.h"
+#include "moon_source.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
@@ -79,8 +80,21 @@ esp_err_t web_add_source_handler(httpd_req_t *req)
         return web_send_400(req, "Missing required parameter: url");
     if (app_config_source_count() >= WEB_MAX_SOURCES)
         return web_send_400(req, "Maximum image sources reached");
-    if (app_config_add_source(url) < 0)
+    int idx = app_config_add_source(url);
+    if (idx < 0)
         return web_send_400(req, "Maximum image sources reached");
+
+    /* A newly added moon:// source needs the moon disc scale (0.8), not the global
+     * add default (~1.2), so the disc renders at the right size before any restart
+     * migration runs. Matches the __moon__ preset seed. */
+    if (moon_source_is_moon_url(url)) {
+        image_source_t s;
+        if (app_config_get_source(idx, &s)) {
+            s.transform.scale_x = 0.8f;
+            s.transform.scale_y = 0.8f;
+            app_config_set_source_transform(idx, &s.transform);
+        }
+    }
     app_config_save();
     web_hook_mqtt_sources_changed();
     return web_send_ok(req, "Source added");
