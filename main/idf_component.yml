@@ -1,7 +1,12 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  # C6 WiFi via ESP-Hosted (SDIO), matching the NINA-Display donor versions.
-  espressif/esp_hosted: ">=2.12.3,<2.12.4"
+  # C6 WiFi via ESP-Hosted (SDIO). Pinned to the 2.7.x line for compatibility
+  # with field-deployed ESP32-C6 slaves stuck on esp-hosted 2.7.x. Those slaves
+  # cannot be OTA-upgraded (DIO-bootloader/QIO-app trap, esp-hosted-mcu issue
+  # #143), and a host on 2.12 logs a version mismatch and risks RPC timeouts
+  # against a 2.7.x co-processor. Do not bump this without first recovering the
+  # slave to a matching version.
+  espressif/esp_hosted: "~2.7.4"
   espressif/esp_wifi_remote: "~0.16.3"
   espressif/esp_websocket_client: "~1.6.1"
   espressif/esp_lvgl_port:
