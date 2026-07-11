@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS
         "main.c"
+        "display_defs.c"
         "app_config.c"
         "config_backup.c"
         "config_debounce.c"

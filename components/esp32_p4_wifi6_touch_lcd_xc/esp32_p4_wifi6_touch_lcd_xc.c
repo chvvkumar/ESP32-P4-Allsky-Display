@@ -6,9 +6,10 @@
  * proven NINA-Display stack) rather than the reference BSP's experimental esp_lv_adapter.
  * Audio / SD card / USB host from the reference BSP are omitted (not used by this firmware).
  *
- * The single panel-selection switch is CONFIG_ALLSKY_PANEL_* (main/Kconfig.projbuild):
- *   - CONFIG_ALLSKY_PANEL_3_4 -> 800x800, page-1 reg 0x40 = 0x00
- *   - CONFIG_ALLSKY_PANEL_4_0 -> 720x720, page-1 reg 0x40 = 0x04
+ * Panel selection is RUNTIME (both round panels from one binary): bsp_display_set_panel_type()
+ * sets the resolution and the one differing JD9365 init byte before bring-up.
+ *   - type id 1 -> 800x800, page-1 reg 0x40 = 0x00 (default)
+ *   - type id 2 -> 720x720, page-1 reg 0x40 = 0x04
  */
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
@@ -43,9 +44,37 @@ static esp_lcd_panel_io_handle_t io_handle = NULL;
 static i2c_master_bus_handle_t i2c_handle = NULL;    // I2C bus handle
 static uint8_t brightness;
 
+/* Active panel geometry, selected at runtime by bsp_display_set_panel_type() before bring-up.
+ * Default = type 1 (3.4" 800x800). */
+static uint16_t s_lcd_h_res = 800;
+static uint16_t s_lcd_v_res = 800;
+
+/* JD9365 page-1 reg 0x40 value: the ONLY init byte that differs between the two panels
+ * (0x00 for the 3.4" 800x800, 0x04 for the 4.0" 720x720). Mutable so the shared const init
+ * table can point at it and bsp_display_set_panel_type() can patch it at runtime. */
+static uint8_t s_panel_init_byte[1] = {0x00};
+
+esp_err_t bsp_display_set_panel_type(int type_id)
+{
+    if (type_id == 2) {
+        s_lcd_h_res = 720;
+        s_lcd_v_res = 720;
+        s_panel_init_byte[0] = 0x04;
+    } else {
+        /* type 1 and any unknown id fall back to the 3.4" 800x800 default. */
+        s_lcd_h_res = 800;
+        s_lcd_v_res = 800;
+        s_panel_init_byte[0] = 0x00;
+    }
+    return ESP_OK;
+}
+
+int bsp_display_get_h_res(void) { return s_lcd_h_res; }
+int bsp_display_get_v_res(void) { return s_lcd_v_res; }
+
 /* JD9365 vendor init sequence. The ONLY value that differs between the two round panels is
- * page-1 register 0x40 (0x00 for the 3.4" 800x800, 0x04 for the 4.0" 720x720). Everything else
- * is shared. Sequence matches the AllSky display-driver spec section 3. */
+ * page-1 register 0x40, held in the mutable s_panel_init_byte above. Everything else is shared.
+ * Sequence matches the AllSky display-driver spec section 3. */
 static const jd9365_lcd_init_cmd_t lcd_init_cmds[] = {
     {0xE0, (uint8_t[]){0x00}, 1, 0},
 
@@ -81,11 +110,7 @@ static const jd9365_lcd_init_cmd_t lcd_init_cmds[] = {
     {0x3E, (uint8_t[]){0xFF}, 1, 0},
     {0x3F, (uint8_t[]){0xFF}, 1, 0},
 
-#if CONFIG_ALLSKY_PANEL_4_0
-    {0x40, (uint8_t[]){0x04}, 1, 0},   /* 4.0" 720x720 */
-#else
-    {0x40, (uint8_t[]){0x00}, 1, 0},   /* 3.4" 800x800 (default) */
-#endif
+    {0x40, s_panel_init_byte, 1, 0},   /* panel byte: 0x00 (3.4") / 0x04 (4.0"), set at runtime */
     {0x41, (uint8_t[]){0x64}, 1, 0},
     {0x42, (uint8_t[]){0xC7}, 1, 0},
     {0x43, (uint8_t[]){0x18}, 1, 0},
@@ -457,7 +482,7 @@ esp_err_t bsp_display_new_with_handles(const bsp_display_config_t *config, bsp_l
 
     esp_lcd_panel_handle_t disp_panel = NULL;
     ESP_LOGI(TAG, "Install Waveshare ESP32-P4-WIFI6-Touch-LCD-XC LCD panel (JD9365, %dx%d)",
-             BSP_LCD_H_RES, BSP_LCD_V_RES);
+             s_lcd_h_res, s_lcd_v_res);
 
     esp_lcd_dpi_panel_config_t dpi_config = {
         .dpi_clk_src = MIPI_DSI_DPI_CLK_SRC_DEFAULT,
@@ -470,8 +495,8 @@ esp_err_t bsp_display_new_with_handles(const bsp_display_config_t *config, bsp_l
 #endif
         .num_fbs = CONFIG_BSP_LCD_DPI_BUFFER_NUMS,
         .video_timing = {
-            .h_size = BSP_LCD_H_RES,
-            .v_size = BSP_LCD_V_RES,
+            .h_size = s_lcd_h_res,
+            .v_size = s_lcd_v_res,
             .hsync_back_porch = 20,
             .hsync_pulse_width = 20,
             .hsync_front_porch = 40,
@@ -534,8 +559,8 @@ esp_err_t bsp_touch_new(esp_lcd_touch_handle_t *ret_touch)
     BSP_ERROR_CHECK_RETURN_ERR(bsp_i2c_init());
 
     const esp_lcd_touch_config_t tp_cfg = {
-        .x_max = BSP_LCD_H_RES,
-        .y_max = BSP_LCD_V_RES,
+        .x_max = s_lcd_h_res,
+        .y_max = s_lcd_v_res,
         .rst_gpio_num = BSP_LCD_TOUCH_RST,
         .int_gpio_num = BSP_LCD_TOUCH_INT,
         .levels = {
@@ -589,8 +614,8 @@ static lv_display_t *bsp_display_lcd_init(const bsp_display_cfg_t *cfg)
         .control_handle = lcd_panels.control,
         .buffer_size = cfg->buffer_size,
         .double_buffer = cfg->double_buffer,
-        .hres = BSP_LCD_H_RES,
-        .vres = BSP_LCD_V_RES,
+        .hres = s_lcd_h_res,
+        .vres = s_lcd_v_res,
         .monochrome = false,
         .rotation = {
             .swap_xy = false,
@@ -648,7 +673,7 @@ lv_display_t *bsp_display_start(void)
 {
     bsp_display_cfg_t cfg = {
         .lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
-        .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
+        .buffer_size = (uint32_t)s_lcd_h_res * 50,
         .double_buffer = BSP_LCD_DRAW_BUFF_DOUBLE,
         .flags = {
 #if CONFIG_BSP_LCD_COLOR_FORMAT_RGB888

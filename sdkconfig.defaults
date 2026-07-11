@@ -1,6 +1,7 @@
 # AllSky-Display ESP-IDF project - base defaults (IDF v5.5.2, target esp32p4).
-# Panel variant defaults to 3.4" 800x800 (CONFIG_ALLSKY_PANEL_3_4). Build the 4.0" 720x720
-# variant by adding sdkconfig.defaults.4_0 to SDKCONFIG_DEFAULTS.
+# Both round panels are served at RUNTIME from this single binary; the active panel is selected
+# from persisted config (NVS disp_type). The Kconfig ALLSKY_PANEL_* choice only sets the
+# first-boot default for disp_type (CONFIG_ALLSKY_PANEL_3_4 -> type 1, the 3.4" 800x800 default).
 
 CONFIG_IDF_TARGET="esp32p4"
 CONFIG_IDF_EXPERIMENTAL_FEATURES=y

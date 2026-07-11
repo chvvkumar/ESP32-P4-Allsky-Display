@@ -71,7 +71,7 @@ esp_err_t bsp_spiffs_unmount(void);
 
 #if (BSP_CONFIG_NO_GRAPHIC_LIB == 0)
 
-#define BSP_LCD_DRAW_BUFF_SIZE     (BSP_LCD_H_RES * 50) // Draw buffer size in pixels
+/* Draw buffer is sized at runtime from the active panel width (bsp_display_get_h_res() * 50). */
 #define BSP_LCD_DRAW_BUFF_DOUBLE   (0)
 
 /**

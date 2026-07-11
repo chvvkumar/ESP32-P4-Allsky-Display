@@ -21,22 +21,15 @@
 #define BSP_LCD_COLOR_SPACE         (ESP_LCD_COLOR_SPACE_RGB)
 
 /*
- * Panel resolution and DSI lane bit-rate are selected by the single project-level
- * Kconfig choice ALLSKY_PANEL_* (main/Kconfig.projbuild), which is also the source
- * of truth for the app-side display profile (main/display_defs.h) and the one byte
- * that differs in the JD9365 init sequence (page-1 reg 0x40). This BSP intentionally
- * has NO panel-type choice of its own so the two can never disagree.
+ * Panel resolution and the one differing byte of the JD9365 init sequence (page-1 reg 0x40)
+ * are selected at RUNTIME. Both round panels are supported from a single binary; the active
+ * panel is chosen by bsp_display_set_panel_type() which MUST be called before bsp_display_new /
+ * bsp_display_start. The Kconfig ALLSKY_PANEL_* choice is only the first-boot default fed into
+ * persisted config; the BSP no longer reads CONFIG_ALLSKY_PANEL_* directly.
  *
- *   ALLSKY_PANEL_3_4 -> 3.4" round, 800x800 (default, type id 1)
- *   ALLSKY_PANEL_4_0 -> 4.0" round, 720x720 (type id 2)
+ *   type id 1 -> 3.4" round, 800x800, reg 0x40 = 0x00 (default)
+ *   type id 2 -> 4.0" round, 720x720, reg 0x40 = 0x04
  */
-#if CONFIG_ALLSKY_PANEL_4_0
-#define BSP_LCD_H_RES              (720)
-#define BSP_LCD_V_RES              (720)
-#else
-#define BSP_LCD_H_RES              (800)
-#define BSP_LCD_V_RES              (800)
-#endif
 #define BSP_LCD_MIPI_DSI_LANE_BITRATE_MBPS (1500)
 
 #define BSP_LCD_MIPI_DSI_LANE_NUM          (2)    // 2 data lanes
@@ -63,6 +56,22 @@ typedef struct {
     esp_lcd_panel_handle_t      panel;         /*!< ESP LCD panel (color) handle */
     esp_lcd_panel_handle_t      control;       /*!< ESP LCD panel (control) handle */
 } bsp_lcd_handles_t;
+
+/**
+ * @brief Select the active panel type (1 = 3.4" 800x800, 2 = 4.0" 720x720).
+ *
+ * Sets the DSI panel resolution, the JD9365 page-1 reg 0x40 init byte, and the LVGL draw-buffer
+ * size used by the subsequent bring-up. MUST be called before bsp_display_new /
+ * bsp_display_new_with_handles / bsp_display_start. Unknown ids fall back to type 1. Because the
+ * draw buffers are sized once at start, changing the type after start requires a reboot.
+ */
+esp_err_t bsp_display_set_panel_type(int type_id);
+
+/**
+ * @brief Active panel resolution set by bsp_display_set_panel_type() (defaults to 800x800).
+ */
+int bsp_display_get_h_res(void);
+int bsp_display_get_v_res(void);
 
 /**
  * @brief Create new display panel (reset + init only; backlight left off).

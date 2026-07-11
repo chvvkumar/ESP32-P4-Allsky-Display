@@ -3,7 +3,8 @@
  *
  * Brings up the BSP display + GT911 touch + LVGL (esp_lvgl_port) and shows a centered
  * label reporting the firmware name, selected panel variant and resolution. This proves the
- * board bring-up path end to end for both panel variants selected via CONFIG_ALLSKY_PANEL_*.
+ * board bring-up path end to end. The panel is selected at runtime from persisted config
+ * (NVS disp_type); both round panels are served by this single binary.
  */
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
@@ -14,6 +15,7 @@
 #include "lvgl.h"
 #include "bsp/esp-bsp.h"
 #include "display_defs.h"
+#include "app_config.h"
 
 #define ALLSKY_FW_NAME "AllSky-Display"
 
@@ -58,8 +60,20 @@ void app_main(void)
         ESP_ERROR_CHECK(nvs_flash_init());
     }
 
-    ESP_LOGI(TAG, "Starting %s scaffold, panel %s %dx%d",
-             ALLSKY_FW_NAME, ALLSKY_PANEL_NAME, ALLSKY_PANEL_WIDTH, ALLSKY_PANEL_HEIGHT);
+    /* Load persisted configuration (defaults + stored values). Must precede display bring-up so
+     * the runtime panel selection (NVS disp_type) is known before buffers are sized. */
+    ESP_ERROR_CHECK(app_config_init());
+
+    /* Select the active panel profile from persisted config (Kconfig ALLSKY_PANEL_* is only the
+     * first-boot default baked into that value). Both the app-side profile table and the BSP are
+     * fed the same type id; this MUST happen before bsp_display_start sizes the draw buffers. */
+    int disp_type = (int)app_config_get_disp_type();
+    allsky_panel_set_type(disp_type);
+    ESP_ERROR_CHECK(bsp_display_set_panel_type(disp_type));
+
+    allsky_panel_profile_t panel = allsky_panel_profile();
+    ESP_LOGI(TAG, "Starting %s, panel %s (type %d) %dx%d",
+             ALLSKY_FW_NAME, panel.name, panel.type_id, panel.width, panel.height);
 
     /* Bring up display + touch + LVGL, then enable the backlight. */
     lv_display_t *disp = bsp_display_start();

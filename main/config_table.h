@@ -2,6 +2,15 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "sdkconfig.h"
+
+/* First-boot default for displayType (NVS disp_type). The Kconfig ALLSKY_PANEL_* choice is ONLY
+ * this default; the panel is otherwise selected at runtime from persisted config. */
+#if CONFIG_ALLSKY_PANEL_4_0
+#define ALLSKY_DEFAULT_DISP_TYPE 2
+#else
+#define ALLSKY_DEFAULT_DISP_TYPE 1
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -94,7 +103,7 @@ enum {
     BOOL(bright_auto,        "bright_auto", "brightnessAutoMode",     CFG_GRP_DISPLAY, true) \
     I32 (bl_freq,            "bl_freq",     "backlightFreq",          CFG_GRP_DISPLAY, 5000) \
     I32 (bl_res,             "bl_res",      "backlightResolution",    CFG_GRP_DISPLAY, 10) \
-    I32M(disp_type,          "disp_type",   "displayType",            CFG_GRP_DISPLAY, 1) \
+    I32M(disp_type,          "disp_type",   "displayType",            CFG_GRP_DISPLAY, ALLSKY_DEFAULT_DISP_TYPE) \
     I32C(color_temp,         "color_temp",  "colorTemp",              CFG_GRP_DISPLAY, 6500, 2000, 15000) \
     /* -- Moon renderer -- */ \
     F32 (moonLat,            "moonLat",     "moonLat",                CFG_GRP_MOON,    0.0f) \

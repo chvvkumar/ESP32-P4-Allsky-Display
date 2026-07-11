@@ -1,4 +1,0 @@
-# AllSky-Display panel override: 4.0 inch round, 720x720 (type id 2).
-# Use by adding this file after sdkconfig.defaults, e.g.:
-#   idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.4_0" build
-CONFIG_ALLSKY_PANEL_4_0=y

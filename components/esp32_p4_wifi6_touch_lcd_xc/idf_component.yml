@@ -8,7 +8,7 @@ dependencies:
   idf: ">=5.5"
 description: Waveshare ESP32-P4-WIFI6-Touch-LCD-XC BSP, adapted for AllSky-Display
   (JD9365 round DSI panels 800x800/720x720, GT911 touch, esp_lvgl_port). Audio, SD
-  and USB stripped; panel selection driven by CONFIG_ALLSKY_PANEL_*.
+  and USB stripped; panel selected at runtime via bsp_display_set_panel_type().
 targets:
 - esp32p4
 version: 2.0.0

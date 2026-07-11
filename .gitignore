@@ -175,7 +175,7 @@ CONVERSATION_CONTEXT.md
 
 # ESP-IDF rewrite (branch esp-idf)
 build_idf/
-build_idf_40/
+build_idf*/
 managed_components/
 sdkconfig.ci
 sdkconfig.40
