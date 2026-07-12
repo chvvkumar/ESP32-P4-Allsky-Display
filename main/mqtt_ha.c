@@ -13,7 +13,7 @@
 #include "esp_wifi.h"
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
-#include "driver/temperature_sensor.h"
+#include "sensor_temp.h"
 #include "cJSON.h"
 
 #include "freertos/FreeRTOS.h"
@@ -54,7 +54,6 @@ static int s_fail_count = 0;
 static int64_t s_next_attempt_us = 0;
 static TaskHandle_t s_task = NULL;
 static config_debounce_t s_bright_debounce;
-static temperature_sensor_handle_t s_tsens = NULL;
 
 /* ---- Discovery / publish scheduling ------------------------------------- */
 static int s_disc_step = -1;         /* -1 idle; 0..27 in progress; ENTITY_COUNT = finalize */
@@ -135,14 +134,7 @@ static int8_t sta_rssi(void)
 
 static float soc_temp_c(void)
 {
-    if (!s_tsens) {
-        temperature_sensor_config_t c = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
-        if (temperature_sensor_install(&c, &s_tsens) != ESP_OK) { s_tsens = NULL; return NAN; }
-        temperature_sensor_enable(s_tsens);
-    }
-    float t = NAN;
-    if (temperature_sensor_get_celsius(s_tsens, &t) != ESP_OK) return NAN;
-    return t;
+    return sensor_temp_read_celsius();
 }
 
 static bool pub(const char *topic, const char *payload, int retain)

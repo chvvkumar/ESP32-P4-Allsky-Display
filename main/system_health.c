@@ -7,6 +7,7 @@
 #include "system_crash_log.h"
 #include "app_config.h"
 #include "mqtt_ha.h"
+#include "sensor_temp.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -15,7 +16,6 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "cJSON.h"
-#include "driver/temperature_sensor.h"
 
 static const char *TAG = "sys_health";
 
@@ -44,28 +44,10 @@ static uint32_t s_last_roam_time_ms;
 
 static system_health_providers_t s_prov;
 
-/* ---- Temperature sensor (lazy) ----------------------------------------- */
-static temperature_sensor_handle_t s_tsens;
-
+/* ---- Temperature sensor ------------------------------------------------ */
 static float read_temperature_c(void)
 {
-    if (!s_tsens) {
-        temperature_sensor_config_t cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 120);
-        if (temperature_sensor_install(&cfg, &s_tsens) != ESP_OK) {
-            s_tsens = NULL;
-            return NAN;
-        }
-        if (temperature_sensor_enable(s_tsens) != ESP_OK) {
-            temperature_sensor_uninstall(s_tsens);
-            s_tsens = NULL;
-            return NAN;
-        }
-    }
-    float t = NAN;
-    if (temperature_sensor_get_celsius(s_tsens, &t) != ESP_OK) {
-        return NAN;
-    }
-    return t;
+    return sensor_temp_read_celsius();
 }
 
 /* ---- Provider helpers with fallbacks ----------------------------------- */

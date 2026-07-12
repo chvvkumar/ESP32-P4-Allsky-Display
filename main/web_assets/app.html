@@ -100,9 +100,8 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:2px}
 #console{background:#05070c;border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;overflow:auto;height:60vh;min-height:250px}
 .savebar{position:sticky;bottom:12px;background:var(--surface);border:1px solid var(--glass-edge);border-radius:var(--radius-lg);padding:12px 18px;display:flex;gap:10px;align-items:center;margin:12px auto;justify-content:flex-end;
   backdrop-filter:blur(12px) saturate(1);-webkit-backdrop-filter:blur(12px) saturate(1);box-shadow:var(--glass-shadow)}
-.health .st{font-size:11px;font-weight:600}
-.health .st.ok{color:var(--success)}.health .st.warn{color:var(--warning)}.health .st.bad{color:var(--danger)}
-.health .rec{font-size:12px;color:var(--text-3);margin-top:4px}
+.st{font-weight:600}
+.st.ok{color:var(--success)}.st.warn{color:var(--warning)}.st.bad{color:var(--danger)}
 @media(max-width:640px){nav{gap:0}.console-grid{grid-template-columns:1fr}}
 .api .ep{border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;margin:8px 0;background:var(--elev)}
 .api .ep .path{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;word-break:break-all}
@@ -217,33 +216,34 @@ PAGES['/']=function(){
   h+='<div class="grid">';
   h+=card('Network',net.connected?kv('SSID',net.ssid)+kv('IP',net.ip)+kv('Signal',net.rssi+' dBm')+kv('MAC',net.mac)+kv('Gateway',net.gateway)+kv('DNS',net.dns):'<p class="dim">Not connected</p>');
   h+=card('MQTT',mq.connected?kv('Broker',mq.server+':'+mq.port)+kv('Client',mq.client_id)+kv('HA Discovery',ha.discovery_enabled?'On':'Off'):'<p class="dim">Not connected</p>');
-  h+=card('System',kv('Chip',sys.chip_model+' rev'+sys.chip_revision)+kv('Cores/MHz',sys.chip_cores+' / '+sys.cpu_freq)+kv('Heap',fmtk(sys.free_heap)+' / '+fmtk(sys.total_heap))+kv('PSRAM',fmtk(sys.free_psram)+' / '+fmtk(sys.total_psram))+kv('Temp',(sys.temperature_celsius||0).toFixed(1)+'C / '+(sys.temperature_fahrenheit||0).toFixed(1)+'F')+kv('Health',sys.healthy?'Healthy':'Issues'));
+  h+=card('System',kv('Chip',sys.chip_model+' rev'+sys.chip_revision)+kv('Cores/MHz',sys.chip_cores+' / '+sys.cpu_freq)+kvi('Heap',fmtk(sys.free_heap)+' / '+fmtk(sys.total_heap),'sysHeap')+kvi('PSRAM',fmtk(sys.free_psram)+' / '+fmtk(sys.total_psram),'sysPsram')+kvi('Temp',(sys.temperature_celsius||0).toFixed(1)+'C / '+(sys.temperature_fahrenheit||0).toFixed(1)+'F','sysTemp'));
   h+=card('Display',kv('Resolution',dsp.width+' x '+dsp.height)+kv('Brightness',dsp.brightness+'% ('+bmode+')')+kv('PWM Freq',dsp.backlight_freq+' Hz')+kv('PWM Res',dsp.backlight_resolution+' bit'));
   h+=card('Firmware',kv('Version',fw.version)+kv('Size',fmtk(fw.size))+kv('Free',fmtk(fw.free_space))+kv('Checksum','<span class="mono">'+esc((fw.checksum||'').slice(0,16))+'</span>'));
   h+=card('Home Assistant',kv('Discovery',ha.discovery_enabled?'On':'Off')+kv('Device',ha.device_name)+kv('Prefix',ha.discovery_prefix)+kv('State topic',ha.state_topic)+kv('Interval',ha.sensor_update_interval+' s'));
-  h+='<div class="card health" id="healthCard"><h2>System Health</h2><p class="dim">Loading health...</p></div>';
   h+='</div>';
   h+='<div class="card"><h2>Configured Sources</h2>'+srcs.map(function(s){
-    return '<div class="src '+(s.active?'active':'')+'"><span class="mono" style="word-break:break-all">'+(s.index+1)+'. '+esc(s.url)+'</span>'+(s.active?' <span class="pill">Active</span>':'')+'</div>';}).join('')+'</div>';
+    return '<div class="src '+(s.active?'active':'')+'"><span class="mono" style="word-break:break-all">'+(s.index+1)+'. '+esc(srcLabel(s.url))+'</span>'+(s.active?' <span class="pill">Active</span>':'')+'</div>';}).join('')+'</div>';
   el('main').innerHTML=h;
-  renderHealth();
+  applyHealth();
  });
- clearInterval(window._dashT);window._dashT=setInterval(function(){if(location.pathname!=='/'){clearInterval(window._dashT);return;}loadInfo().then(updateBadges);renderHealth();},5000);
+ clearInterval(window._dashT);window._dashT=setInterval(function(){if(location.pathname!=='/'){clearInterval(window._dashT);return;}loadInfo().then(updateBadges);applyHealth();},5000);
 };
 function healthCls(s){return s==='WARNING'?'warn':(s==='CRITICAL'||s==='FAILING')?'bad':'ok';}
-function renderHealth(){api('/api/health').then(function(r){var hd=r.json;var c=el('healthCard');if(!c||!hd||!hd.overall)return;
- var subs=[['System','system'],['Memory','memory'],['Network','network'],['MQTT','mqtt'],['Display','display']];
- var h='<h2>System Health</h2>';
- h+='<div class="kv"><span class="k">Overall</span><span class="st '+healthCls(hd.overall.status)+'">'+esc(hd.overall.status)+'</span></div>';
- if(hd.overall.message)h+='<p class="dim" style="font-size:12px;margin:4px 0 8px">'+esc(hd.overall.message)+'</p>';
- subs.forEach(function(p){var o=hd[p[1]];if(!o)return;h+='<div class="kv"><span class="k">'+p[0]+'</span><span class="st '+healthCls(o.status)+'" title="'+esc(o.message||'')+'">'+esc(o.status)+'</span></div>';});
- var recs=hd.recommendations||[];
- if(recs.length){h+='<div style="margin-top:8px"><span class="k" style="font-size:11px;color:var(--muted)">Recommendations</span>'+recs.map(function(t){return '<div class="rec">- '+esc(t)+'</div>';}).join('')+'</div>';}
- c.innerHTML=h;}).catch(function(){});}
+// Color Heap/PSRAM/Temp inline in the System card + plain-language tooltips. No code/config refs in tips.
+var HTIP={mem:'Low working memory. The device may slow down or restart. Try using fewer image sources.',
+ psram:'Low image memory. Large images may fail to load. Reduce the number or resolution of image sources.',
+ temp:'The device is running hot. Improve airflow around the device.'};
+function setH(id,status,kind){var e=el(id);if(!e)return;var c=healthCls(status);
+ if(c==='ok'){e.className='';e.removeAttribute('title');return;}
+ e.className='st '+c;e.title=HTIP[kind]||'';}
+function applyHealth(){api('/api/health').then(function(r){var hd=r.json;if(!hd)return;var m=hd.memory||{},sy=hd.system||{};
+ setH('sysHeap',m.status,'mem');setH('sysPsram',m.status,'psram');setH('sysTemp',sy.status,'temp');}).catch(function(){});}
 function tile(k,v){return '<div class="tile"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'</div></div>';}
 function card(t,b){return '<div class="card"><h2>'+esc(t)+'</h2>'+b+'</div>';}
 function kv(k,v){return '<div class="kv"><span class="k">'+esc(k)+'</span><span>'+(v==null?'-':v)+'</span></div>';}
+function kvi(k,v,id){return '<div class="kv"><span class="k">'+esc(k)+'</span><span id="'+id+'">'+(v==null?'-':v)+'</span></div>';}
 function fmtk(b){return b>1048576?((b/1048576).toFixed(1)+' MB'):((b/1024|0)+' KB');}
+function srcLabel(u){return (u&&u.indexOf('moon://')===0)?'Moon Phase':u;}
 
 /* ======================================================= DISPLAY */
 PAGES['/config/display']=function(){

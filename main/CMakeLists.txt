@@ -15,6 +15,7 @@ idf_component_register(
         "system_serial.c"
         "system_tasks.c"
         "system_web_bridge.c"
+        "sensor_temp.c"
         # Network
         "network_wifi.c"
         "network_time.c"

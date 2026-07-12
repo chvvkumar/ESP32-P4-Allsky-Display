@@ -50,7 +50,7 @@ esp_err_t web_status_handler(httpd_req_t *req)
         net.connected ? "true" : "false", ssid_esc,
         net.connected ? net.ip : "0.0.0.0", net.rssi,
         web_hook_mqtt_connected() ? "true" : "false",
-        (unsigned)esp_get_free_heap_size(),
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
         (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
         (unsigned long long)uptime_ms(), current_brightness());
     return web_send_json(req, 200, body);
@@ -84,9 +84,9 @@ esp_err_t web_info_handler(httpd_req_t *req)
     cJSON_AddStringToObject(sys, "device_name", sbuf);
     cJSON_AddNumberToObject(sys, "uptime", (double)uptime_ms());
     cJSON_AddNumberToObject(sys, "uptime_seconds", (double)(uptime_ms() / 1000));
-    cJSON_AddNumberToObject(sys, "free_heap", esp_get_free_heap_size());
+    cJSON_AddNumberToObject(sys, "free_heap", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     cJSON_AddNumberToObject(sys, "total_heap", heap_caps_get_total_size(MALLOC_CAP_INTERNAL));
-    cJSON_AddNumberToObject(sys, "min_free_heap", esp_get_minimum_free_heap_size());
+    cJSON_AddNumberToObject(sys, "min_free_heap", heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
     cJSON_AddNumberToObject(sys, "free_psram", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     cJSON_AddNumberToObject(sys, "total_psram", heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
     cJSON_AddNumberToObject(sys, "min_free_psram", heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM));
