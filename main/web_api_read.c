@@ -147,6 +147,25 @@ esp_err_t web_info_handler(httpd_req_t *req)
     cJSON_AddStringToObject(ha, "state_topic", sbuf);
     cJSON_AddNumberToObject(ha, "sensor_update_interval", app_config_get_ha_sens_int());
 
+    /* ha_rest / light-sensor auto-brightness (token is sensitive: emit a flag) */
+    cJSON *hr = cJSON_AddObjectToObject(root, "ha_rest");
+    app_config_get_ha_base_url(sbuf, sizeof(sbuf));
+    cJSON_AddStringToObject(hr, "ha_base_url", sbuf);
+    cJSON_AddNumberToObject(hr, "ha_poll_interval", app_config_get_ha_poll_int());
+    app_config_get_ha_token(sbuf, sizeof(sbuf));
+    cJSON_AddBoolToObject(hr, "ha_token_set", sbuf[0] != '\0');
+    app_config_get_ha_sensor_ent(sbuf, sizeof(sbuf));
+    cJSON_AddStringToObject(hr, "ha_light_sensor_entity", sbuf);
+    cJSON_AddNumberToObject(hr, "light_sensor_mapping_mode", app_config_get_sensor_map_mode());
+    cJSON_AddNumberToObject(hr, "light_sensor_min_lux", app_config_get_sensor_min_lux());
+    cJSON_AddNumberToObject(hr, "light_sensor_max_lux", app_config_get_sensor_max_lux());
+    cJSON_AddNumberToObject(hr, "display_min_brightness", app_config_get_disp_min_br());
+    cJSON_AddNumberToObject(hr, "display_max_brightness", app_config_get_disp_max_br());
+
+    /* logging */
+    cJSON *lg = cJSON_AddObjectToObject(root, "logging");
+    cJSON_AddNumberToObject(lg, "min", app_config_get_log_min_sev());
+
     /* display */
     cJSON *disp = cJSON_AddObjectToObject(root, "display");
     cJSON_AddNumberToObject(disp, "width", panel.width);
@@ -165,30 +184,34 @@ esp_err_t web_info_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(img, "update_interval", app_config_get_upd_interval());
     app_config_current_image_url(sbuf, sizeof(sbuf));
     cJSON_AddStringToObject(img, "current_url", sbuf);
+
+    /* Source list, count and cycling defaults are always present so the UI can
+     * render them regardless of whether cycling is currently enabled. */
+    cJSON_AddNumberToObject(img, "default_image_duration", app_config_get_def_img_dur());
+    cJSON_AddBoolToObject(img, "random_order", app_config_get_random_ord());
+    cJSON_AddNumberToObject(img, "current_index", app_config_get_curr_img_idx());
+    int cnt = app_config_source_count();
+    cJSON_AddNumberToObject(img, "source_count", cnt);
+    cJSON *arr = cJSON_AddArrayToObject(img, "sources");
+    int cur = web_hook_image_current_index();
+    for (int i = 0; i < cnt; i++) {
+        image_source_t s;
+        if (!app_config_get_source(i, &s)) continue;
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddNumberToObject(o, "index", i);
+        cJSON_AddStringToObject(o, "url", s.url);
+        cJSON_AddBoolToObject(o, "enabled", s.enabled);
+        cJSON_AddBoolToObject(o, "active", i == cur);
+        cJSON_AddNumberToObject(o, "scale_x", s.transform.scale_x);
+        cJSON_AddNumberToObject(o, "scale_y", s.transform.scale_y);
+        cJSON_AddNumberToObject(o, "offset_x", s.transform.offset_x);
+        cJSON_AddNumberToObject(o, "offset_y", s.transform.offset_y);
+        cJSON_AddNumberToObject(o, "rotation", s.transform.rotation);
+        cJSON_AddItemToArray(arr, o);
+    }
+
     if (cycling) {
         cJSON_AddNumberToObject(img, "cycle_interval", app_config_get_cycle_intv());
-        cJSON_AddNumberToObject(img, "default_image_duration", app_config_get_def_img_dur());
-        cJSON_AddBoolToObject(img, "random_order", app_config_get_random_ord());
-        cJSON_AddNumberToObject(img, "current_index", app_config_get_curr_img_idx());
-        int cnt = app_config_source_count();
-        cJSON_AddNumberToObject(img, "source_count", cnt);
-        cJSON *arr = cJSON_AddArrayToObject(img, "sources");
-        int cur = web_hook_image_current_index();
-        for (int i = 0; i < cnt; i++) {
-            image_source_t s;
-            if (!app_config_get_source(i, &s)) continue;
-            cJSON *o = cJSON_CreateObject();
-            cJSON_AddNumberToObject(o, "index", i);
-            cJSON_AddStringToObject(o, "url", s.url);
-            cJSON_AddBoolToObject(o, "enabled", s.enabled);
-            cJSON_AddBoolToObject(o, "active", i == cur);
-            cJSON_AddNumberToObject(o, "scale_x", s.transform.scale_x);
-            cJSON_AddNumberToObject(o, "scale_y", s.transform.scale_y);
-            cJSON_AddNumberToObject(o, "offset_x", s.transform.offset_x);
-            cJSON_AddNumberToObject(o, "offset_y", s.transform.offset_y);
-            cJSON_AddNumberToObject(o, "rotation", s.transform.rotation);
-            cJSON_AddItemToArray(arr, o);
-        }
     } else {
         app_config_get_image_url(sbuf, sizeof(sbuf));
         cJSON_AddStringToObject(img, "url", sbuf);

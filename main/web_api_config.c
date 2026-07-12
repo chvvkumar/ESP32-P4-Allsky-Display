@@ -25,7 +25,10 @@ static bool checkbox_addressed(const char *body, const char *field, bool *val)
 {
     char marker[48];
     snprintf(marker, sizeof(marker), "%s_present", field);
-    bool has_field = web_form_has(body, field);
+    char v[8];
+    /* Frontend always POSTs the checkbox key (empty value when unchecked), so
+     * presence alone is not enough: a non-empty value means checked. */
+    bool has_field  = web_form_get(body, field, v, sizeof(v)) && v[0] != '\0';
     bool has_marker = web_form_has(body, marker);
     if (!has_field && !has_marker) return false;
     *val = has_field;
