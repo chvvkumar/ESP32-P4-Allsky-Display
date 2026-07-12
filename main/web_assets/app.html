@@ -7,7 +7,7 @@
 <style>
 :root{
   --bg:#0a0c14; --bg-2:#0f1320;
-  --surface:rgba(16,18,25,.85); --elev:rgba(24,27,38,.90);
+  --surface:rgba(22,25,34,.82); --elev:rgba(30,34,46,.88);
   --hover:rgba(30,34,48,.70); --input:rgba(12,14,20,.90);
   --border:rgba(255,255,255,.08); --border-em:rgba(255,255,255,.15);
   --glass-edge:rgba(255,255,255,.10);
@@ -24,10 +24,10 @@ html,body{margin:0;color:var(--text);min-height:100vh;
   font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;
   background:linear-gradient(135deg,var(--bg) 0%,var(--bg-2) 100%);background-attachment:fixed}
 body::before,body::after{content:"";position:fixed;pointer-events:none;z-index:0;border-radius:50%}
-body::before{left:-10%;top:-15%;width:72%;height:72%;
-  background:radial-gradient(circle,rgba(30,41,59,.30) 0%,rgba(30,41,59,.10) 45%,transparent 75%)}
-body::after{left:52%;top:42%;width:80%;height:80%;
-  background:radial-gradient(circle,rgba(15,23,42,.34) 0%,rgba(15,23,42,.11) 45%,transparent 75%)}
+body::before{left:-10%;top:-15%;width:85%;height:85%;
+  background:radial-gradient(circle,rgba(30,41,59,.55) 0%,rgba(30,41,59,.18) 45%,transparent 75%)}
+body::after{left:52%;top:42%;width:95%;height:95%;
+  background:radial-gradient(circle,rgba(15,23,42,.5) 0%,rgba(15,23,42,.16) 45%,transparent 75%)}
 body{display:flex;flex-direction:column}
 header,nav,main,footer{position:relative;z-index:1}
 a{color:var(--accent);text-decoration:none}
@@ -38,22 +38,26 @@ header .sp{flex:1}
 .badge{font-size:11px;padding:3px 8px;border-radius:12px;background:var(--elev);border:1px solid var(--border)}
 .badge.ok{color:var(--success)}.badge.bad{color:var(--danger)}.badge.warn{color:var(--warning)}
 .btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;white-space:nowrap;flex-shrink:0;
-  background:var(--accent-s);color:#0a0c14;border:0;border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;font-weight:500;cursor:pointer}
-.btn:hover{background:var(--accent-sh)}.btn.red{background:var(--danger);color:#0a0c14}.btn.red:hover{background:var(--danger-h)}
+  background:var(--elev);color:var(--text);border:1px solid var(--border-em);border-radius:var(--radius-sm);padding:8px 12px;font-size:13px;font-weight:500;cursor:pointer}
+.btn:hover{background:var(--hover);border-color:var(--glass-edge)}
 .btn.ghost{background:var(--elev);color:var(--text);border:1px solid var(--border-em)}
 .btn.ghost:hover{background:var(--hover)}
-.btn:disabled{background:var(--hover);color:var(--text-3);cursor:not-allowed}
+.btn.primary{background:var(--accent);color:#0a0c14;border-color:transparent}
+.btn.primary:hover{background:var(--accent-sh);border-color:transparent}
+.btn.red{background:transparent;color:var(--danger);border:1px solid rgba(248,113,113,.5)}
+.btn.red:hover{background:rgba(248,113,113,.12);border-color:var(--danger)}
+.btn:disabled,.btn.primary:disabled{background:var(--hover);color:var(--text-3);border-color:var(--border);cursor:not-allowed}
 .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 nav{position:sticky;top:0;z-index:20;display:flex;gap:2px;padding:6px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap;
   backdrop-filter:blur(12px) saturate(1);-webkit-backdrop-filter:blur(12px) saturate(1)}
 nav a{padding:7px 12px;border-radius:var(--radius-sm);font-size:13px;color:var(--muted)}
-nav a:hover{background:var(--hover);color:var(--text)}nav a.active{background:var(--accent-s);color:#0a0c14}
+nav a:hover{background:var(--hover);color:var(--text)}nav a.active{background:rgba(122,162,247,.14);color:var(--accent)}
 main{flex:1;padding:18px;max-width:1100px;width:100%;margin:0 auto}
 footer{padding:12px 16px;background:var(--surface);border-top:1px solid var(--border);font-size:11px;color:var(--muted);text-align:center;
   backdrop-filter:blur(12px) saturate(1);-webkit-backdrop-filter:blur(12px) saturate(1)}
 .card{background:var(--surface);border:1px solid var(--glass-edge);border-radius:var(--radius-lg);padding:16px;margin:0 0 14px;
   backdrop-filter:blur(12px) saturate(1);-webkit-backdrop-filter:blur(12px) saturate(1);box-shadow:var(--glass-shadow)}
-.card h2{font-size:14px;margin:0 0 12px}
+.card h2{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 12px}
 .grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .console-grid{grid-template-columns:200px 1fr}
 .tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px}
@@ -72,7 +76,7 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:2px}
 .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
 .src{border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;margin:6px 0;background:var(--elev);
   backdrop-filter:blur(8px) saturate(1);-webkit-backdrop-filter:blur(8px) saturate(1)}
-.src.active{border-color:var(--success);background:rgba(74,222,128,.06)}
+.src.active{border-left:3px solid var(--success);background:rgba(74,222,128,.05)}
 .dim{color:var(--text-3);opacity:1}
 .toast-wrap{position:fixed;top:14px;right:14px;z-index:100;display:flex;flex-direction:column;gap:8px}
 .toast{min-width:280px;max-width:460px;padding:11px 14px;border-radius:var(--radius-md);background:var(--elev);border-left:4px solid var(--accent);box-shadow:var(--glass-shadow);font-size:13px;display:flex;justify-content:space-between;gap:10px;transition:opacity .3s;
@@ -93,8 +97,8 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:2px}
 .collapse .body{display:none}.collapse.open .body{display:block}
 .collapse h2{cursor:pointer}
 #console{background:#05070c;border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;overflow:auto;height:60vh;min-height:250px}
-.savebar{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border-em);padding:10px;display:flex;gap:10px;align-items:center;margin:14px -18px -18px;justify-content:flex-end;
-  backdrop-filter:blur(12px) saturate(1);-webkit-backdrop-filter:blur(12px) saturate(1);box-shadow:var(--glass-shadow)}
+.savebar{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--glass-edge);padding:12px 18px;display:flex;gap:10px;align-items:center;margin:14px -18px -18px;justify-content:flex-end;
+  backdrop-filter:blur(12px) saturate(1);-webkit-backdrop-filter:blur(12px) saturate(1);box-shadow:0 -8px 24px rgba(0,0,0,.3)}
 .health .st{font-size:11px;font-weight:600}
 .health .st.ok{color:var(--success)}.health .st.warn{color:var(--warning)}.health .st.bad{color:var(--danger)}
 .health .rec{font-size:12px;color:var(--text-3);margin-top:4px}
@@ -300,7 +304,7 @@ PAGES['/config/network']=function(){
  el('main').innerHTML='<div class="card"><h2>WiFi Networks</h2><button class="btn" id="scanb" onclick="wifiScan()">Scan Networks</button>'+
   '<div id="scanstat" style="font-size:12px;color:var(--muted);margin-top:8px"></div><div id="nets" style="max-height:400px;overflow:auto;margin-top:8px">Click Scan to discover networks.</div></div>'+
   '<form id="wf"><div class="card"><h2>Manual Configuration</h2><label>SSID</label><input id="wssid" required>'+
-  '<label>Password</label><input type="password" id="wpw" placeholder="(unchanged)"><button class="btn" type="submit" style="margin-top:12px">Save Network Settings</button></div></form>';
+  '<label>Password</label><input type="password" id="wpw" placeholder="(unchanged)"><button class="btn primary" type="submit" style="margin-top:12px">Save Network Settings</button></div></form>';
  el('wf').onsubmit=function(e){e.preventDefault();postSave({wifi_ssid:el('wssid').value,wifi_password:el('wpw').value}).then(function(r){
   if(r.json.status==='success'){toast('Settings saved','success');if(r.json.needsRestart){modal('Restarting',r.json.message,function(){api('/api/restart',{method:'POST'});setTimeout(function(){location.reload();},10000);});}}
   else toast('Error: '+(r.json.message||''),'error');});};
@@ -332,7 +336,7 @@ PAGES['/config/mqtt']=function(){
    '<label>Discovery Prefix</label><input id="hdp" value="'+esc(ha.discovery_prefix)+'">'+
    '<label>State Topic Prefix</label><input id="hst" value="'+esc(ha.state_topic)+'">'+
    '<label>Sensor Update Interval (s)</label><input type="number" min="10" max="300" id="hsi" value="'+ha.sensor_update_interval+'">'+
-   '<button class="btn" type="submit" style="margin-top:12px">Save MQTT Settings</button></div></form>';
+   '<button class="btn primary" type="submit" style="margin-top:12px">Save MQTT Settings</button></div></form>';
   el('mf').onsubmit=function(e){e.preventDefault();
    postSave({mqtt_server:el('ms').value,mqtt_port:el('mp').value,mqtt_client_id:el('mc').value,mqtt_user:el('mu').value,mqtt_password:el('mpw').value,
     ha_discovery_enabled:el('hde').checked?'on':'',ha_discovery_enabled_present:'1',ha_device_name:el('hdn').value,ha_discovery_prefix:el('hdp').value,ha_state_topic:el('hst').value,ha_sensor_update_interval:el('hsi').value}).then(function(r){
@@ -355,8 +359,8 @@ PAGES['/config/system']=function(){
    '<div class="card"><h2>Display Hardware</h2><label>Display Type</label><select id="dt"><option value="1" '+(a.display_type==1?'selected':'')+'>3.4" 800x800</option><option value="2" '+(a.display_type==2?'selected':'')+'>4.0" 720x720</option></select><p class="dim" style="font-size:11px">Changing restarts the device.</p></div>'+
    '<div class="card"><h2>Memory Thresholds</h2><label>Critical Heap (bytes)</label><input type="number" min="10000" max="1000000" id="cht" value="'+a.critical_heap_threshold+'">'+
    '<label>Critical PSRAM (bytes)</label><input type="number" min="10000" max="10000000" id="cpt" value="'+a.critical_psram_threshold+'"></div></div>'+
-   '<button class="btn" type="submit">Save System Settings</button></form>'+
-   '<div class="card"><h2>Firmware Update</h2><p class="dim">Settings survive OTA.</p><a class="btn" href="/update">Open OTA Uploader</a></div>'+
+   '<button class="btn primary" type="submit">Save System Settings</button></form>'+
+   '<div class="card"><h2>Firmware Update</h2><p class="dim">Settings survive OTA.</p><a class="btn primary" href="/update">Open OTA Uploader</a></div>'+
    '<div class="card"><h2>Live Screenshot</h2><button class="btn" onclick="shot()">Capture Screenshot</button><div id="shotout" style="margin-top:10px"></div></div>'+
    '<div class="card"><h2>Backup &amp; Restore</h2><label class="row"><input type="checkbox" id="secrets"> Include passwords and tokens</label>'+
    '<button class="btn" style="margin-top:8px" onclick="backup()">Download Backup</button><hr style="border-color:var(--border);margin:14px 0">'+
@@ -431,7 +435,7 @@ function renderImages(){
   '<label class="row"><input type="checkbox" id="prand" '+(s.randomOrder?'checked':'')+' onchange="mkDirty()"> Randomize order</label></div>';
  h+='<div class="card collapse" id="deftf"><h2 onclick="tog(\'deftf\')">Default Transform &#9662;</h2><div class="body">'+
   tfFields('d',s.defaults,s.maxScale)+'<p class="dim">Baseline for new images. Per-image edits override these.</p></div></div>';
- h+='<div class="savebar"><span id="dirtytag" style="color:var(--warning);display:none">Unsaved default changes</span><button class="btn" id="savedef" onclick="saveDefaults()" disabled>Save defaults</button></div>';
+ h+='<div class="savebar"><span id="dirtytag" style="color:var(--warning);display:none">Unsaved default changes</span><button class="btn primary" id="savedef" onclick="saveDefaults()" disabled>Save defaults</button></div>';
  el('main').innerHTML=h;
  attachDefListeners();updateSelCount();
 }
@@ -443,7 +447,7 @@ function srcRow(s){
  var h='<div class="src '+(active?'active':'')+(s.enabled?'':' dim')+'">'+
   '<div class="row">'+(IST.sources.length>1?'<input type="checkbox" class="rowsel" data-i="'+s.index+'" onchange="updateSelCount()"> ':'')+
   '<button class="btn ghost" onclick="toggleEn('+s.index+')">'+(s.enabled?'On':'Off')+'</button>'+
-  '<span>'+(s.index+1)+'.</span>';
+  '<span>'+(s.index+1)+'.</span>'+(active?' <span class="badge ok">On screen</span>':'');
  if(s.isMoon)h+='<span style="flex:1">Moon Phase</span>';
  else h+='<input style="flex:1" class="urlin" data-i="'+s.index+'" value="'+esc(s.url)+'" onchange="updUrl('+s.index+',this)">';
  h+='<button class="btn ghost" onclick="tglDrawer('+s.index+')">'+(open?'&#9652;':'&#9662;')+'</button></div>';
