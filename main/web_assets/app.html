@@ -99,6 +99,14 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:2px}
 .health .st.ok{color:var(--success)}.health .st.warn{color:var(--warning)}.health .st.bad{color:var(--danger)}
 .health .rec{font-size:12px;color:var(--text-3);margin-top:4px}
 @media(max-width:640px){nav{gap:0}.console-grid{grid-template-columns:1fr}}
+.api .ep{border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;margin:8px 0;background:var(--elev)}
+.api .ep .path{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;word-break:break-all}
+.api .desc{color:var(--muted);font-size:13px;margin:4px 0}
+.api pre{background:#05070c;border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px;margin:6px 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;white-space:pre-wrap;word-break:break-word;overflow:auto;color:var(--text)}
+.api .m{display:inline-block;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:6px;vertical-align:1px}
+.api .m.get{background:rgba(74,222,128,.15);color:var(--success)}
+.api .m.post{background:rgba(122,162,247,.15);color:var(--accent)}
+.api .m.ws{background:rgba(251,191,36,.15);color:var(--warning)}
 </style>
 </head>
 <body>
@@ -531,11 +539,107 @@ PAGES['/config/commands']=function(){el('main').innerHTML='<div class="card"><h2
  tbl('System',[['B','Reboot'],['M','Memory info'],['I','Network info'],['P','PPA info'],['T','MQTT info'],['X','Web server status/restart'],['H / ?','Help']])+
  tbl('Touch',[['Single tap','Next image'],['Double tap','Toggle cycling/refresh mode']])+'</div>';};
 function tbl(t,rows){return '<h2 style="margin-top:14px">'+esc(t)+'</h2><table style="width:100%;border-collapse:collapse">'+rows.map(function(r){return '<tr><td class="mono" style="padding:5px;border-bottom:1px solid var(--border);width:120px">'+esc(r[0])+'</td><td style="padding:5px;border-bottom:1px solid var(--border)">'+esc(r[1])+'</td></tr>';}).join('')+'</table>';}
-PAGES['/api-reference']=function(){el('main').innerHTML='<div class="card"><h2>REST API</h2>'+
- '<p>Base: <span class="mono">http://'+location.host+'</span>. POST bodies are form-encoded (restore takes raw JSON). Responses are JSON.</p>'+
- '<p class="dim">GET /status, /api/info, /api/health, /api/auth/status, /api/images/state, /api/current-image, /api/getMoon, /api/wifi-scan, /api/screenshot, /api/backup?secrets=0|1</p>'+
- '<p class="dim">POST /api/save, /api/add-source, /api/addPreset, /api/remove-source, /api/update-source, /api/clear-sources, /api/bulk-delete-sources, /api/next-image, /api/force-refresh, /api/update-transform, /api/copy-defaults, /api/apply-transform, /api/toggle-image-enabled, /api/select-image, /api/images/tune, /api/images/tune/stop, /api/update-image-duration, /api/setMoon, /api/restore, /api/restart, /api/factory-reset, /api/set-log-severity, /api/clear-crash-logs, /api/force-brightness-update, /api/logout</p>'+
- '<p>Status codes: 200 OK, 400 bad input, 401 auth, 404 not found, 500 error.</p></div>';};
+function apiEp(a){var m=a[0];
+ var h='<div class="ep"><div class="path"><span class="m '+m.toLowerCase()+'">'+m+'</span>'+esc(a[1])+'</div>';
+ if(a[2])h+='<div class="desc">'+esc(a[2])+'</div>';
+ if(a[3])h+='<div class="desc"><b>Params:</b> <span class="mono">'+esc(a[3])+'</span></div>';
+ if(a[4])h+='<pre>'+esc(a[4])+'</pre>';
+ if(a[5])h+='<pre>'+esc(a[5])+'</pre>';
+ return h+'</div>';}
+function apiEps(list){return list.map(apiEp).join('');}
+PAGES['/api-reference']=function(){
+ var base='http://'+location.host;
+ var GET=[
+  ['GET','/status','Compact runtime status snapshot (JSON).'],
+  ['GET','/api/info','Full device state: network, mqtt, system, display, image, firmware, home_assistant, defaults, advanced, time, ha_rest, logging.','',
+   'curl -b session=TOKEN '+base+'/api/info',
+   '{ "system":{"device_name":"..","free_heap":..,"temperature_celsius":..,"healthy":true},\n  "network":{"connected":true,"ssid":"..","ip":"..","rssi":-55},\n  "image":{"source_count":3,"current_index":0,"cycling_enabled":true},\n  "firmware":{"version":"..","checksum":"..","size":..,"free_space":..} }'],
+  ['GET','/api/health','Per-subsystem health plus recommendations.','',
+   '',
+   '{ "overall":{"status":"OK","message":".."},\n  "memory":{"status":"OK"}, "network":{"status":"OK"},\n  "mqtt":{"status":"WARNING"}, "display":{"status":"OK"},\n  "recommendations":["..."] }'],
+  ['GET','/api/wifi-scan','Scan 2.4 GHz networks. Rate limited: returns 429 if called too often.','',
+   '',
+   '{ "networks":[{"ssid":"..","rssi":-60,"channel":6,"quality":"Good","is_open":false}] }'],
+  ['GET','/api/screenshot','Live JPEG capture of the panel. Returns image/jpeg, not JSON.','t (optional cache-buster)'],
+  ['GET','/api/current-image','Currently displayed source URL and cycling state.','',
+   '',
+   '{ "status":"success","current_url":"..","cycling_enabled":true,"current_index":0,"total_sources":3 }'],
+  ['GET','/api/images/state','Full Images page state: sources[], presets[], defaults, moon, tuning, updateMode, updateInterval, defaultDuration, randomOrder, maxScale.'],
+  ['GET','/api/getMoon','Moon render settings.','',
+   '',
+   '{ "lat":..,"lon":..,"bg":0,"flipu":0,"flipv":0,"roll":0,"yaw":0,"pitch":0,"northup":1,"light":0,"spin":0,"spinret":.. }'],
+  ['GET','/api/backup','Download configuration JSON as an attachment.','secrets=0|1 (1 includes passwords and tokens)'],
+  ['GET','/update','OTA firmware uploader (HTML page).']
+ ];
+ var POST=[
+  ['POST','/api/save','Persist settings. Boolean fields need a companion <field>_present=1 to be written.','form: e.g. device_name=..&default_brightness=..','',
+   '{ "status":"success","message":"..","needsRestart":false }'],
+  ['POST','/api/restore','Restore from a backup file, then reboot.','raw JSON body (max 32 KB)'],
+  ['POST','/api/restart','Reboot the device.'],
+  ['POST','/api/factory-reset','Erase all settings and reboot.'],
+  ['POST','/api/set-log-severity','Minimum severity for /ws/logs and device logging.','severity=0..4 (DEBUG..CRITICAL)','',
+   '{ "severity":1 }'],
+  ['POST','/api/clear-crash-logs','Clear buffered crash logs from RTC and NVS.'],
+  ['POST','/api/force-brightness-update','Re-evaluate auto-brightness immediately.'],
+  ['POST','/api/add-source','Append an image source URL.','url=http(s)://...'],
+  ['POST','/api/addPreset','Add a built-in preset or the local moon source.','id=<presetId> | __moon__'],
+  ['POST','/api/remove-source','Remove one source by index (last remaining source cannot be removed).','index=N'],
+  ['POST','/api/update-source','Change a source URL.','index=N&url=...'],
+  ['POST','/api/clear-sources','Reset the list to a single default source.'],
+  ['POST','/api/bulk-delete-sources','Delete several sources; at least one must remain.','indices=[0,2,3] (JSON array string)'],
+  ['POST','/api/next-image','Advance to the next image in rotation.'],
+  ['POST','/api/force-refresh','Re-fetch and redraw the current image.'],
+  ['POST','/api/update-transform','Live-edit one transform property of a source.','index=N&property=scaleX|scaleY|offsetX|offsetY|rotation&value=..'],
+  ['POST','/api/copy-defaults','Reset one source transform back to the defaults.','index=N'],
+  ['POST','/api/apply-transform','Apply and persist the current transform for a source.','index=N'],
+  ['POST','/api/toggle-image-enabled','Enable or disable a source in the rotation.','index=N','',
+   '{ "status":"success","enabled":true }'],
+  ['POST','/api/select-image','Select and hold a source on the display.','index=N'],
+  ['POST','/api/clear-editing-state','Clear any active tuning or editing hold.'],
+  ['POST','/api/images/tune','Hold a source on-screen for live tuning (runtime only, not persisted).','index=N'],
+  ['POST','/api/images/tune/stop','Stop tuning and resume cycling.'],
+  ['POST','/api/update-image-duration','Set the per-image display duration.','index=N&duration=5..3600'],
+  ['POST','/api/setMoon','Save moon render settings.','lat,lon,bg,flipu,flipv,roll,yaw,pitch,northup,light,spin,spinret'],
+  ['POST','/update','OTA firmware upload (multipart binary body).'],
+  ['POST','/api/ota-github','Download and flash firmware from a URL, server-side.','JSON {"url":"https://.../firmware.bin"}']
+ ];
+ var AUTH=[
+  ['POST','/api/login','Create a session. Public. Sets an HttpOnly session cookie (12 h).','JSON {"password":".."} or form password=..'],
+  ['POST','/api/logout','Destroy the current session.'],
+  ['GET','/api/auth/status','Whether auth is enabled and the caller is authenticated. Public.','',
+   '',
+   '{ "auth_enabled":true,"authed":false }']
+ ];
+ var pyEx='import requests\ns = requests.Session()\ns.post("'+base+'/api/login", json={"password": "yourpass"})\ninfo = s.get("'+base+'/api/info").json()\nprint(info["system"]["device_name"], info["network"]["ip"])\ns.post("'+base+'/api/next-image")';
+ var jsEx='await fetch("/api/login", {method:"POST",\n  headers:{"Content-Type":"application/json"},\n  body: JSON.stringify({password:"yourpass"})});\nconst info = await (await fetch("/api/info")).json();\nawait fetch("/api/force-refresh", {method:"POST"});';
+ var haEx='# REST sensor (MQTT auto-discovery handles the rest)\nrest:\n  - resource: '+base+'/api/info\n    scan_interval: 60\n    sensor:\n      - name: AllSky SoC Temp\n        value_template: "{{ value_json.system.temperature_celsius }}"';
+ var wsEx="var ws = new WebSocket('ws://'+location.host+'/ws/logs');\nws.onmessage = e => console.log(e.data);";
+ var h='<div class="card api"><h2>REST API</h2>'+
+  '<p class="desc">Base URL <span class="mono">'+esc(base)+'</span>. POST bodies are form-encoded unless noted (restore, ota-github and login take JSON). Responses are JSON with a <span class="mono">status</span> field, except screenshot (JPEG) and backup (file download).</p></div>';
+ h+='<div class="card api"><h2>GET endpoints</h2>'+apiEps(GET)+'</div>';
+ h+='<div class="card api"><h2>POST endpoints</h2>'+apiEps(POST)+'</div>';
+ h+='<div class="card api"><h2>Authentication and sessions</h2>'+apiEps(AUTH)+
+  '<p class="desc">When an admin password is set, every route except /login, /api/auth/status and /favicon.ico requires a valid <span class="mono">session</span> cookie. Log in once, then send that cookie with each request. Sessions expire after 12 hours.</p></div>';
+ h+='<div class="card api"><h2>WebSocket: /ws/logs</h2>'+
+  '<p class="desc">Authenticated WebSocket streaming plain-text log lines, one per message. Set the minimum severity with POST /api/set-log-severity (0=DEBUG .. 4=CRITICAL).</p>'+
+  '<pre>'+esc(wsEx)+'</pre></div>';
+ h+='<div class="card api"><h2>MQTT API</h2>'+
+  '<p class="desc">Home Assistant discovery publishes entities under the configured prefix. Topic base is <span class="mono">&lt;stateTopicPrefix&gt;/&lt;deviceMAC&gt;</span>.</p>'+
+  '<p class="desc">Command topic <span class="mono">&lt;base&gt;/&lt;entity&gt;/set</span> &middot; State topic <span class="mono">&lt;base&gt;/&lt;entity&gt;/state</span> (retained) &middot; Availability <span class="mono">&lt;base&gt;/availability</span> (online / offline).</p>'+
+  tbl('Command entities (publish payload to /set)',[['brightness','0-100'],['cycling','ON / OFF'],['random_order','ON / OFF'],['auto_brightness','ON / OFF'],['cycle_interval','10-3600 (seconds)'],['update_interval','10-3600 (seconds)'],['image_source','"Image N" (select)'],['reboot','PRESS (button)'],['next_image','PRESS (button)'],['reset_transforms','PRESS (button)']])+
+  '<p class="desc" style="margin-top:10px">State-only sensors include current_image, free_heap, free_psram, wifi_rssi, uptime, uptime_readable, image_count, current_image_index, cycling_mode, temperature_celsius, temperature_fahrenheit, display_width, display_height, brightness_level.</p></div>';
+ h+='<div class="card api"><h2>Usage examples</h2>'+
+  '<div class="desc">Python (requests)</div><pre>'+esc(pyEx)+'</pre>'+
+  '<div class="desc">JavaScript (fetch)</div><pre>'+esc(jsEx)+'</pre>'+
+  '<div class="desc">Home Assistant (configuration.yaml)</div><pre>'+esc(haEx)+'</pre></div>';
+ h+='<div class="card api"><h2>HTTP response codes</h2>'+
+  tbl('',[['200','Success'],['400','Invalid input or missing parameter'],['401','Authentication required'],['404','Not found / unknown preset id'],['409','OTA already in progress'],['429','Rate limited (wifi-scan)'],['500','Internal error'],['502','OTA download failed'],['503','Framebuffer or JPEG encoder unavailable']])+'</div>';
+ h+='<div class="card api"><h2>Notes</h2>'+
+  '<p class="desc">The dashboard at "/" is reachable in setup mode before a password is configured; all other pages require auth once a password is set.</p>'+
+  '<p class="desc">Do not power off the device during /update or /api/ota-github. Settings survive OTA. /api/ota-github fetches the given URL server-side with no certificate validation, so only use trusted URLs.</p>'+
+  '<p class="desc">/api/screenshot returns a JPEG and /api/backup returns a downloadable JSON file; both are non-JSON responses.</p></div>';
+ el('main').innerHTML=h;
+};
 
 /* ---------- boot ---------- */
 loadInfo().then(updateBadges).catch(function(){});
