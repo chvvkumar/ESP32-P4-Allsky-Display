@@ -122,17 +122,25 @@ esp_err_t web_ota_upload_handler(httpd_req_t *req)
         char *data = buf; size_t dlen = r;
 
         if (!header_done) {
-            /* Accumulate until the blank line that ends the part headers. */
+            /* Accumulate until the blank line that ends the part headers.
+             * prior = bytes already in hdracc BEFORE this chunk. The copy may be
+             * truncated by the 512-byte cap, so it is NOT hdracc_len - dlen. */
+            size_t prior = hdracc_len;
             size_t cp = dlen; if (cp > sizeof(hdracc) - hdracc_len - 1) cp = sizeof(hdracc) - hdracc_len - 1;
             memcpy(hdracc + hdracc_len, data, cp);
             hdracc_len += cp;
             hdracc[hdracc_len] = '\0';
             char *sep = strstr(hdracc, "\r\n\r\n");
-            if (!sep) continue;
+            if (!sep) {
+                /* No blank line yet and the accumulator is full: part headers
+                 * larger than our cap, which should never happen for a valid
+                 * multipart upload. Fail loud rather than consume the whole body. */
+                if (hdracc_len >= sizeof(hdracc) - 1) { status = ESP_FAIL; break; }
+                continue;
+            }
             size_t consumed_in_hdr = (sep + 4) - hdracc;
             /* Header may span prior chunks; body starts consumed_in_hdr bytes
              * from the start of accumulation. Map into this chunk's offset. */
-            size_t prior = hdracc_len - dlen;
             size_t body_off = (consumed_in_hdr > prior) ? (consumed_in_hdr - prior) : 0;
             if (body_off > dlen) body_off = dlen;
             data += body_off; dlen -= body_off;
