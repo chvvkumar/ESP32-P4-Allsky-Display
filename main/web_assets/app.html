@@ -556,7 +556,7 @@ PAGES['/api-reference']=function(){
    '{ "system":{"device_name":"..","free_heap":..,"temperature_celsius":..,"healthy":true},\n  "network":{"connected":true,"ssid":"..","ip":"..","rssi":-55},\n  "image":{"source_count":3,"current_index":0,"cycling_enabled":true},\n  "firmware":{"version":"..","checksum":"..","size":..,"free_space":..} }'],
   ['GET','/api/health','Per-subsystem health plus recommendations.','',
    '',
-   '{ "overall":{"status":"OK","message":".."},\n  "memory":{"status":"OK"}, "network":{"status":"OK"},\n  "mqtt":{"status":"WARNING"}, "display":{"status":"OK"},\n  "recommendations":["..."] }'],
+   '{ "overall":{"status":"GOOD","message":".."},\n  "memory":{"status":"GOOD"}, "network":{"status":"GOOD"},\n  "mqtt":{"status":"WARNING"}, "display":{"status":"GOOD"},\n  "recommendations":["..."] }'],
   ['GET','/api/wifi-scan','Scan 2.4 GHz networks. Rate limited: returns 429 if called too often.','',
    '',
    '{ "networks":[{"ssid":"..","rssi":-60,"channel":6,"quality":"Good","is_open":false}] }'],
