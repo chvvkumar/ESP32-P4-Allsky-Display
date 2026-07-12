@@ -109,7 +109,7 @@ function postSave(fields){return api('/api/save',{method:'POST',headers:{'Conten
 function validUrl(u){return /^https?:\/\/.+/i.test(u);}
 
 /* ---------- header actions ---------- */
-function doNext(){api('/api/next-image',{method:'POST'}).then(function(){toast('Next image queued','success');setTimeout(function(){location.reload();},2000);});}
+function doNext(){api('/api/next-image',{method:'POST'}).then(function(r){if(!r.ok){toast('Failed to queue next image','error');return;}toast('Next image queued','success');setTimeout(function(){var p=location.pathname;if(p==='/'||p==='/config/images')route(p);},1000);});}
 function doRestart(){modal('Restart','Are you sure you want to restart the device?',function(){
  overlay(true,'Restarting device...');api('/api/restart',{method:'POST'});toast('Device is restarting...','info');
  setTimeout(function(){location.reload();},10000);},null,true);}
@@ -122,7 +122,7 @@ function doFactory(){modal('Factory Reset','Reset all settings to defaults?',fun
 document.addEventListener('keydown',function(e){
  if(!(e.ctrlKey||e.metaKey))return;
  var k=e.key.toLowerCase();
- if(k==='s'){e.preventDefault();var f=document.querySelector('form');toast('Saving...','info');if(f)f.requestSubmit?f.requestSubmit():f.dispatchEvent(new Event('submit',{cancelable:true}));}
+ if(k==='s'){e.preventDefault();var f=el('main').querySelector('form');if(f){toast('Saving...','info');f.requestSubmit?f.requestSubmit():f.dispatchEvent(new Event('submit',{cancelable:true}));}}
  else if(k==='r'){e.preventDefault();if(confirm('Restart device?'))doRestart();}
  else if(k==='n'){e.preventDefault();var b=el('nextBtn');if(b&&b.style.display!=='none')b.click();}
 });
@@ -133,7 +133,7 @@ function renderNav(path){el('nav').innerHTML=NAV.map(function(n){
 function go(path){history.pushState({},'',path);route(path);return false;}
 window.onpopstate=function(){route(location.pathname);};
 var PAGES={};
-function route(path){renderNav(path);var fn=PAGES[path]||PAGES['/'];el('main').innerHTML='<div class="card">Loading...</div>';fn();}
+function route(path){window.onbeforeunload=null;dirty=false;renderNav(path);var fn=PAGES[path]||PAGES['/'];el('main').innerHTML='<div class="card">Loading...</div>';fn();}
 
 /* ---------- shared header/footer refresh ---------- */
 function updateBadges(info){
@@ -184,7 +184,7 @@ PAGES['/config/display']=function(){
  loadInfo().then(function(i){
   var d=i.display||{},def=i.defaults||{},t=i.time||{};
   function auto(field,val,extra){var f={};f[field]=val;f[field+'_present']='1';for(var k in (extra||{}))f[k]=extra[k];
-   postSave(f).then(function(r){toast(r.json.status==='success'?'Setting saved':'Error: '+(r.json.message||''),r.json.status==='success'?'success':'error');});}
+   postSave(f).then(function(r){toast(r.json.status==='success'?'Settings saved':'Error: '+(r.json.message||''),r.json.status==='success'?'success':'error');});}
   var bmode=d.use_ha_rest_control?'ha':d.brightness_auto_mode?'mqtt':'manual';
   var h='<form onsubmit="return false"><div class="card"><h2>Live Brightness</h2>'+
    '<label>Brightness Mode</label>'+
@@ -195,7 +195,7 @@ PAGES['/config/display']=function(){
    '<input type="range" min="0" max="100" id="bright" value="'+d.brightness+'" '+(bmode!=='manual'?'disabled':'')+'></div>'+
    '<div class="card collapse" id="basic"><h2 onclick="tog(\'basic\')">Basic Settings &#9662;</h2><div class="body">'+
    '<label>Startup Brightness <span id="sb">'+def.brightness+'%</span></label><input type="range" min="0" max="100" id="startbr" value="'+def.brightness+'">'+
-   '<label>Color Temp <span id="ct">'+i.display.color_temp+'K</span></label><input type="range" min="2000" max="15000" step="100" id="colort" value="'+i.display.color_temp+'">'+
+   '<label>Color Temp <span id="ct">'+d.color_temp+'K</span></label><input type="range" min="2000" max="15000" step="100" id="colort" value="'+d.color_temp+'">'+
    '<label>PWM Frequency (Hz)</label><input type="number" min="1000" max="20000" id="plf" value="'+d.backlight_freq+'">'+
    '<label>PWM Resolution (bits)</label><input type="number" min="8" max="16" id="plr" value="'+d.backlight_resolution+'"></div></div>'+
    '<div class="card collapse" id="haab"><h2 onclick="tog(\'haab\')">HA Auto-Brightness &#9662;</h2><div class="body" id="habody">Loading...</div></div>'+
@@ -204,9 +204,9 @@ PAGES['/config/display']=function(){
   el('bright').oninput=function(){el('blab').textContent=this.value+'%';};
   el('bright').onchange=function(){auto('default_brightness',this.value);};
   el('startbr').oninput=function(){el('sb').textContent=this.value+'%';};el('startbr').onchange=function(){auto('default_brightness',this.value);};
-  el('colort').oninput=function(){el('ct').textContent=this.value+'K';};el('colort').onchange=function(){var f={color_temp:this.value};postSave(f).then(function(){toast('Setting saved','success');});};
-  el('plf').onchange=function(){var f={backlight_freq:this.value};postSave(f).then(function(){toast('Setting saved','success');});};
-  el('plr').onchange=function(){var f={backlight_resolution:this.value};postSave(f).then(function(){toast('Setting saved','success');});};
+  el('colort').oninput=function(){el('ct').textContent=this.value+'K';};el('colort').onchange=function(){var f={color_temp:this.value};postSave(f).then(function(){toast('Settings saved','success');});};
+  el('plf').onchange=function(){var f={backlight_freq:this.value};postSave(f).then(function(){toast('Settings saved','success');});};
+  el('plr').onchange=function(){var f={backlight_resolution:this.value};postSave(f).then(function(){toast('Settings saved','success');});};
   document.querySelectorAll('input[name=bmode]').forEach(function(r){r.onchange=function(){
    var m=this.value;postSave({brightness_auto_mode:m==='mqtt'?'on':'',brightness_auto_mode_present:'1',use_ha_rest_control:m==='ha'?'on':'',use_ha_rest_control_present:'1'}).then(function(rr){
     if(rr.json.status==='success'){toast('Brightness mode updated','success');api('/api/force-brightness-update',{method:'POST'});route('/config/display');}else toast('Failed to update mode','error');});};});
@@ -221,7 +221,7 @@ function renderHA(){el('habody').innerHTML='<label>HA Base URL</label><input id=
  '<div class="grid"><div><label>Lux min</label><input type="number" step="0.1" id="lmin"></div><div><label>Lux max</label><input type="number" step="0.1" id="lmax"></div>'+
  '<div><label>Brightness min %</label><input type="number" min="0" max="100" id="dmin"></div><div><label>Brightness max %</label><input type="number" min="0" max="100" id="dmax"></div></div>';
  var map={hu:'ha_base_url',hpi:'ha_poll_interval',htk:'ha_access_token',hse:'ha_light_sensor_entity',hmm:'light_sensor_mapping_mode',lmin:'light_sensor_min_lux',lmax:'light_sensor_max_lux',dmin:'display_min_brightness',dmax:'display_max_brightness'};
- Object.keys(map).forEach(function(id){el(id).onchange=function(){var v=this.value;if(map[id]==='ha_access_token'&&!v)return;var f={};f[map[id]]=v;postSave(f).then(function(){toast('Setting saved','success');});};});
+ Object.keys(map).forEach(function(id){el(id).onchange=function(){var v=this.value;if(map[id]==='ha_access_token'&&!v)return;var f={};f[map[id]]=v;postSave(f).then(function(){toast('Settings saved','success');});};});
 }
 function tog(id){el(id).classList.toggle('open');}
 
@@ -232,7 +232,7 @@ PAGES['/config/network']=function(){
   '<form id="wf"><div class="card"><h2>Manual Configuration</h2><label>SSID</label><input id="wssid" required>'+
   '<label>Password</label><input type="password" id="wpw" placeholder="(unchanged)"><button class="btn" type="submit" style="margin-top:12px">Save Network Settings</button></div></form>';
  el('wf').onsubmit=function(e){e.preventDefault();postSave({wifi_ssid:el('wssid').value,wifi_password:el('wpw').value}).then(function(r){
-  if(r.json.status==='success'){toast('Settings saved successfully','success');if(r.json.needsRestart){modal('Restarting',r.json.message,function(){api('/api/restart',{method:'POST'});setTimeout(function(){location.reload();},10000);});}}
+  if(r.json.status==='success'){toast('Settings saved','success');if(r.json.needsRestart){modal('Restarting',r.json.message,function(){api('/api/restart',{method:'POST'});setTimeout(function(){location.reload();},10000);});}}
   else toast('Error: '+(r.json.message||''),'error');});};
  window._lastScan=0;wifiScan();clearInterval(window._scanT);window._scanT=setInterval(function(){if(location.pathname!=='/config/network'){clearInterval(window._scanT);return;}wifiScan(true);},60000);
 };
@@ -266,7 +266,7 @@ PAGES['/config/mqtt']=function(){
   el('mf').onsubmit=function(e){e.preventDefault();
    postSave({mqtt_server:el('ms').value,mqtt_port:el('mp').value,mqtt_client_id:el('mc').value,mqtt_user:el('mu').value,mqtt_password:el('mpw').value,
     ha_discovery_enabled:el('hde').checked?'on':'',ha_discovery_enabled_present:'1',ha_device_name:el('hdn').value,ha_discovery_prefix:el('hdp').value,ha_state_topic:el('hst').value,ha_sensor_update_interval:el('hsi').value}).then(function(r){
-    if(r.json.status==='success'){toast('Settings saved successfully','success');if(r.json.needsRestart)modal('Restarting',r.json.message,function(){api('/api/restart',{method:'POST'});setTimeout(function(){location.reload();},10000);});}
+    if(r.json.status==='success'){toast('Settings saved','success');if(r.json.needsRestart)modal('Restarting',r.json.message,function(){api('/api/restart',{method:'POST'});setTimeout(function(){location.reload();},10000);});}
     else toast('Error: '+(r.json.message||''),'error');});};
  });
 };
@@ -295,7 +295,7 @@ PAGES['/config/system']=function(){
    postSave({device_name:el('dn').value,mqtt_reconnect_interval:el('mri').value,watchdog_timeout:el('wdt').value,
     ntp_enabled:el('ntpe').checked?'on':'',ntp_enabled_present:'1',ntp_server:el('ntps').value,timezone:el('tz').value,
     display_type:el('dt').value,critical_heap_threshold:el('cht').value,critical_psram_threshold:el('cpt').value}).then(function(r){
-    if(r.json.status==='success'){toast('Settings saved successfully','success');if(r.json.needsRestart)modal('Restarting',r.json.message,function(){api('/api/restart',{method:'POST'});setTimeout(function(){location.reload();},10000);});}
+    if(r.json.status==='success'){toast('Settings saved','success');if(r.json.needsRestart)modal('Restarting',r.json.message,function(){api('/api/restart',{method:'POST'});setTimeout(function(){location.reload();},10000);});}
     else toast('Error: '+(r.json.message||''),'error');});};
  });
 };
@@ -405,7 +405,7 @@ function moonDrawer(s,tuning){var m=IST.moon;var dis=tuning?'':'disabled';
  var h='<p class="dim">Moon settings &mdash; changes preview live while editing</p>';
  h+='<div class="grid"><div><label>Background</label><select id="mbg" '+dis+'><option value="0" '+(m.bg==0?'selected':'')+'>Black</option><option value="1" '+(m.bg==1?'selected':'')+'>Starfield</option><option value="2" '+(m.bg==2?'selected':'')+'>Glow</option><option value="3" '+(m.bg==3?'selected':'')+'>Stars + Glow</option></select></div>'+
   '<div><label>North up</label><select id="mnu" '+dis+'><option value="1" '+(m.northup==1?'selected':'')+'>On</option><option value="0" '+(m.northup==0?'selected':'')+'>Off</option></select></div>'+
-  '<div><label>Disk scale</label><input type="number" step="0.01" min="0.1" max="'+IST.maxScale+'" '+dis+' value="'+s.scaleX+'" onchange="tf('+s.index+',\'scaleX\',this.value)"></div>'+
+  '<div><label>Disk scale</label><input type="number" step="0.01" min="0.1" max="'+IST.maxScale+'" '+dis+' value="'+s.scaleX+'" onchange="tf('+s.index+',\'scaleX\',this.value);tf('+s.index+',\'scaleY\',this.value)"></div>'+
   '<div><label>Offset X</label><input type="number" '+dis+' value="'+s.offsetX+'" onchange="tf('+s.index+',\'offsetX\',this.value)"></div>'+
   '<div><label>Offset Y</label><input type="number" '+dis+' value="'+s.offsetY+'" onchange="tf('+s.index+',\'offsetY\',this.value)"></div>'+
   '<div><label>Latitude</label><input type="number" step="0.0001" id="mlat" '+dis+' value="'+m.lat+'"></div>'+
@@ -458,8 +458,8 @@ function mkDirty(){dirty=true;el('savedef').disabled=false;el('dirtytag').style.
 function attachDefListeners(){window.onbeforeunload=function(){if(dirty)return 'Unsaved changes';};}
 function saveDefaults(){postSave({image_update_mode:el('pmode').value,update_interval:el('pint').value,default_image_duration:el('pdur').value,
  random_order:el('prand').checked?'on':'',random_order_present:'1',default_scale_x:el('dsx').value,default_scale_y:el('dsy').value,
- default_offset_x:el('dox').value,default_offset_y:el('doy').value,default_rotation:el('drot').value,cycling_enabled:'on',cycling_enabled_present:'1'}).then(function(r){
- if(r.json.status==='success'){dirty=false;el('savedef').disabled=true;el('dirtytag').style.display='none';toast('Defaults saved','success');loadImages();}else toast(r.json.message||'Error','error');});}
+ default_offset_x:el('dox').value,default_offset_y:el('doy').value,default_rotation:el('drot').value,cycling_enabled:el('pmode').value==='0'?'on':'',cycling_enabled_present:'1'}).then(function(r){
+ if(r.json.status==='success'){dirty=false;el('savedef').disabled=true;el('dirtytag').style.display='none';toast('Settings saved','success');loadImages();}else toast(r.json.message||'Error','error');});}
 
 /* ======================================================= COMMANDS / API (static) */
 PAGES['/config/commands']=function(){el('main').innerHTML='<div class="card"><h2>Serial Commands</h2>'+
