@@ -3,6 +3,9 @@
 #include "esp_heap_caps.h"
 #include "driver/jpeg_encode.h"
 #include "lvgl.h"
+/* lv_obj_get_ext_draw_size() lives in a private header in this LVGL version;
+ * lv_snapshot.c itself includes it the same way. */
+#include "src/core/lv_obj_draw_private.h"
 #include "bsp/esp-bsp.h"
 
 static const char *TAG = "web_screenshot";
