@@ -95,6 +95,9 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:2px}
 #console{background:#05070c;border:1px solid var(--border);border-radius:var(--radius-md);padding:10px;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;overflow:auto;height:60vh;min-height:250px}
 .savebar{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border-em);padding:10px;display:flex;gap:10px;align-items:center;margin:14px -18px -18px;justify-content:flex-end;
   backdrop-filter:blur(12px) saturate(1);-webkit-backdrop-filter:blur(12px) saturate(1);box-shadow:var(--glass-shadow)}
+.health .st{font-size:11px;font-weight:600}
+.health .st.ok{color:var(--success)}.health .st.warn{color:var(--warning)}.health .st.bad{color:var(--danger)}
+.health .rec{font-size:12px;color:var(--text-3);margin-top:4px}
 @media(max-width:640px){nav{gap:0}.console-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -107,8 +110,10 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:2px}
   <span class="badge" id="bm">MQTT</span>
   <span class="badge" id="bs">System</span>
   <button class="btn ghost" id="nextBtn" style="display:none" onclick="doNext()">Next</button>
+  <button class="btn ghost" onclick="doForceRefresh()">Force Refresh</button>
   <button class="btn" onclick="doRestart()">Restart</button>
   <button class="btn red" onclick="doFactory()">Reset</button>
+  <button class="btn ghost" id="logoutBtn" style="display:none" onclick="doLogout()">Logout</button>
 </header>
 <nav id="nav"></nav>
 <main id="main"><div class="card">Loading...</div></main>
@@ -144,6 +149,8 @@ function validUrl(u){return /^https?:\/\/.+/i.test(u);}
 
 /* ---------- header actions ---------- */
 function doNext(){api('/api/next-image',{method:'POST'}).then(function(r){if(!r.ok){toast('Failed to queue next image','error');return;}toast('Next image queued','success');setTimeout(function(){var p=location.pathname;if(p==='/'||p==='/config/images')route(p);},1000);});}
+function doForceRefresh(){api('/api/force-refresh',{method:'POST'}).then(function(r){toast(r.ok?'Refresh forced':(r.json.message||'Force refresh failed'),r.ok?'success':'error');});}
+function doLogout(){api('/api/logout',{method:'POST'}).then(function(){location.href='/login';});}
 function doRestart(){modal('Restart','Are you sure you want to restart the device?',function(){
  overlay(true,'Restarting device...');api('/api/restart',{method:'POST'});toast('Device is restarting...','info');
  setTimeout(function(){location.reload();},10000);},null,true);}
@@ -201,13 +208,25 @@ PAGES['/']=function(){
   h+=card('Display',kv('Resolution',dsp.width+' x '+dsp.height)+kv('Brightness',dsp.brightness+'% ('+bmode+')')+kv('PWM Freq',dsp.backlight_freq+' Hz')+kv('PWM Res',dsp.backlight_resolution+' bit'));
   h+=card('Firmware',kv('Version',fw.version)+kv('Size',fmtk(fw.size))+kv('Free',fmtk(fw.free_space))+kv('Checksum','<span class="mono">'+esc((fw.checksum||'').slice(0,16))+'</span>'));
   h+=card('Home Assistant',kv('Discovery',ha.discovery_enabled?'On':'Off')+kv('Device',ha.device_name)+kv('Prefix',ha.discovery_prefix)+kv('State topic',ha.state_topic)+kv('Interval',ha.sensor_update_interval+' s'));
+  h+='<div class="card health" id="healthCard"><h2>System Health</h2><p class="dim">Loading health...</p></div>';
   h+='</div>';
   h+='<div class="card"><h2>Configured Sources</h2>'+srcs.map(function(s){
     return '<div class="src '+(s.active?'active':'')+'"><span class="mono" style="word-break:break-all">'+(s.index+1)+'. '+esc(s.url)+'</span>'+(s.active?' <span class="pill">Active</span>':'')+'</div>';}).join('')+'</div>';
   el('main').innerHTML=h;
+  renderHealth();
  });
- clearInterval(window._dashT);window._dashT=setInterval(function(){if(location.pathname!=='/'){clearInterval(window._dashT);return;}loadInfo().then(updateBadges);},5000);
+ clearInterval(window._dashT);window._dashT=setInterval(function(){if(location.pathname!=='/'){clearInterval(window._dashT);return;}loadInfo().then(updateBadges);renderHealth();},5000);
 };
+function healthCls(s){return s==='WARNING'?'warn':(s==='CRITICAL'||s==='FAILING')?'bad':'ok';}
+function renderHealth(){api('/api/health').then(function(r){var hd=r.json;var c=el('healthCard');if(!c||!hd||!hd.overall)return;
+ var subs=[['System','system'],['Memory','memory'],['Network','network'],['MQTT','mqtt'],['Display','display']];
+ var h='<h2>System Health</h2>';
+ h+='<div class="kv"><span class="k">Overall</span><span class="st '+healthCls(hd.overall.status)+'">'+esc(hd.overall.status)+'</span></div>';
+ if(hd.overall.message)h+='<p class="dim" style="font-size:12px;margin:4px 0 8px">'+esc(hd.overall.message)+'</p>';
+ subs.forEach(function(p){var o=hd[p[1]];if(!o)return;h+='<div class="kv"><span class="k">'+p[0]+'</span><span class="st '+healthCls(o.status)+'" title="'+esc(o.message||'')+'">'+esc(o.status)+'</span></div>';});
+ var recs=hd.recommendations||[];
+ if(recs.length){h+='<div style="margin-top:8px"><span class="k" style="font-size:11px;color:var(--muted)">Recommendations</span>'+recs.map(function(t){return '<div class="rec">- '+esc(t)+'</div>';}).join('')+'</div>';}
+ c.innerHTML=h;}).catch(function(){});}
 function tile(k,v){return '<div class="tile"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'</div></div>';}
 function card(t,b){return '<div class="card"><h2>'+esc(t)+'</h2>'+b+'</div>';}
 function kv(k,v){return '<div class="kv"><span class="k">'+esc(k)+'</span><span>'+(v==null?'-':v)+'</span></div>';}
@@ -244,16 +263,25 @@ PAGES['/config/display']=function(){
   document.querySelectorAll('input[name=bmode]').forEach(function(r){r.onchange=function(){
    var m=this.value;postSave({brightness_auto_mode:m==='mqtt'?'on':'',brightness_auto_mode_present:'1',use_ha_rest_control:m==='ha'?'on':'',use_ha_rest_control_present:'1'}).then(function(rr){
     if(rr.json.status==='success'){toast('Brightness mode updated','success');api('/api/force-brightness-update',{method:'POST'});route('/config/display');}else toast('Failed to update mode','error');});};});
-  renderHA();
+  renderHA(i.ha_rest||{});
  });
 };
-function renderHA(){el('habody').innerHTML='<label>HA Base URL</label><input id="hu" placeholder="http://homeassistant.local:8123">'+
+function renderHA(hr){hr=hr||{};el('habody').innerHTML='<label>HA Base URL</label><input id="hu" placeholder="http://homeassistant.local:8123">'+
  '<label>Poll interval (s)</label><input type="number" id="hpi" min="10" max="3600">'+
  '<label>Access Token</label><input type="password" id="htk" placeholder="Leave blank to keep current">'+
  '<label>Sensor Entity</label><input id="hse" placeholder="sensor.living_room_illuminance">'+
  '<label>Response Curve</label><select id="hmm"><option value="0">Linear (Indoor)</option><option value="1">Logarithmic (Outdoor)</option><option value="2">Threshold (Day/Night)</option></select>'+
  '<div class="grid"><div><label>Lux min</label><input type="number" step="0.1" id="lmin"></div><div><label>Lux max</label><input type="number" step="0.1" id="lmax"></div>'+
  '<div><label>Brightness min %</label><input type="number" min="0" max="100" id="dmin"></div><div><label>Brightness max %</label><input type="number" min="0" max="100" id="dmax"></div></div>';
+ el('hu').value=hr.ha_base_url||'';
+ if(hr.ha_poll_interval!=null)el('hpi').value=hr.ha_poll_interval;
+ if(hr.ha_token_set)el('htk').placeholder='(saved - leave blank to keep)';
+ el('hse').value=hr.ha_light_sensor_entity||'';
+ if(hr.light_sensor_mapping_mode!=null)el('hmm').value=hr.light_sensor_mapping_mode;
+ if(hr.light_sensor_min_lux!=null)el('lmin').value=hr.light_sensor_min_lux;
+ if(hr.light_sensor_max_lux!=null)el('lmax').value=hr.light_sensor_max_lux;
+ if(hr.display_min_brightness!=null)el('dmin').value=hr.display_min_brightness;
+ if(hr.display_max_brightness!=null)el('dmax').value=hr.display_max_brightness;
  var map={hu:'ha_base_url',hpi:'ha_poll_interval',htk:'ha_access_token',hse:'ha_light_sensor_entity',hmm:'light_sensor_mapping_mode',lmin:'light_sensor_min_lux',lmax:'light_sensor_max_lux',dmin:'display_min_brightness',dmax:'display_max_brightness'};
  Object.keys(map).forEach(function(id){el(id).onchange=function(){var v=this.value;if(map[id]==='ha_access_token'&&!v)return;var f={};f[map[id]]=v;postSave(f).then(function(){toast('Settings saved','success');});};});
 }
@@ -505,12 +533,13 @@ PAGES['/config/commands']=function(){el('main').innerHTML='<div class="card"><h2
 function tbl(t,rows){return '<h2 style="margin-top:14px">'+esc(t)+'</h2><table style="width:100%;border-collapse:collapse">'+rows.map(function(r){return '<tr><td class="mono" style="padding:5px;border-bottom:1px solid var(--border);width:120px">'+esc(r[0])+'</td><td style="padding:5px;border-bottom:1px solid var(--border)">'+esc(r[1])+'</td></tr>';}).join('')+'</table>';}
 PAGES['/api-reference']=function(){el('main').innerHTML='<div class="card"><h2>REST API</h2>'+
  '<p>Base: <span class="mono">http://'+location.host+'</span>. POST bodies are form-encoded (restore takes raw JSON). Responses are JSON.</p>'+
- '<p class="dim">GET /status, /api/info, /api/health, /api/images/state, /api/current-image, /api/getMoon, /api/wifi-scan, /api/screenshot, /api/backup?secrets=0|1</p>'+
- '<p class="dim">POST /api/save, /api/add-source, /api/addPreset, /api/remove-source, /api/update-source, /api/clear-sources, /api/bulk-delete-sources, /api/next-image, /api/force-refresh, /api/update-transform, /api/copy-defaults, /api/apply-transform, /api/toggle-image-enabled, /api/select-image, /api/images/tune, /api/images/tune/stop, /api/update-image-duration, /api/setMoon, /api/restore, /api/restart, /api/factory-reset, /api/set-log-severity, /api/clear-crash-logs, /api/force-brightness-update</p>'+
+ '<p class="dim">GET /status, /api/info, /api/health, /api/auth/status, /api/images/state, /api/current-image, /api/getMoon, /api/wifi-scan, /api/screenshot, /api/backup?secrets=0|1</p>'+
+ '<p class="dim">POST /api/save, /api/add-source, /api/addPreset, /api/remove-source, /api/update-source, /api/clear-sources, /api/bulk-delete-sources, /api/next-image, /api/force-refresh, /api/update-transform, /api/copy-defaults, /api/apply-transform, /api/toggle-image-enabled, /api/select-image, /api/images/tune, /api/images/tune/stop, /api/update-image-duration, /api/setMoon, /api/restore, /api/restart, /api/factory-reset, /api/set-log-severity, /api/clear-crash-logs, /api/force-brightness-update, /api/logout</p>'+
  '<p>Status codes: 200 OK, 400 bad input, 401 auth, 404 not found, 500 error.</p></div>';};
 
 /* ---------- boot ---------- */
 loadInfo().then(updateBadges).catch(function(){});
+api('/api/auth/status').then(function(r){if(r.ok&&r.json&&r.json.auth_enabled)el('logoutBtn').style.display='';}).catch(function(){});
 route(location.pathname);
 </script>
 </body>
