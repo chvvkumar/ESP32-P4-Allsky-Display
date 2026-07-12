@@ -17,6 +17,12 @@
 
 #include "cJSON.h"
 
+/* Link anchor: this object file provides only strong overrides of hooks that are
+ * also weakly defined elsewhere, so nothing would otherwise reference a symbol
+ * defined here and the linker would leave the strong definitions out of the image.
+ * app_main() calls this once to force the object into the link. */
+void system_web_bridge_link(void) { }
+
 size_t web_hook_health_report_json(char *buf, size_t buf_len)
 {
     if (!buf || buf_len == 0) {

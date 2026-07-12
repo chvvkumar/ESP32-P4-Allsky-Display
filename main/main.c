@@ -48,6 +48,10 @@
 /* Web-team main-loop backstop (auto-resume tuning after idle). */
 void web_editing_tick(void);
 
+/* Anchor that forces system_web_bridge.o (strong web hook overrides) into the
+ * link; without a reference the linker keeps the weak stubs instead. */
+extern void system_web_bridge_link(void);
+
 #define ALLSKY_FW_NAME  "AllSky-Display"
 
 static const char *TAG = "allsky_main";
@@ -102,6 +106,10 @@ static void run_provisioning_portal(void)
 
 void app_main(void)
 {
+    /* Pull the strong web-integration hooks (health report, temperature, boot/live
+     * log, crash maintenance) into the image so the web API serves real data. */
+    system_web_bridge_link();
+
     /* NVS first: config store, crash logger and WiFi credentials all rely on it. */
     esp_err_t nvs_ret = nvs_flash_init();
     if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
