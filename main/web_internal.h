@@ -59,6 +59,7 @@ esp_err_t   web_auth_status_handler(httpd_req_t *req);
 esp_err_t   web_status_handler(httpd_req_t *req);
 esp_err_t   web_info_handler(httpd_req_t *req);
 esp_err_t   web_health_handler(httpd_req_t *req);
+esp_err_t   web_crash_log_handler(httpd_req_t *req);
 esp_err_t   web_wifi_scan_handler(httpd_req_t *req);
 esp_err_t   web_current_image_handler(httpd_req_t *req);
 esp_err_t   web_images_state_handler(httpd_req_t *req);

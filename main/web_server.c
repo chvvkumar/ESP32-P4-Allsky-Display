@@ -311,6 +311,7 @@ static const route_entry_t s_routes[] = {
     { { "/status",          HTTP_GET, web_status_handler, NULL }, ROUTE_AUTH_REQUIRED },
     { { "/api/info",        HTTP_GET, web_info_handler, NULL }, ROUTE_AUTH_REQUIRED },
     { { "/api/health",      HTTP_GET, web_health_handler, NULL }, ROUTE_AUTH_REQUIRED },
+    { { "/api/crash-log",   HTTP_GET, web_crash_log_handler, NULL }, ROUTE_AUTH_REQUIRED },
     { { "/api/wifi-scan",   HTTP_GET, web_wifi_scan_handler, NULL }, ROUTE_AUTH_REQUIRED },
     { { "/api/screenshot",  HTTP_GET, web_screenshot_handler, NULL }, ROUTE_AUTH_REQUIRED },
     { { "/api/current-image", HTTP_GET, web_current_image_handler, NULL }, ROUTE_AUTH_REQUIRED },

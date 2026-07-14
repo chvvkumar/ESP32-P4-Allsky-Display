@@ -86,6 +86,7 @@ WEAK size_t web_hook_bootlog_read(size_t offset, char *dst, size_t max_len)
     return 0;
 }
 WEAK size_t web_hook_bootlog_size(void) { return 0; }
+WEAK size_t web_hook_crash_dump(char *dst, size_t max_len) { if (dst && max_len) dst[0] = '\0'; return 0; }
 WEAK size_t web_hook_logstream_read(char *dst, size_t max_len) { (void)dst; (void)max_len; return 0; }
 WEAK void web_hook_crash_clear(void) {}
 WEAK void web_hook_crash_save(void) {}

@@ -86,6 +86,11 @@ size_t web_hook_logstream_read(char *dst, size_t max_len)
     return n;
 }
 
+size_t web_hook_crash_dump(char *dst, size_t max_len)
+{
+    return crash_log_get_combined(dst, max_len);
+}
+
 void web_hook_crash_clear(void)
 {
     crash_log_clear_all();

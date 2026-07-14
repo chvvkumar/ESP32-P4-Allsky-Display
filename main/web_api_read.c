@@ -261,6 +261,21 @@ esp_err_t web_health_handler(httpd_req_t *req)
     return r;
 }
 
+/* ---- GET /api/crash-log -------------------------------------------------- */
+/* Plain-text dump: NVS (previous boot, incl. panic backtrace) + RTC + RAM. */
+esp_err_t web_crash_log_handler(httpd_req_t *req)
+{
+    const size_t cap = 20480;
+    char *buf = heap_caps_malloc(cap, MALLOC_CAP_SPIRAM);
+    if (!buf) buf = malloc(cap);
+    if (!buf) { httpd_resp_send_500(req); return ESP_FAIL; }
+    size_t n = web_hook_crash_dump(buf, cap);
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    esp_err_t r = httpd_resp_send(req, buf, n);
+    free(buf);
+    return r;
+}
+
 /* ---- GET /api/wifi-scan -------------------------------------------------- */
 esp_err_t web_wifi_scan_handler(httpd_req_t *req)
 {

@@ -139,6 +139,9 @@ float web_hook_system_temperature_c(void);
 size_t web_hook_bootlog_read(size_t offset, char *dst, size_t max_len);
 size_t web_hook_bootlog_size(void);
 
+/* Combined crash-log dump (NVS previous boot + RTC + RAM), text form. */
+size_t web_hook_crash_dump(char *dst, size_t max_len);
+
 /* Drain up to max_len bytes of NEW log output emitted since the previous call
  * (for the live WebSocket console). Returns bytes copied; 0 when no new output.
  * The system log subsystem implements this over its capture ring. */
