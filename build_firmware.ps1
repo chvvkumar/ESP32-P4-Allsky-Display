@@ -234,10 +234,13 @@ if ($OTA) {
         finally { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
     }
 
-    Write-Host "`nUploading OTA firmware to $Device ..." -ForegroundColor Cyan
+    # The web server listens on :8080. Append it when the caller gave a bare host.
+    $OtaHost = if ($Device -match ':\d+$') { $Device } else { "${Device}:8080" }
+
+    Write-Host "`nUploading OTA firmware to $OtaHost ..." -ForegroundColor Cyan
 
     # 1. Login for a session cookie
-    $LoginUrl  = "http://${Device}/api/login"
+    $LoginUrl  = "http://${OtaHost}/api/login"
     $loginBody = @{ password = $Password } | ConvertTo-Json -Compress
     $loginResp = Invoke-WebRequest -Uri $LoginUrl -Method Post `
         -Body $loginBody -ContentType "application/json" -TimeoutSec 15 -UseBasicParsing
@@ -272,7 +275,7 @@ if ($OTA) {
     $body = $ms.ToArray()
     $ms.Dispose()
 
-    $OtaUrl  = "http://${Device}/update"
+    $OtaUrl  = "http://${OtaHost}/update"
     $otaResp = Invoke-WebRequest -Uri $OtaUrl -Method Post `
         -Body $body `
         -ContentType "multipart/form-data; boundary=$boundary" `

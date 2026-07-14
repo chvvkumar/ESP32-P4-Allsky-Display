@@ -101,8 +101,14 @@ esp_err_t web_ota_upload_handler(httpd_req_t *req)
 
     ota_begin_ui();
 
-    char *buf = malloc(2048);
+    /* All working buffers are allocated ONCE here, never per-chunk. Internal
+     * heap is tight during normal operation (min ~31 KB); a malloc/free on every
+     * 2 KB recv would fragment it and can panic the OTA task. `combined` holds the
+     * withheld tail (<= blen) plus one recv (<= 2048). */
+    const size_t recv_cap = 2048;
+    char *buf = malloc(recv_cap);
     char *tail = malloc(blen + 8);
+    char *combined = malloc(blen + recv_cap + 1);
     size_t tail_len = 0;
     bool header_done = false;
     size_t written = 0, total = req->content_len, recv_total = 0;
@@ -110,7 +116,7 @@ esp_err_t web_ota_upload_handler(httpd_req_t *req)
     esp_err_t status = ESP_OK;
     char hdracc[512]; size_t hdracc_len = 0;
 
-    if (!buf || !tail) { status = ESP_ERR_NO_MEM; goto done; }
+    if (!buf || !tail || !combined) { status = ESP_ERR_NO_MEM; goto done; }
 
     while (recv_total < total) {
         int r = httpd_req_recv(req, buf, 2048);
@@ -147,11 +153,9 @@ esp_err_t web_ota_upload_handler(httpd_req_t *req)
             header_done = true;
         }
 
-        /* Combine withheld tail + new data, then withhold a new tail that could
-         * contain the closing boundary. */
+        /* Combine withheld tail + new data into the pre-allocated buffer, then
+         * withhold a new tail that could contain the closing boundary. */
         size_t combined_len = tail_len + dlen;
-        char *combined = malloc(combined_len + 1);
-        if (!combined) { status = ESP_ERR_NO_MEM; break; }
         memcpy(combined, tail, tail_len);
         memcpy(combined + tail_len, data, dlen);
 
@@ -163,7 +167,6 @@ esp_err_t web_ota_upload_handler(httpd_req_t *req)
         if (found) {
             size_t body = found - combined;
             if (body) { if (esp_ota_write(handle, combined, body) != ESP_OK) status = ESP_FAIL; else written += body; }
-            free(combined);
             break;  /* reached end of firmware part */
         }
 
@@ -172,7 +175,6 @@ esp_err_t web_ota_upload_handler(httpd_req_t *req)
         if (flush) { if (esp_ota_write(handle, combined, flush) != ESP_OK) status = ESP_FAIL; else written += flush; }
         memcpy(tail, combined + flush, keep);
         tail_len = keep;
-        free(combined);
 
         if (total) {
             int pct = (int)(recv_total * 100 / total);
@@ -184,6 +186,7 @@ esp_err_t web_ota_upload_handler(httpd_req_t *req)
 done:
     free(buf);
     free(tail);
+    free(combined);
 
     if (status != ESP_OK || written == 0) {
         esp_ota_abort(handle);
