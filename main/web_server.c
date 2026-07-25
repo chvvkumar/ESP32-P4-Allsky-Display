@@ -3,6 +3,7 @@
 #include "web_route_auth.h"
 #include <string.h>
 #include <stdio.h>
+#include "esp_heap_caps.h"
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "esp_app_desc.h"
@@ -103,7 +104,7 @@ static bool session_extract_cookie(httpd_req_t *req, char *out, size_t out_len)
     if (out_len < SESSION_TOKEN_HEX_LEN + 1) return false;
     size_t hdr_len = httpd_req_get_hdr_value_len(req, "Cookie");
     if (hdr_len == 0 || hdr_len > 1024) return false;
-    char *buf = malloc(hdr_len + 1);
+    char *buf = heap_caps_malloc(hdr_len + 1, MALLOC_CAP_SPIRAM);
     if (!buf) return false;
     bool ok = false;
     if (httpd_req_get_hdr_value_str(req, "Cookie", buf, hdr_len + 1) == ESP_OK) {

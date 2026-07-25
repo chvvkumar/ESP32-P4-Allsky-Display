@@ -30,6 +30,10 @@ static const char *TAG = "net_wifi";
 #define BACKOFF_MIN_MS        2000
 #define BACKOFF_MAX_MS       60000
 #define ROAM_SCAN_INTERVAL   60000
+/* Skip the periodic roam scan while the current link is stronger than this
+ * (dBm). A strong link cannot be improved enough to justify a full scan, so
+ * gating here avoids thousands of wasted scans over a long stable session. */
+#define ROAM_SCAN_RSSI_GATE    (-65)
 #define ROAM_RSSI_MARGIN_DB      8
 #define ROAM_TIMEOUT_MS      12000
 #define ROAM_DISC_WAIT_MS     3000
@@ -310,6 +314,14 @@ static void maybe_start_roam_scan(void) {
     if (t - s_last_roam_scan_ms < ROAM_SCAN_INTERVAL) return;
     if (s_scan_running) return;
     if (network_time_sntp_in_progress()) return;
+
+    /* Skip when the current link is already strong; roaming could not improve it
+     * enough to be worth a scan. Fail open if the AP info is unavailable. */
+    wifi_ap_record_t cur;
+    if (esp_wifi_sta_get_ap_info(&cur) == ESP_OK && cur.rssi > ROAM_SCAN_RSSI_GATE) {
+        s_last_roam_scan_ms = t;
+        return;
+    }
 
     wifi_scan_config_t sc = { .show_hidden = false };
     s_scan_is_roam = true;

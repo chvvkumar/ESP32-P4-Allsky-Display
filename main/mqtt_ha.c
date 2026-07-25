@@ -18,6 +18,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/idf_additions.h"
 #include "freertos/queue.h"
 
 #include <string.h>
@@ -372,7 +373,7 @@ static void publish_state_and_sensors(void)
     if (!s_connected || !app_config_get_ha_disc_en()) return;
     /* Snapshot on the heap: allsky_config_t is several KB (image source array),
      * too large to place on a service task stack alongside newlib float formatting. */
-    allsky_config_t *cfg = heap_caps_malloc(sizeof(*cfg), MALLOC_CAP_DEFAULT);
+    allsky_config_t *cfg = heap_caps_malloc(sizeof(*cfg), MALLOC_CAP_SPIRAM);
     if (!cfg) return;
     app_config_snapshot(cfg);
 
@@ -610,7 +611,7 @@ static void advance_discovery(void)
     if (s_disc_step < ENTITY_COUNT) {
         /* Heap snapshot: keep the multi-KB config off this task's stack, and free it
          * before publish_state_and_sensors() so the two snapshots never layer. */
-        allsky_config_t *cfg = heap_caps_malloc(sizeof(*cfg), MALLOC_CAP_DEFAULT);
+        allsky_config_t *cfg = heap_caps_malloc(sizeof(*cfg), MALLOC_CAP_SPIRAM);
         if (!cfg) return;
         app_config_snapshot(cfg);
         bool ok = publish_discovery_entity(s_disc_step, cfg);
@@ -645,7 +646,7 @@ static void service_heartbeat_and_sensors(void)
     if (app_config_get_ha_disc_en() && s_disc_step < 0 && !s_disc_failed) {
         int64_t period = (int64_t)app_config_get_ha_sens_int() * 1000000;
         if (now - s_last_sensor_us >= period) {
-            allsky_config_t *cfg = heap_caps_malloc(sizeof(*cfg), MALLOC_CAP_DEFAULT);
+            allsky_config_t *cfg = heap_caps_malloc(sizeof(*cfg), MALLOC_CAP_SPIRAM);
             if (cfg) {
                 app_config_snapshot(cfg);
                 publish_sensors_locked(cfg);
@@ -715,7 +716,8 @@ esp_err_t mqtt_ha_init(const mqtt_ha_hooks_t *hooks)
     if (err != ESP_OK) { ESP_LOGE(TAG, "brightness debounce init failed: %s", esp_err_to_name(err)); return err; }
 
     if (!s_task) {
-        if (xTaskCreate(mqtt_ha_task, "mqtt_ha", 8192, NULL, 4, &s_task) != pdPASS) {
+        if (xTaskCreateWithCaps(mqtt_ha_task, "mqtt_ha", 8192, NULL, 4, &s_task,
+                                MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
             ESP_LOGE(TAG, "service task create failed");
             return ESP_ERR_NO_MEM;
         }
@@ -856,7 +858,7 @@ static esp_err_t rest_http_evt(esp_http_client_event_t *e)
         int need = b->len + e->data_len + 1;
         if (need > b->cap) {
             int ncap = need < 512 ? 512 : need;
-            char *n = realloc(b->buf, ncap);
+            char *n = heap_caps_realloc(b->buf, ncap, MALLOC_CAP_SPIRAM);
             if (!n) return ESP_FAIL;
             b->buf = n; b->cap = ncap;
         }
@@ -992,7 +994,8 @@ esp_err_t mqtt_ha_rest_start(void)
 {
     static TaskHandle_t rest_task = NULL;
     if (rest_task) return ESP_OK;
-    if (xTaskCreate(ha_rest_task, "ha_rest", 8192, NULL, 4, &rest_task) != pdPASS) {
+    if (xTaskCreateWithCaps(ha_rest_task, "ha_rest", 8192, NULL, 4, &rest_task,
+                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
         ESP_LOGE(TAG, "HA REST task create failed");
         return ESP_ERR_NO_MEM;
     }

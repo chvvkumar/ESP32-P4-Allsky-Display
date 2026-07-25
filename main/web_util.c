@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 
 static const char *TAG = "web_util";
 
@@ -103,7 +104,7 @@ bool web_query_get(httpd_req_t *req, const char *key, char *out, size_t out_len)
     out[0] = '\0';
     size_t qlen = httpd_req_get_url_query_len(req);
     if (qlen == 0) return false;
-    char *q = malloc(qlen + 1);
+    char *q = heap_caps_malloc(qlen + 1, MALLOC_CAP_SPIRAM);
     if (!q) return false;
     bool ok = false;
     if (httpd_req_get_url_query_str(req, q, qlen + 1) == ESP_OK) {

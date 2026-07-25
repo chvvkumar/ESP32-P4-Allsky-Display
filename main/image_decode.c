@@ -15,10 +15,12 @@
 
 static const char *TAG = "img_decode";
 
-/* Minimum free internal DMA heap before attempting a HW decode. The JPEG engine
- * allocates DMA descriptors from internal memory; starting it when memory is
- * tight both starves the SDIO WiFi driver and hits an IDF cleanup crash. */
-#define JPEG_DMA_MIN_FREE_BYTES  (20 * 1024)
+/* The JPEG decoder engine is created once at startup and reused for the process
+ * lifetime, so its DMA descriptors are allocated while internal heap is still
+ * plentiful and can never be refused later under chronic low-memory pressure.
+ * All decode calls run on the single image-pipeline worker task, so the handle
+ * needs no locking. */
+static jpeg_decoder_handle_t s_decoder;
 
 static inline uint32_t align16(uint32_t v)
 {
@@ -55,25 +57,39 @@ static int select_divisor(uint32_t w, uint32_t h, size_t cap, uint16_t max_dim,
     return 0;
 }
 
-/* Run one HW decode of jpg -> out (RGB565 or GRAY). Returns ESP_OK on success. */
-static esp_err_t hw_decode(const uint8_t *jpg, size_t jpg_len, bool gray,
-                           uint8_t *out, size_t out_cap, void (*wdt_feed)(void))
+/* Create the shared decoder engine once. Safe to call repeatedly; a no-op once
+ * the handle exists. Returns ESP_OK when the engine is ready. */
+esp_err_t image_decode_init(void)
 {
-    size_t free_dma = heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    if (free_dma < JPEG_DMA_MIN_FREE_BYTES) {
-        ESP_LOGW(TAG, "skip HW decode: low DMA heap (%u bytes)", (unsigned)free_dma);
-        return ESP_ERR_NO_MEM;
+    if (s_decoder) {
+        return ESP_OK;
     }
-
-    jpeg_decoder_handle_t decoder = NULL;
     jpeg_decode_engine_cfg_t engine_cfg = {
         .intr_priority = 0,
         .timeout_ms = 5000,
     };
-    esp_err_t err = jpeg_new_decoder_engine(&engine_cfg, &decoder);
-    if (err != ESP_OK || !decoder) {
+    esp_err_t err = jpeg_new_decoder_engine(&engine_cfg, &s_decoder);
+    if (err != ESP_OK || !s_decoder) {
+        s_decoder = NULL;
         ESP_LOGE(TAG, "decoder engine create failed: %s", esp_err_to_name(err));
         return err != ESP_OK ? err : ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+/* Run one HW decode of jpg -> out (RGB565 or GRAY). Returns ESP_OK on success.
+ * Uses the shared engine created by image_decode_init(); called only from the
+ * single image-pipeline worker task, so no locking is needed. */
+static esp_err_t hw_decode(const uint8_t *jpg, size_t jpg_len, bool gray,
+                           uint8_t *out, size_t out_cap, void (*wdt_feed)(void))
+{
+    if (!s_decoder) {
+        /* Engine creation failed at init (or was never run); retry now so one
+         * boot-time failure is not permanent. */
+        esp_err_t init_err = image_decode_init();
+        if (init_err != ESP_OK) {
+            return ESP_ERR_INVALID_STATE;
+        }
     }
 
     jpeg_decode_cfg_t decode_cfg = {
@@ -84,11 +100,11 @@ static esp_err_t hw_decode(const uint8_t *jpg, size_t jpg_len, bool gray,
     if (wdt_feed) {
         wdt_feed();
     }
-    err = jpeg_decoder_process(decoder, &decode_cfg, jpg, jpg_len, out, out_cap, &out_size);
+    esp_err_t err = jpeg_decoder_process(s_decoder, &decode_cfg, jpg, jpg_len,
+                                         out, out_cap, &out_size);
     if (wdt_feed) {
         wdt_feed();
     }
-    jpeg_del_decoder_engine(decoder);
 
     if (err != ESP_OK || out_size == 0) {
         ESP_LOGW(TAG, "decode failed: %s", esp_err_to_name(err));

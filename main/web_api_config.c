@@ -5,6 +5,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
+#include "esp_heap_caps.h"
 
 static const char *TAG = "web_api_config";
 
@@ -42,7 +43,7 @@ static bool get_str(const char *body, const char *key, char *out, size_t len)
 
 esp_err_t web_save_handler(httpd_req_t *req)
 {
-    char *body = malloc(4096);
+    char *body = heap_caps_malloc(4096, MALLOC_CAP_SPIRAM);
     if (!body) { httpd_resp_send_500(req); return ESP_FAIL; }
     if (web_read_body(req, body, 4096) < 0) { free(body); return web_send_400(req, "Invalid request body"); }
 
@@ -185,7 +186,7 @@ esp_err_t web_restore_handler(httpd_req_t *req)
     if (req->content_len == 0) return web_send_400(req, "Request body is empty. Upload a backup file.");
     size_t len = req->content_len;
     if (len > 32768) return web_send_400(req, "Backup file too large");
-    char *body = malloc(len + 1);
+    char *body = heap_caps_malloc(len + 1, MALLOC_CAP_SPIRAM);
     if (!body) { httpd_resp_send_500(req); return ESP_FAIL; }
     if (web_read_body(req, body, len + 1) < 0) { free(body); return web_send_400(req, "Failed to read request body"); }
 

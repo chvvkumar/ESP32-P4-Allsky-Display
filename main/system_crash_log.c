@@ -106,9 +106,12 @@ typedef struct {
 static RTC_NOINIT_ATTR rtc_log_t s_rtc;
 
 /* ---- RAM ring (current session) ---------------------------------------- */
-static char  *s_ram;
-static size_t s_ram_head;
-static size_t s_ram_count;
+/* Statically allocated in internal .bss: guaranteed present regardless of heap
+ * pressure, and readable from panic context where the cache may be disabled
+ * (so it must NOT live in PSRAM / EXT_RAM_BSS_ATTR). */
+static uint8_t s_ram[RAM_RING_SIZE];
+static size_t  s_ram_head;
+static size_t  s_ram_count;
 
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -190,9 +193,7 @@ static size_t ring_read(const char *buf, size_t cap, size_t head, size_t count,
 static void tiers_append(const char *src, size_t len)
 {
     portENTER_CRITICAL(&s_mux);
-    if (s_ram) {
-        ring_append(s_ram, RAM_RING_SIZE, &s_ram_head, &s_ram_count, src, len);
-    }
+    ring_append((char *)s_ram, RAM_RING_SIZE, &s_ram_head, &s_ram_count, src, len);
     if (s_rtc.magic == RTC_MAGIC) {
         size_t h = s_rtc.head, c = s_rtc.count;
         ring_append(s_rtc.buf, RTC_RING_SIZE, &h, &c, src, len);
@@ -230,8 +231,9 @@ static void nvs_save_rtc(void)
     if (nvs_open(CRASH_NS, NVS_READWRITE, &h) != ESP_OK) {
         return;
     }
-    /* Only the newest NVS_BLOB_MAX bytes of the RTC ring are saved. */
-    char *tmp = malloc(NVS_BLOB_MAX + 1);
+    /* Only the newest NVS_BLOB_MAX bytes of the RTC ring are saved. Normal
+     * (non-panic) path, so this scratch buffer can come from PSRAM. */
+    char *tmp = heap_caps_malloc(NVS_BLOB_MAX + 1, MALLOC_CAP_SPIRAM);
     if (tmp) {
         size_t n;
         portENTER_CRITICAL(&s_mux);
@@ -269,7 +271,6 @@ static uint32_t boot_counter_increment(void)
 /* ---- Public init ------------------------------------------------------- */
 void crash_log_init(void)
 {
-    s_ram = heap_caps_malloc(RAM_RING_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     s_ram_head = 0;
     s_ram_count = 0;
 
@@ -315,7 +316,9 @@ void crash_log_init(void)
     }
 
     if (s_last_crash) {
-        char *panic = malloc(PANIC_BUF_SIZE + 1);
+        /* Runs at boot from crash_log_init(), i.e. normal (non-panic) context,
+         * so this scratch buffer can come from PSRAM. */
+        char *panic = heap_caps_malloc(PANIC_BUF_SIZE + 1, MALLOC_CAP_SPIRAM);
         if (panic) {
             panic_text_extract(panic, PANIC_BUF_SIZE + 1);
         }
@@ -427,7 +430,7 @@ void crash_log_prepare_reboot(void)
 size_t crash_log_get_ram(char *out, size_t len)
 {
     portENTER_CRITICAL(&s_mux);
-    size_t n = ring_read(s_ram, RAM_RING_SIZE, s_ram_head, s_ram_count, out, len);
+    size_t n = ring_read((char *)s_ram, RAM_RING_SIZE, s_ram_head, s_ram_count, out, len);
     portEXIT_CRITICAL(&s_mux);
     return n;
 }

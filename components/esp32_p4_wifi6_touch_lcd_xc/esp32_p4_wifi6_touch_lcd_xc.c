@@ -678,10 +678,11 @@ lv_display_t *bsp_display_start(void)
         .flags = {
 #if CONFIG_BSP_LCD_COLOR_FORMAT_RGB888
             .buff_dma = false,
-#else
-            .buff_dma = true,
-#endif
             .buff_spiram = false,
+#else
+            .buff_dma = false,
+            .buff_spiram = true,
+#endif
             .sw_rotate = false,
         }
     };

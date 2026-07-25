@@ -38,6 +38,7 @@
 #include "network_portal.h"
 #include "provision_screen.h"
 #include "image_pipeline.h"
+#include "image_decode.h"
 #include "moon_source.h"
 #include "input_touch.h"
 #include "mqtt_ha.h"
@@ -194,6 +195,13 @@ void app_main(void)
     /* Moon renderer: prepare the texture and the interactive drag driver. */
     moon_source_init();
     moon_interactive_init(integ_moon_blit, integ_moon_settle);
+
+    /* Create the shared JPEG decoder engine now, while internal heap is still
+     * plentiful and before the web server / MQTT come up, so its DMA descriptors
+     * are guaranteed for the process lifetime. */
+    if (image_decode_init() != ESP_OK) {
+        ESP_LOGW(TAG, "JPEG decoder engine init deferred; will retry on first decode");
+    }
 
     /* Image pipeline: allocate buffers + LVGL sink, then spawn the tasks. */
     static const image_pipeline_deps_t pipeline_deps = {

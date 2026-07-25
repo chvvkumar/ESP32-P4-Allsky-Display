@@ -20,6 +20,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/idf_additions.h"
 #include "freertos/semphr.h"
 #include "esp_task_wdt.h"
 #include "esp_timer.h"
@@ -654,12 +655,24 @@ esp_err_t image_pipeline_init(const image_pipeline_deps_t *deps)
 
 esp_err_t image_pipeline_start(void)
 {
-    BaseType_t r1 = xTaskCreatePinnedToCore(worker_task, "img_worker", 16 * 1024, NULL,
-                                            2, NULL, WORKER_CORE);
-    BaseType_t r2 = xTaskCreatePinnedToCore(loop_task, "img_loop", 8 * 1024, NULL,
-                                            3, NULL, LOOP_CORE);
+    TaskHandle_t h_worker = NULL;
+    TaskHandle_t h_loop = NULL;
+    BaseType_t r1 = xTaskCreatePinnedToCoreWithCaps(worker_task, "img_worker", 16 * 1024, NULL,
+                                            2, &h_worker, WORKER_CORE,
+                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    BaseType_t r2 = xTaskCreatePinnedToCoreWithCaps(loop_task, "img_loop", 8 * 1024, NULL,
+                                            3, &h_loop, LOOP_CORE,
+                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (r1 != pdPASS || r2 != pdPASS) {
         ESP_LOGE(TAG, "task creation failed");
+        if (h_worker != NULL) {
+            vTaskDeleteWithCaps(h_worker);
+            h_worker = NULL;
+        }
+        if (h_loop != NULL) {
+            vTaskDeleteWithCaps(h_loop);
+            h_loop = NULL;
+        }
         return ESP_ERR_NO_MEM;
     }
     ESP_LOGI(TAG, "pipeline started");

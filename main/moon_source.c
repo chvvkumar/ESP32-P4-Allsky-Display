@@ -13,6 +13,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/idf_additions.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 
@@ -250,9 +251,10 @@ esp_err_t moon_interactive_init(moon_blit_cb_t blit, moon_settle_cb_t on_settle)
     s_settle_cb = on_settle;
     if (s_drag_task) return ESP_OK;
 
-    BaseType_t ok = xTaskCreatePinnedToCore(
+    BaseType_t ok = xTaskCreatePinnedToCoreWithCaps(
         moon_interactive_task, "moon_drag", MOON_DRAG_TASK_STACK, NULL,
-        MOON_DRAG_TASK_PRIO, &s_drag_task, MOON_DRAG_TASK_CORE);
+        MOON_DRAG_TASK_PRIO, &s_drag_task, MOON_DRAG_TASK_CORE,
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (ok != pdPASS) {
         s_drag_task = NULL;
         ESP_LOGE(TAG, "interactive render task create failed");

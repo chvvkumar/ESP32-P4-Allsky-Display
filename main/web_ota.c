@@ -8,6 +8,7 @@
 #include "esp_ota_ops.h"
 #include "esp_http_client.h"
 #include "esp_task_wdt.h"
+#include "esp_heap_caps.h"
 
 static const char *TAG = "web_ota";
 
@@ -106,9 +107,9 @@ esp_err_t web_ota_upload_handler(httpd_req_t *req)
      * 2 KB recv would fragment it and can panic the OTA task. `combined` holds the
      * withheld tail (<= blen) plus one recv (<= 2048). */
     const size_t recv_cap = 2048;
-    char *buf = malloc(recv_cap);
-    char *tail = malloc(blen + 8);
-    char *combined = malloc(blen + recv_cap + 1);
+    char *buf = heap_caps_malloc(recv_cap, MALLOC_CAP_SPIRAM);
+    char *tail = heap_caps_malloc(blen + 8, MALLOC_CAP_SPIRAM);
+    char *combined = heap_caps_malloc(blen + recv_cap + 1, MALLOC_CAP_SPIRAM);
     size_t tail_len = 0;
     bool header_done = false;
     size_t written = 0, total = req->content_len, recv_total = 0;

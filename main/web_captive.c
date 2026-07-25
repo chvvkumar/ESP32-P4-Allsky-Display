@@ -2,6 +2,7 @@
 #include "web_internal.h"
 #include <string.h>
 #include <stdlib.h>
+#include "esp_heap_caps.h"
 
 static const char *TAG = "web_captive";
 
@@ -50,7 +51,7 @@ static esp_err_t cp_scan(httpd_req_t *req)
 
 static esp_err_t cp_scan_results(httpd_req_t *req)
 {
-    char *buf = malloc(4096);
+    char *buf = heap_caps_malloc(4096, MALLOC_CAP_SPIRAM);
     if (!buf) { httpd_resp_send_500(req); return ESP_FAIL; }
     web_hook_captive_scan_results(buf, 4096);
     esp_err_t r = web_send_json(req, 200, buf);

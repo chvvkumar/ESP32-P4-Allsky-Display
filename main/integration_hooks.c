@@ -120,7 +120,7 @@ int web_hook_net_wifi_scan(char *buf, size_t buf_len)
     }
     buf[0] = '\0';
 
-    char *tmp = malloc(4096);
+    char *tmp = heap_caps_malloc(4096, MALLOC_CAP_SPIRAM);
     if (!tmp) {
         return -1;
     }

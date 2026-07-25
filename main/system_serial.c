@@ -19,6 +19,8 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/idf_additions.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_app_desc.h"
@@ -265,7 +267,7 @@ static void cmd_web_status(void)
 
 static void cmd_health(void)
 {
-    char *buf = malloc(2048);
+    char *buf = heap_caps_malloc(2048, MALLOC_CAP_SPIRAM);
     if (!buf) {
         return;
     }
@@ -408,8 +410,9 @@ esp_err_t system_serial_start(void)
             fcntl(fd, F_SETFL, flags | O_NONBLOCK);
         }
     }
-    if (xTaskCreate(console_task, "SerialConsole", CONSOLE_TASK_STACK, NULL,
-                    CONSOLE_TASK_PRIO, NULL) != pdPASS) {
+    if (xTaskCreateWithCaps(console_task, "SerialConsole", CONSOLE_TASK_STACK, NULL,
+                    CONSOLE_TASK_PRIO, NULL,
+                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
         ESP_LOGE(TAG, "console task create failed");
         return ESP_ERR_NO_MEM;
     }

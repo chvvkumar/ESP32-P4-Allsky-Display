@@ -13,6 +13,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/idf_additions.h"
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
@@ -95,7 +96,7 @@ static void dns_server_task(void *arg) {
     if (sock < 0) {
         ESP_LOGE(TAG, "DNS socket create failed");
         s_dns_task = NULL;
-        vTaskDelete(NULL);
+        vTaskDeleteWithCaps(NULL);
         return;
     }
     struct sockaddr_in addr = {
@@ -107,7 +108,7 @@ static void dns_server_task(void *arg) {
         ESP_LOGE(TAG, "DNS bind failed");
         close(sock);
         s_dns_task = NULL;
-        vTaskDelete(NULL);
+        vTaskDeleteWithCaps(NULL);
         return;
     }
     struct timeval tv = { .tv_sec = 1, .tv_usec = 0 };
@@ -147,7 +148,7 @@ static void dns_server_task(void *arg) {
     }
     close(sock);
     s_dns_task = NULL;
-    vTaskDelete(NULL);
+    vTaskDeleteWithCaps(NULL);
 }
 
 /* ---- HTTP helpers --------------------------------------------------------- */
@@ -402,7 +403,8 @@ esp_err_t network_portal_start(void) {
     }
 
     s_dns_run = true;
-    if (xTaskCreate(dns_server_task, "portal_dns", 3072, NULL, 4, &s_dns_task) != pdPASS) {
+    if (xTaskCreateWithCaps(dns_server_task, "portal_dns", 3072, NULL, 4, &s_dns_task,
+                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
         ESP_LOGW(TAG, "DNS task create failed (captive redirect degraded)");
         s_dns_task = NULL;
     }

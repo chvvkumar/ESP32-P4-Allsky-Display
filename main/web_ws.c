@@ -2,8 +2,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/idf_additions.h"
 #include "freertos/semphr.h"
 
 static const char *TAG = "web_ws";
@@ -131,7 +133,7 @@ static void emit_line(char *line)
 static void ws_task(void *arg)
 {
     (void)arg;
-    char *drain = malloc(WS_DRAIN_MAX + 1);
+    char *drain = heap_caps_malloc(WS_DRAIN_MAX + 1, MALLOC_CAP_SPIRAM);
     char line[WS_LINE_MAX];
     size_t line_len = 0;
     while (s_run) {
@@ -152,7 +154,7 @@ static void ws_task(void *arg)
     }
     free(drain);
     s_task = NULL;
-    vTaskDelete(NULL);
+    vTaskDeleteWithCaps(NULL);
 }
 
 /* ---- replay to a newly connected client ---------------------------------- */
@@ -173,7 +175,7 @@ static void replay_buffered(int fd)
     const char *hdr = "==== BUFFERED LOGS (Boot + Crash History) ====\n";
     ws_send_text(fd, hdr, strlen(hdr));
 
-    char *chunk = malloc(WS_REPLAY_CHUNK + 1);
+    char *chunk = heap_caps_malloc(WS_REPLAY_CHUNK + 1, MALLOC_CAP_SPIRAM);
     if (chunk) {
         size_t off = 0;
         while (off < total) {
@@ -242,7 +244,8 @@ esp_err_t web_ws_init(httpd_handle_t server)
     s_client_count = 0;
     s_run = true;
     if (!s_task) {
-        xTaskCreatePinnedToCore(ws_task, "web_ws", 4096, NULL, 4, &s_task, 0);
+        xTaskCreatePinnedToCoreWithCaps(ws_task, "web_ws", 4096, NULL, 4, &s_task, 0,
+                                        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     }
     ESP_LOGI(TAG, "WebSocket log console ready at /ws/logs (min sev %d)", s_min_sev);
     return ESP_OK;

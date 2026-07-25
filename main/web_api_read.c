@@ -253,7 +253,7 @@ esp_err_t web_info_handler(httpd_req_t *req)
 /* ---- GET /api/health ----------------------------------------------------- */
 esp_err_t web_health_handler(httpd_req_t *req)
 {
-    char *buf = malloc(4096);
+    char *buf = heap_caps_malloc(4096, MALLOC_CAP_SPIRAM);
     if (!buf) { httpd_resp_send_500(req); return ESP_FAIL; }
     web_hook_health_report_json(buf, 4096);
     esp_err_t r = web_send_json(req, 200, buf);
@@ -279,7 +279,7 @@ esp_err_t web_crash_log_handler(httpd_req_t *req)
 /* ---- GET /api/wifi-scan -------------------------------------------------- */
 esp_err_t web_wifi_scan_handler(httpd_req_t *req)
 {
-    char *buf = malloc(4096);
+    char *buf = heap_caps_malloc(4096, MALLOC_CAP_SPIRAM);
     if (!buf) { httpd_resp_send_500(req); return ESP_FAIL; }
     buf[0] = '\0';
     int n = web_hook_net_wifi_scan(buf, 4096);
@@ -289,7 +289,7 @@ esp_err_t web_wifi_scan_handler(httpd_req_t *req)
     } else if (n < 0) {
         r = web_send_status(req, 500, "error", "WiFi scan failed", NULL);
     } else {
-        char *out = malloc(4096 + 64);
+        char *out = heap_caps_malloc(4096 + 64, MALLOC_CAP_SPIRAM);
         if (!out) { free(buf); httpd_resp_send_500(req); return ESP_FAIL; }
         snprintf(out, 4096 + 64, "{\"status\":\"success\",\"networks\":%s}",
                  buf[0] ? buf : "[]");
