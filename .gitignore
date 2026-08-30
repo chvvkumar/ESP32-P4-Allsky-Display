@@ -170,3 +170,11 @@ CONVERSATION_CONTEXT.md
 
 # GitHub Copilot instructions (development-only)
 # .github/copilot-instructions.md
+
+# Local development only (specs, plans)
+.planning/
+
+# Editor/LSP config
+.clangd
+.cache/
+compile_commands.json
