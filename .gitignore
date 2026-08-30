@@ -116,3 +116,8 @@ CONVERSATION_CONTEXT.md
 docs/_build/
 docs/html/
 docs/latex/
+
+# Editor/LSP config
+.clangd
+.cache/
+compile_commands.json
