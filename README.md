@@ -1,5 +1,9 @@
 # ESP32-P4 AllSky Display
 
+> ## Development has moved
+>
+> Active development of this firmware now happens in [ESP32-P4-NINA-Display](https://github.com/chvvkumar/ESP32-P4-NINA-Display), a single code base covering multiple ESP32-P4 displays. That firmware is built on ESP-IDF; this repository uses the Arduino framework. All future work goes there. This repository will be archived once testing in the new repository is complete, and remains available here for reference only.
+
 This project enables the use of an ESP32-P4 display into an all-sky camera viewer. It features multi-image cycling, hardware acceleration, and seamless integration with Home Assistant.
 
 3.6" Screen
